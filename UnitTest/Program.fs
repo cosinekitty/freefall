@@ -1,6 +1,6 @@
 ﻿open Freefall.Expr
 
-let AlmostPi:Expression = Number(Real(3.14))
+let AlmostPi:Expression = Number(Rational(22L,7L))
 
 [<EntryPoint>]
 let main argv = 
