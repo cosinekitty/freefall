@@ -12,7 +12,7 @@ module Expr =
     let BaseUnitNames = [ "kilogram" ; "meter"    ; "second" ; "kelvin"      ; "mole"      ; "ampere"  ; "candela"    ]
     let NumDimensions = List.length ConceptNames
 
-    type PhysicalConcept = Concept of (int64 * int64) list       // list must have 7 elements, each representing a rational number - see comments above
+    type PhysicalConcept = Concept of (int64 * int64) list       // list must have NumDimensions elements, each representing a rational number for the exponent of that dimension
 
     let Dimensionless = Concept (List.replicate NumDimensions (0L,1L))
 
@@ -20,6 +20,12 @@ module Expr =
     type PhysicalQuantity = PhysicalQuantity of Number * PhysicalConcept
 
     let Unity = PhysicalQuantity(Rational(1L,1L), Dimensionless)
+
+    let IsZero number =
+        match number with
+        | Rational(numer,denom) -> numer=0L && denom<>0L
+        | Real re -> re=0.0
+        | Complex(re,im) -> re=0.0 && im=0.0
 
     type Expression =
         | Amount of PhysicalQuantity
@@ -42,27 +48,42 @@ module Expr =
         | Real re -> re.ToString()
         | Complex(re,im) -> "(" + re.ToString() + "," + im.ToString() + ")"
 
-    let FormatDimension prefix name (numer,denom) =
+    let FormatDimension name (numer,denom) =
         if numer = 0L then
-            prefix      // this dimension does not contribute
+            ""      // this dimension does not contribute to formatting, e.g. meter^0
         elif numer = 1L && denom = 1L then
-            prefix + "*" + name
+            name    // meter^(1/1) is written as "meter"
         elif denom = 1L then
-            prefix + "*" + name + "^" + numer.ToString()
+            if numer < 0L then
+                name + "^(" + numer.ToString() + ")"        // meter^(-1)
+            else
+                name + "^" + numer.ToString()               // meter^(3)
         else
-            prefix + "*" + name + "^(" + numer.ToString() + "/" + denom.ToString() + ")"
+            name + "^(" + numer.ToString() + "/" + denom.ToString() + ")"       // meter^(-1/3)
+
+    let AccumDimension prefix name (numer,denom) =
+        let text = FormatDimension name (numer,denom)
+        match (prefix,text) with
+        | ("","") -> ""
+        | ("",_)  -> text
+        | (_,"")  -> prefix
+        | (_,_)   -> prefix + "*" + text
 
     let FormatConcept namelist (Concept(powlist)) =
-        List.fold2 FormatDimension "" namelist powlist
+        List.fold2 AccumDimension "" namelist powlist
 
     let FormatQuantity (PhysicalQuantity(scalar,concept)) =
-
-        let scalarText = FormatNumber scalar
-        let conceptText = FormatConcept BaseUnitNames concept
-        if conceptText = "" then
-            scalarText
+        if IsZero scalar then
+            "0"     // special case because zero makes all units irrelevant
         else
-            scalarText + "*" + conceptText
+            let scalarText = FormatNumber scalar
+            let conceptText = FormatConcept BaseUnitNames concept
+            if conceptText = "" then
+                scalarText
+            elif scalarText = "1" then
+                conceptText
+            else
+                scalarText + "*" + conceptText
 
     let rec FormatExpression expr =
         match expr with
