@@ -13,7 +13,7 @@ let main argv =
     printfn "AlmostPi = %s" (FormatExpression AlmostPi)
     printfn "OneNewton = %s" (FormatExpression Weight)
     printfn "WeightSquared = %s" (FormatExpression WeightSquared)
-    printfn "concept(WeightSquared) = %s" (FormatOptConcept (ExpressionConcept WeightSquared))
+    printfn "concept(WeightSquared) = %s" (FormatConcept (ExpressionConcept WeightSquared))
 
     0 // return an integer exit code
 

@@ -32,7 +32,9 @@ module Expr =
     let BaseUnitNames = [ "kilogram" ; "meter"    ; "second" ; "kelvin"      ; "mole"      ; "ampere"  ; "candela"    ]
     let NumDimensions = List.length ConceptNames
 
-    type PhysicalConcept = Concept of (int64 * int64) list       // list must have NumDimensions elements, each representing a rational number for the exponent of that dimension
+    type PhysicalConcept = 
+        | Zero
+        | Concept of (int64 * int64) list       // list must have NumDimensions elements, each representing a rational number for the exponent of that dimension
 
     let Dimensionless = Concept (List.replicate NumDimensions (0L,1L))
 
@@ -92,17 +94,14 @@ module Expr =
         | (_,"")  -> prefix
         | (_,_)   -> prefix + "*" + text
 
-    let FormatDimensions namelist (Concept(powlist)) =
-        List.fold2 AccumDimension "" namelist powlist
+    let FormatDimensions namelist concept =
+        match concept with
+        | Zero -> "0"
+        | Concept(powlist) -> List.fold2 AccumDimension "" namelist powlist
 
     let FormatConcept = FormatDimensions ConceptNames
 
     let FormatUnits = FormatDimensions BaseUnitNames
-
-    let FormatOptConcept opt =
-        match opt with
-        | None -> "0"
-        | Some(concept) -> FormatConcept concept
 
     let FormatQuantity (PhysicalQuantity(scalar,concept)) =
         if IsZero scalar then
@@ -112,6 +111,8 @@ module Expr =
             let conceptText = FormatDimensions BaseUnitNames concept
             if conceptText = "" then
                 scalarText
+            elif conceptText = "0" then
+                "0"
             elif scalarText = "1" then
                 conceptText
             else
@@ -146,8 +147,8 @@ module Expr =
 
     let rec ExpressionConcept expr =
         match expr with
-        | Amount(PhysicalQuantity(number,concept)) -> if IsZero number then None else Some(concept)
-        | Variable(_,concept) -> Some(concept)
+        | Amount(PhysicalQuantity(number,concept)) -> if IsZero number then Zero else concept
+        | Variable(_,concept) -> concept
         | Negative(arg) -> ExpressionConcept arg
         | Reciprocal(arg) -> ReciprocalConcept arg
         | Sum(terms) -> SumConcept terms
@@ -156,32 +157,30 @@ module Expr =
 
     and SumConcept terms =
         match terms with 
-        | [] -> None        // sum() = 0, which has no specific units -- see comments above.
+        | [] -> Zero        // sum() = 0, which has no specific units -- see comments above.
         | first::rest -> 
-            let firstOptConcept = ExpressionConcept first
-            let restOptConcept = SumConcept rest
-            match (firstOptConcept, restOptConcept) with
-            | (None,None) -> None                   // 0+0 = 0, which has no specific units
-            | (Some(f),None) -> firstOptConcept     // x+0 = x with specific units
-            | (None,Some(r)) -> restOptConcept      // 0+y = y
-            | (Some(f),Some(r)) ->
+            let firstConcept = ExpressionConcept first
+            let restConcept = SumConcept rest
+            match (firstConcept, restConcept) with
+            | (Zero,Zero) -> Zero                    // 0+0 = 0, which has no specific units
+            | (Concept(_),Zero) -> firstConcept      // x+0 = x with specific units
+            | (Zero,Concept(_)) -> restConcept       // 0+y = y
+            | (Concept(f),Concept(r)) ->
                 if f <> r then
-                    failwith (sprintf "Incompatible units: cannot add %s and %s" (FormatConcept f) (FormatConcept r))
+                    failwith (sprintf "Incompatible units: cannot add %s and %s" (FormatConcept firstConcept) (FormatConcept restConcept))
                 else
-                    firstOptConcept
+                    firstConcept
 
     and ProductConcept factors =
         match factors with 
-        | [] -> Some(Dimensionless)     // product() = 1, which has dimensionless units
+        | [] -> Dimensionless     // product() = 1, which has dimensionless units
         | first::rest ->
             let firstOptConcept = ExpressionConcept first
             let restOptConcept = ProductConcept rest
             match (firstOptConcept, restOptConcept) with
-            | (None,_) -> None      // 0*y = 0, which has no definite units
-            | (_,None) -> None      // x*0 = 0, which has no definite units
-            | (Some(Concept(alist)),Some(Concept(blist))) ->
-                // Add respective exponents to yield the exponents of the product
-                Some(Concept(AddExponentLists alist blist))
+            | (Zero,_) -> Zero      // 0*y = 0, which has no definite units
+            | (_,Zero) -> Zero      // x*0 = 0, which has no definite units
+            | (Concept(alist),Concept(blist)) -> Concept(AddExponentLists alist blist)
 
     and PowerConcept a b =
         // FIXFIXFIX: plan - numerically reduce b, require it to be dimensionless rational.
@@ -189,7 +188,7 @@ module Expr =
 
     and ReciprocalConcept arg =
         match ExpressionConcept arg with
-        | None -> None
-        | Some(Concept(dimlist)) -> 
+        | Zero -> Zero
+        | Concept(dimlist) -> 
             // Take the reciprocal by negating each rational number in the list of dimensional exponents.
-            Some(Concept(List.map (fun (numer,denom) -> MakeRationalPair (-numer) denom) dimlist))
+            Concept(List.map (fun (numer,denom) -> MakeRationalPair (-numer) denom) dimlist)
