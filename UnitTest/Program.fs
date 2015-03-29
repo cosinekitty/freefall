@@ -1,6 +1,9 @@
 ﻿open Freefall.Expr
 
-let AlmostPi:Expression = Number(Rational(22L,7L))
+let Unknown = Variable "x"
+
+let AlmostPi = PhysicalQuantity(Rational(22L,7L), Dimensionless)
+
 
 [<EntryPoint>]
 let main argv = 
