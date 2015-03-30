@@ -8,6 +8,12 @@ module Expr =
         | Real of float
         | Complex of float * float
 
+    let NegateNumber number =
+        match number with
+        | Rational(numer,denom) -> Rational(-numer,denom)
+        | Real(x) -> Real(-x)
+        | Complex(x,y) -> Complex(-x,-y)
+
     let rec GreatestCommonDivisor (a:int64) (b:int64) =         // caller must ensure that a and b are both non-negative
         if b = 0L then
             if a = 0L then 1L else a
@@ -34,6 +40,35 @@ module Expr =
     let SubtractExponentLists (alist:(int64 * int64) list) (blist:(int64 * int64) list) =
         List.map2 (fun (a,b) (c,d) -> MakeRationalPair (a*d - c*b) (b*d)) alist blist        
 
+    let NegateExponentList (clist:(int64 * int64) list) =
+        List.map (fun (a,b) -> MakeRationalPair (-a) b) clist
+
+    let rec AddNumbers anum bnum =
+        match (anum, bnum) with
+        | (Rational(a,b), Rational(c,d)) -> MakeRational (a*d + b*c) (b*d)
+        | (Rational(a,b), Real(r)) -> Real(r + (float a)/(float b))
+        | (Rational(a,b), Complex(x,y)) -> Complex(x + (float a)/(float b), y)
+        | (Real(_), Rational(_,_)) -> AddNumbers bnum anum
+        | (Real(x), Real(y)) -> Real(x + y)
+        | (Real(r), Complex(x,y)) -> Complex(r+x, y)
+        | (Complex(_,_), Rational(_,_)) -> AddNumbers bnum anum
+        | (Complex(_,_), Real(_)) -> AddNumbers bnum anum
+        | (Complex(x,y), Complex(u,v)) -> Complex(x+u, y+v)
+
+    let rec MultiplyNumbers anum bnum =
+        match (anum, bnum) with
+        | (Rational(a,b), Rational(c,d)) -> MakeRational (a*c) (b*d)
+        | (Rational(a,b), Real(r)) -> Real(r * (float a)/(float b))
+        | (Rational(a,b), Complex(x,y)) -> 
+            let ratio = (float a) / (float b)
+            Complex(ratio*x, ratio*y)
+        | (Real(_), Rational(_,_)) -> MultiplyNumbers bnum anum
+        | (Real(x), Real(y)) -> Real(x * y)
+        | (Real(r), Complex(x,y)) -> Complex(r*x, r*y)
+        | (Complex(_,_), Rational(_,_)) -> MultiplyNumbers bnum anum
+        | (Complex(_,_), Real(_)) -> MultiplyNumbers bnum anum
+        | (Complex(x,y), Complex(u,v)) -> Complex(x*u - y*v, x*v + y*u)
+
     let ConceptNames  = [ "mass"     ; "distance" ; "time"   ; "temperature" ; "substance" ; "current" ; "luminosity" ]
     let BaseUnitNames = [ "kilogram" ; "meter"    ; "second" ; "kelvin"      ; "mole"      ; "ampere"  ; "candela"    ]
     let NumDimensions = List.length ConceptNames
@@ -43,6 +78,16 @@ module Expr =
         | Concept of (int64 * int64) list       // list must have NumDimensions elements, each representing a rational number for the exponent of that dimension
 
     // Functions to help build concepts from other concepts...
+
+    let AddConcepts a b =
+        match (a,b) with
+        | (_,Zero) -> a
+        | (Zero,_) -> b
+        | (Concept(alist),Concept(blist)) ->
+            if alist = blist then
+                a
+            else
+                failwith "Cannot add incompatible concepts."
 
     let MultiplyConcepts a b =
         match (a,b) with
@@ -55,6 +100,11 @@ module Expr =
         | (_,Zero) -> failwith "Cannot divide concept by 0."
         | (Zero,_) -> Zero
         | (Concept(alist),Concept(blist)) -> Concept(SubtractExponentLists alist blist)
+
+    let InvertConcept c =
+        match c with
+        | Zero -> failwith "Cannot take reciprocal of 0 concept."
+        | Concept(clist) -> Concept(NegateExponentList clist)
 
     // Handy concepts by name...
 
@@ -79,13 +129,28 @@ module Expr =
     // A physical quantity is a numeric scalar attached to a physical concept.
     type PhysicalQuantity = PhysicalQuantity of Number * PhysicalConcept
 
+    let ZeroQuantity = PhysicalQuantity(Rational(0L,1L), Zero)
     let Unity = PhysicalQuantity(Rational(1L,1L), Dimensionless)
 
-    let IsZero number =
-        match number with
-        | Rational(numer,denom) -> numer=0L && denom<>0L
-        | Real re -> re=0.0
-        | Complex(re,im) -> re=0.0 && im=0.0
+    let IsNumberEqualToInteger n x =
+        match x with
+        | Rational(numer,denom) -> (numer = n) && (denom = 1L)      // assumes rational was created using MakeRational to normalize
+        | Real re -> re = (float n)
+        | Complex(re,im) -> (im = 0.0) && (re = (float n))
+
+    let IsNumberZero = IsNumberEqualToInteger 0L
+
+    let InvertNumber number =        // calculate the numeric reciprocal
+        if IsNumberZero number then
+            failwith "Cannot take reciprocal of 0."
+        else
+            match number with
+            | Rational(a,b) -> Rational(b,a)
+            | Real x -> Real(1.0 / x)
+            | Complex(x,y) -> 
+                // 1/(x+iy) = (x-iy)/(x^2+y^2)
+                let denom = x*x + y*y
+                Complex(x/denom, -y/denom)
 
     type Expression =
         | Amount of PhysicalQuantity
@@ -95,6 +160,31 @@ module Expr =
         | Sum of Expression list
         | Product of Expression list
         | Power of Expression * Expression
+     
+    let ZeroAmount = Amount(ZeroQuantity)
+    let UnityAmount = Amount(Unity)
+
+    let IsZeroExpression expr =
+        match expr with
+        | Amount(PhysicalQuantity(number,concept)) -> (concept = Zero) || (IsNumberZero number)
+        | _ -> false
+
+    let IsUnityExpression expr =
+        match expr with
+        | Amount(PhysicalQuantity(number,concept)) -> (concept = Dimensionless) && (IsNumberEqualToInteger 1L number)
+        | _ -> false
+
+    let RemoveZeroes terms = 
+        List.filter (fun t -> not (IsZeroExpression t)) terms
+
+    let RemoveUnities factors =
+        List.filter (fun f -> not (IsUnityExpression f)) factors
+
+    let SkipUnity first rest =
+        if IsUnityExpression first then rest else first :: rest
+
+    let SkipZero first rest =
+        if IsZeroExpression first then rest else first :: rest
 
     //-----------------------------------------------------------------------------------------------------
     // Formatting - conversion of expressions to human-readable strings.
@@ -142,7 +232,7 @@ module Expr =
     let FormatUnits = FormatDimensions BaseUnitNames
 
     let FormatQuantity (PhysicalQuantity(scalar,concept)) =
-        if IsZero scalar then
+        if IsNumberZero scalar then
             "0"     // special case because zero makes all units irrelevant
         else
             let scalarText = FormatNumber scalar
@@ -182,7 +272,7 @@ module Expr =
 
     let rec ExpressionConcept expr =
         match expr with
-        | Amount(PhysicalQuantity(number,concept)) -> if IsZero number then Zero else concept
+        | Amount(PhysicalQuantity(number,concept)) -> if IsNumberZero number then Zero else concept
         | Variable(_,concept) -> concept
         | Negative(arg) -> ExpressionConcept arg
         | Reciprocal(arg) -> ReciprocalConcept arg
@@ -227,7 +317,7 @@ module Expr =
     // For example, sum(a,b,c) looks different from sum(b,c,a), but are identical.
 
     let IsZeroNumberConceptPair number concept =
-        (concept = Zero) || (IsZero number)
+        (concept = Zero) || (IsNumberZero number)
 
     let rec AreIdenticalNumbers a b =
         match (a,b) with
@@ -303,3 +393,123 @@ module Expr =
                 match FindIdenticalInList expr rest with
                 | None -> None
                 | Some(shorter) -> Some(first :: shorter)
+
+    //-----------------------------------------------------------------------------------------------------
+    // Expression simplifier.
+
+    let AddQuantities (PhysicalQuantity(aNumber,aConcept)) (PhysicalQuantity(bNumber,bConcept)) =
+        Amount(PhysicalQuantity(AddNumbers aNumber bNumber, AddConcepts aConcept bConcept))
+
+    let MultiplyQuantities (PhysicalQuantity(aNumber,aConcept)) (PhysicalQuantity(bNumber,bConcept)) =
+        Amount(PhysicalQuantity(MultiplyNumbers aNumber bNumber, MultiplyConcepts aConcept bConcept))
+
+    let AreOppositeTerms a b =
+        (AreIdentical a (Negative b)) ||
+        (AreIdentical b (Negative a))
+
+    let AreOppositeFactors a b =
+        (AreIdentical a (Reciprocal b)) ||
+        (AreIdentical b (Reciprocal a))
+
+    let rec CancelOpposite testfunc termlist =
+        match termlist with
+        | [] -> []
+        | first :: rest -> 
+            let rcancel = CancelOpposite testfunc rest
+            match rcancel with
+            | [] -> [first]
+            | next :: others -> 
+                if testfunc first next then
+                    others
+                else
+                    let shorter = first :: others
+                    let attempt = CancelOpposite testfunc shorter
+                    if shorter = attempt then
+                        first :: rcancel
+                    else
+                        CancelOpposite testfunc (next :: attempt)
+
+    let CancelOppositeTerms termlist = CancelOpposite AreOppositeTerms termlist
+
+    let CancelOppositeFactors factorlist = CancelOpposite AreOppositeFactors factorlist
+
+    // Add together all constant terms in a sum list and move the result to the front of the list.
+    let rec MergeConstants mergefunc terms =
+        match terms with
+        | [] -> []
+        | [first] -> [first]
+        | first :: rest -> 
+            let mrest = MergeConstants mergefunc rest
+            match (first, mrest) with
+            | (Amount(a), Amount(b) :: residue) -> mergefunc a b :: residue
+            | (_, Amount(b) :: residue) -> Amount(b) :: first :: residue
+            | _ -> first :: mrest
+
+    let rec SimplifyStep expr =
+        match expr with
+        | Amount(_) -> expr     // already as simple as possible
+        | Variable(_) -> expr   // already as simple as possible
+        | Negative(Negative(x)) -> SimplifyStep x
+        | Negative(arg) -> 
+            match SimplifyStep arg with
+            | Amount(PhysicalQuantity(number,concept)) -> Amount(PhysicalQuantity((NegateNumber number),concept))
+            | sarg -> Negative(sarg)
+
+        | Reciprocal(Reciprocal(x)) -> SimplifyStep x
+        | Reciprocal(arg) -> 
+            match SimplifyStep arg with
+            | Amount(PhysicalQuantity(number,concept)) -> Amount(PhysicalQuantity((InvertNumber number), (InvertConcept concept)))
+            | sarg -> Reciprocal(sarg)
+
+        | Sum(termlist) ->
+            let simpargs = 
+                SimplifySumArgs (List.map SimplifyStep termlist) 
+                |> CancelOppositeTerms 
+                |> MergeConstants AddQuantities
+            match simpargs with
+            | [] -> ZeroAmount
+            | [term] -> term
+            | _ -> Sum simpargs
+
+        | Product(factorlist) ->
+            let simpfactors = 
+                SimplifyProductArgs (List.map SimplifyStep factorlist) 
+                |> CancelOppositeFactors
+                |> MergeConstants MultiplyQuantities
+            if List.exists IsZeroExpression simpfactors then
+                ZeroAmount
+            else
+                match simpfactors with
+                | [] -> UnityAmount
+                | [factor] -> factor
+                | _ -> Product simpfactors
+        | Power(x,y) ->
+            let sx = SimplifyStep x
+            let sy = SimplifyStep y
+            Power(sx,sy)        // FIXFIXFIX - could use more simplification rules here
+
+    // Sum(Sum(A,B,C), Sum(D,E)) = Sum(A,B,C,D,E)
+    // We want to "lift" all inner Sum() contents to the top level of a list.
+    and SimplifySumArgs simpargs =           
+        match simpargs with
+        | [] -> []
+        | (Sum terms)::rest -> (RemoveZeroes terms) @ (SimplifySumArgs rest)
+        | first::rest -> SkipZero first (SimplifySumArgs rest)
+
+    and SimplifyProductArgs simpargs =           
+        match simpargs with
+        | [] -> []
+        | (Product factors)::rest -> (RemoveUnities factors) @ (SimplifyProductArgs rest)
+        | first::rest -> SkipUnity first (SimplifyProductArgs rest)
+
+    //---------------------------------------------------------------------------
+    // Aggressive, iterative simplifier...
+
+    let Simplify expr =
+        // Keep iterating SimplifyStep until the expression stops changing.
+        let mutable prev = expr
+        let mutable simp = SimplifyStep expr
+        while simp <> prev do
+            prev <- simp
+            simp <- SimplifyStep simp
+        simp

@@ -15,6 +15,15 @@ let IdentityTest a b =
     else
         printfn "%s = %s" (FormatExpression a) (FormatExpression b)
 
+let SimplifyTest raw expected =
+    let simp = Simplify raw
+    if simp <> expected then
+        printfn "SimplifyTest failed:"
+        printfn "raw      = %s" (FormatExpression raw)
+        printfn "simp     = %s" (FormatExpression simp)
+        printfn "expected = %s" (FormatExpression expected)
+        failwith "SimplifyTest failure"
+
 [<EntryPoint>]
 let main argv = 
     printfn "AlmostPi = %s" (FormatExpression AlmostPi)
@@ -26,6 +35,8 @@ let main argv =
     let MyScalar = Amount(PhysicalQuantity(Real(7.28), Dimensionless))
 
     IdentityTest (Product[AlmostPi;ForceVar;MyScalar]) (Product[MyScalar;AlmostPi;ForceVar])
+
+    SimplifyTest (Sum[Sum[];Sum[ForceVar]])  ForceVar
 
     0 // return an integer exit code
 
