@@ -33,6 +33,8 @@ let main argv =
 
     let ForceVar = Variable("F", ForceConcept)
     let MyScalar = Amount(PhysicalQuantity(Real(7.28), Dimensionless))
+    let WeirdValue = Power(ForceVar,AlmostPi)
+    printfn "WeirdValue = %s, concept = %s" (FormatExpression WeirdValue) (FormatConcept (ExpressionConcept WeirdValue))
 
     IdentityTest (Product[AlmostPi;ForceVar;MyScalar]) (Product[MyScalar;AlmostPi;ForceVar])
 
