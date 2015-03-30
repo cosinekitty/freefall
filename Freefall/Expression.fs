@@ -106,6 +106,17 @@ module Expr =
         | Zero -> failwith "Cannot take reciprocal of 0 concept."
         | Concept(clist) -> Concept(NegateExponentList clist)
 
+    let ExponentiateConcept xconcept ynum yden =
+        match xconcept with
+        | Concept(xlist) -> Concept(List.map (fun (xnum,xden) -> MakeRationalPair (xnum*ynum) (xden*yden)) xlist)
+        | Zero ->
+            if ynum = 0L then
+                failwith "Cannot raise 0 to the 0 power."
+            elif ynum < 0L then
+                failwith "Cannot raise 0 to a negative power."
+            else
+                Zero    // 0^x = 0 for all positive rational x
+
     // Handy concepts by name...
 
     // A concept to represent any dimensionless quantity...
@@ -261,56 +272,6 @@ module Expr =
         | [] -> ""
         | [single] -> FormatExpression single
         | first :: rest -> FormatExpression first + "," + FormatExprList rest
-
-    //-----------------------------------------------------------------------------------------------------
-    // Unit determination - verify that units are coherent and determine what they are.
-    // For example, sum(3*meter,4*second) should raise an exception because adding distance to time is illegal.
-    // However, sum(3*meter,4*meter) should be seen as distance units (expressible in meters).
-    // Returns an Option(Concept) because None is needed for 0*anything, which has no specific units.
-    // No other reason for returning None should be allowed;
-    // must throw an exception for any unit compatibility violation.
-
-    let rec ExpressionConcept expr =
-        match expr with
-        | Amount(PhysicalQuantity(number,concept)) -> if IsNumberZero number then Zero else concept
-        | Variable(_,concept) -> concept
-        | Negative(arg) -> ExpressionConcept arg
-        | Reciprocal(arg) -> ReciprocalConcept arg
-        | Sum(terms) -> SumConcept terms
-        | Product(factors) -> ProductConcept factors
-        | Power(a,b) -> PowerConcept a b
-
-    and SumConcept terms =
-        match terms with 
-        | [] -> Zero        // sum() = 0, which has no specific units -- see comments above.
-        | first::rest -> 
-            let firstConcept = ExpressionConcept first
-            let restConcept = SumConcept rest
-            match (firstConcept, restConcept) with
-            | (Zero,Zero) -> Zero                    // 0+0 = 0, which has no specific units
-            | (Concept(_),Zero) -> firstConcept      // x+0 = x with specific units
-            | (Zero,Concept(_)) -> restConcept       // 0+y = y
-            | (Concept(f),Concept(r)) ->
-                if f <> r then
-                    failwith (sprintf "Incompatible units: cannot add %s and %s" (FormatConcept firstConcept) (FormatConcept restConcept))
-                else
-                    firstConcept
-
-    and ProductConcept factors =
-        match factors with 
-        | [] -> Dimensionless     // product() = 1, which has dimensionless units            
-        | first::rest -> MultiplyConcepts (ExpressionConcept first) (ProductConcept rest)
-
-    and PowerConcept a b =
-        // FIXFIXFIX: plan - numerically reduce b, require it to be dimensionless rational.
-        failwith "Not yet implemented."
-
-    and ReciprocalConcept arg =
-        match ExpressionConcept arg with
-        | Zero -> Zero
-        | Concept(dimlist) -> 
-            // Take the reciprocal by negating each rational number in the list of dimensional exponents.
-            Concept(List.map (fun (numer,denom) -> MakeRationalPair (-numer) denom) dimlist)
 
     //-----------------------------------------------------------------------------------------------------
     // Identity tester : determines if two expressions have equivalent values.
@@ -486,7 +447,11 @@ module Expr =
         | Power(x,y) ->
             let sx = SimplifyStep x
             let sy = SimplifyStep y
-            Power(sx,sy)        // FIXFIXFIX - could use more simplification rules here
+            // FIXFIXFIX - could use more simplification and validation rules here
+            if (IsZeroExpression sx) && (IsZeroExpression sy) then
+                failwith "Cannot evaluate 0^0."
+            else
+                Power(sx,sy)            
 
     // Sum(Sum(A,B,C), Sum(D,E)) = Sum(A,B,C,D,E)
     // We want to "lift" all inner Sum() contents to the top level of a list.
@@ -513,3 +478,72 @@ module Expr =
             prev <- simp
             simp <- SimplifyStep simp
         simp
+
+    //-----------------------------------------------------------------------------------------------------
+    // Unit determination - verify that units are coherent and determine what they are.
+    // For example, sum(3*meter,4*second) should raise an exception because adding distance to time is illegal.
+    // However, sum(3*meter,4*meter) should be seen as distance units (expressible in meters).
+    // Returns an Option(Concept) because None is needed for 0*anything, which has no specific units.
+    // No other reason for returning None should be allowed;
+    // must throw an exception for any unit compatibility violation.
+
+    let rec ExpressionConcept expr =
+        match expr with
+        | Amount(PhysicalQuantity(number,concept)) -> if IsNumberZero number then Zero else concept
+        | Variable(_,concept) -> concept
+        | Negative(arg) -> ExpressionConcept arg
+        | Reciprocal(arg) -> ReciprocalConcept arg
+        | Sum(terms) -> SumConcept terms
+        | Product(factors) -> ProductConcept factors
+        | Power(a,b) -> PowerConcept a b
+
+    and SumConcept terms =
+        match terms with 
+        | [] -> Zero        // sum() = 0, which has no specific units -- see comments above.
+        | first::rest -> 
+            let firstConcept = ExpressionConcept first
+            let restConcept = SumConcept rest
+            match (firstConcept, restConcept) with
+            | (Zero,Zero) -> Zero                    // 0+0 = 0, which has no specific units
+            | (Concept(_),Zero) -> firstConcept      // x+0 = x with specific units
+            | (Zero,Concept(_)) -> restConcept       // 0+y = y
+            | (Concept(f),Concept(r)) ->
+                if f <> r then
+                    failwith (sprintf "Incompatible units: cannot add %s and %s" (FormatConcept firstConcept) (FormatConcept restConcept))
+                else
+                    firstConcept
+
+    and ProductConcept factors =
+        match factors with 
+        | [] -> Dimensionless     // product() = 1, which has dimensionless units            
+        | first::rest -> MultiplyConcepts (ExpressionConcept first) (ProductConcept rest)
+
+    and PowerConcept x y =
+        let yConcept = ExpressionConcept y
+        if yConcept = Dimensionless then
+            let xConcept = ExpressionConcept x
+            if xConcept = Dimensionless then
+                // If x is dimensionless, then y may be any dimensionless expression, e.g. 2.7182818^y.
+                // A dimensionless value to a dimensionless power is dimensionless.
+                Dimensionless
+            else
+                // If x is dimensional, then y must be rational (e.g. x^(-3/4)).
+                // In this case, multiply the exponent list of x's dimensions with the rational value of y.
+                let ySimp = Simplify y      // take any possible opportunity to boil this down to a number.
+                match ySimp with
+                | Amount(PhysicalQuantity(Rational(ynum,yden),ySimpConcept)) ->
+                    if ySimpConcept <> Dimensionless then
+                        failwith "IMPOSSIBLE - y concept changed after simplification."
+                    else
+                        ExponentiateConcept xConcept ynum yden
+                | _ -> failwith "Cannot raise a dimensional expression to a non-rational power."
+        else
+            failwith "Cannot raise an expression to a dimensional power."
+
+    and ReciprocalConcept arg =
+        match ExpressionConcept arg with
+        | Zero -> Zero
+        | Concept(dimlist) -> 
+            // Take the reciprocal by negating each rational number in the list of dimensional exponents.
+            Concept(List.map (fun (numer,denom) -> MakeRationalPair (-numer) denom) dimlist)
+
