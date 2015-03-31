@@ -58,6 +58,7 @@ let main argv =
     SimplifyTest (Sum[Sum[];Sum[ForceVar]])  ForceVar
 
     FileTokenizerTest "token.ff"
+    FileTokenizerTest "pebble.ff"
 
     0 // return an integer exit code
 
