@@ -20,7 +20,8 @@ type TokenKind =
     | Identifier
     | ExpressionReference
     | IntegerLiteral
-    | FloatLiteral
+    | RealFloatLiteral
+    | ImagFloatLiteral
     | Punctuation
 
 type TokenOrigin = {
@@ -86,8 +87,10 @@ let ClassifyToken text precedence =
     elif IsIdentifier text then
         TokenKind.Identifier
     elif IsNumericLiteral text then
-        if (text.Contains("e")) || (text.Contains("E")) || (text.Contains(".")) then
-            TokenKind.FloatLiteral
+        if (text.EndsWith("i")) then
+            TokenKind.ImagFloatLiteral
+        elif (text.Contains("e")) || (text.Contains("E")) || (text.Contains(".")) then
+            TokenKind.RealFloatLiteral
         else
             TokenKind.IntegerLiteral
     elif text.StartsWith("#") then

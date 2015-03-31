@@ -32,7 +32,7 @@ let PrintToken ({Text=text; Kind=kind; Precedence=precedence; ColumnNumber=colum
         | Some({Filename=filename; LineNumber=lineNumber}) -> sprintf "%s %5d " filename lineNumber 
         | None -> ""
 
-    printfn "%s %5d %d %-14s %-10s" originText columnNumber precedence kindString text
+    printfn "%s %5d %d %-20s %-10s" originText columnNumber precedence kindString text
 
 let FileTokenizerTest filename =
     let filepath = System.IO.Path.Combine("..", "..", "scripts", filename)
