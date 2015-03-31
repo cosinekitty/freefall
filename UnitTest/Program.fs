@@ -1,4 +1,6 @@
-﻿open Freefall.Expr
+﻿module UnitTest
+
+open Freefall.Expr
 open Freefall.Scanner
 open Freefall.Parser
 
