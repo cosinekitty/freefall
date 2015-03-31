@@ -1,10 +1,10 @@
 ﻿open Freefall.Expr
+open Freefall.Scanner
 open Freefall.Parser
 
 let Unknown = Variable ("x", Dimensionless)
 
 let AlmostPi = Amount(PhysicalQuantity(Rational(22L,7L), Dimensionless))
-
 
 let Weight = Amount(PhysicalQuantity(Rational(3L,4L), ForceConcept))
 
@@ -25,6 +25,13 @@ let SimplifyTest raw expected =
         printfn "expected = %s" (FormatExpression expected)
         failwith "SimplifyTest failure"
 
+let FileTokenizerTest filename =
+    let filepath = System.IO.Path.Combine("..", "..", "scripts", filename)
+    printfn "Tokens for file %s :" filepath
+    let tokenlist = TokenizeFile filepath
+    for token in tokenlist do
+        printfn "%A" token
+
 [<EntryPoint>]
 let main argv = 
     printfn "AlmostPi = %s" (FormatExpression AlmostPi)
@@ -40,6 +47,8 @@ let main argv =
     IdentityTest (Product[AlmostPi;ForceVar;MyScalar]) (Product[MyScalar;AlmostPi;ForceVar])
 
     SimplifyTest (Sum[Sum[];Sum[ForceVar]])  ForceVar
+
+    FileTokenizerTest "token.ff"
 
     0 // return an integer exit code
 
