@@ -2,16 +2,18 @@
 open System.Text.RegularExpressions
 open Microsoft.FSharp.Collections
 
-let TokenRegex = new Regex("""
-      [A-Za-z_][A-Za-z_0-9]*                    # identifier or reserved word
-    | [0-9]+(\.[0-9]*)?([eE][\+\-]?[0-9]+)?i?   # real or imaginary constant with optional scientific notation
-    | \#[0-9]*                                  # eref: reference to prior expression
-    | //[^\n]*                                  # comment -- eats the rest of the line
-    | <==>                                      # equivalence operator (must come before <=)
-    | <= | >= | !=                              # multi-character comparison operators
-    | :=                                        # assignment operator
-    | \S                                        # all other non-whitespace single chars are tokens
-    """, RegexOptions.IgnorePatternWhitespace ||| RegexOptions.Compiled)
+let TokenRegex = 
+    new Regex("""
+          [A-Za-z_][A-Za-z_0-9]*                    # identifier or reserved word
+        | [0-9]+(\.[0-9]*)?([eE][\+\-]?[0-9]+)?i?   # real or imaginary constant with optional scientific notation
+        | \#[0-9]*                                  # eref: reference to prior expression
+        | //[^\n]*                                  # comment -- eats the rest of the line
+        | <==>                                      # equivalence operator (must come before <=)
+        | <= | >= | !=                              # multi-character comparison operators
+        | :=                                        # assignment operator
+        | \S                                        # all other non-whitespace single chars are tokens
+    """ 
+    , RegexOptions.IgnorePatternWhitespace ||| RegexOptions.Compiled)
 
 type TokenKind = 
     | Keyword
