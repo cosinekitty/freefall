@@ -1,4 +1,5 @@
 ﻿open Freefall.Expr
+open Freefall.Parser
 
 let Unknown = Variable ("x", Dimensionless)
 
