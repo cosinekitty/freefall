@@ -1,5 +1,6 @@
 ﻿module Freefall.Scanner
 open System.Text.RegularExpressions
+open Microsoft.FSharp.Collections
 
 let TokenRegex = new Regex("""
       [A-Za-z_][A-Za-z_0-9]*                    # identifier or reserved word
@@ -68,22 +69,27 @@ let IsNumericLiteral (text:string) =
         let c = text.[0]
         (c >= '0') && (c <= '9')
 
+let KeywordTable = Set.ofList(["concept"; "unit"; "forget"; "var"])
+let IsKeyword text = Set.contains text KeywordTable 
+
+let TypenameTable = Set.ofList(["integer"; "rational"; "real"; "complex";])
+let IsTypename text = Set.contains text TypenameTable
+
 let ClassifyToken text precedence =
     if precedence < Precedence_Atom then
         TokenKind.Operator
+    elif IsKeyword text then
+        TokenKind.Keyword
+    elif IsTypename text then
+        TokenKind.Typename
+    elif IsIdentifier text then
+        TokenKind.Identifier
+    elif IsNumericLiteral text then
+        TokenKind.NumericLiteral
+    elif text.StartsWith("#") then
+        TokenKind.ExpressionReference
     else
-        match text with
-        | "unit" -> TokenKind.Keyword
-        | "var" -> TokenKind.Keyword
-        | _ ->
-            if IsIdentifier text then
-                TokenKind.Identifier
-            elif IsNumericLiteral text then
-                TokenKind.NumericLiteral
-            elif text.StartsWith("#") then
-                TokenKind.ExpressionReference
-            else
-                TokenKind.Punctuation
+        TokenKind.Punctuation
 
 let MakeToken origin (m:Match): Token =
     let precedence = OperatorPrecedence m.Value

@@ -25,12 +25,21 @@ let SimplifyTest raw expected =
         printfn "expected = %s" (FormatExpression expected)
         failwith "SimplifyTest failure"
 
+let PrintToken ({Text=text; Kind=kind; Precedence=precedence; ColumnNumber=columnNumber; Origin=origin}) =
+    let kindString = sprintf "%A" kind
+    let originText = 
+        match origin with
+        | Some({Filename=filename; LineNumber=lineNumber}) -> sprintf "%s %5d " filename lineNumber 
+        | None -> ""
+
+    printfn "%s %5d %d %-14s %-10s" originText columnNumber precedence kindString text
+
 let FileTokenizerTest filename =
     let filepath = System.IO.Path.Combine("..", "..", "scripts", filename)
     printfn "Tokens for file %s :" filepath
     let tokenlist = TokenizeFile filepath
     for token in tokenlist do
-        printfn "%A" token
+        PrintToken token
 
 [<EntryPoint>]
 let main argv = 

@@ -1,0 +1,35 @@
+var G: distance^3 / (time^2 * mass);
+var M: mass;
+var v: speed;
+var x, H, R: distance;
+var t: time;
+
+H > 0*meter;
+x > 0*meter;
+H - x >= 0*meter;
+M > 0*kilogram;
+G = grav;
+
+v = -sqrt(2*M*G*(1/x - 1/H));
+
+t = sqrt(H/(2*M*G)) * ((H/2)*acos((2*x-H)/H) + sqrt(x*(H-x)));
+
+deriv(#, x, t);
+
+simp(1/#);
+simp(inject(#, 22, expand));
+simp(inject(#, 20, merge));
+simp(inject(#, 20, factor));
+inject(#, 15, merge);
+simp(#);
+simp(inject(#, 20, swap));
+inject(#, 17, split, H*x^2);
+simp(#);
+inject(#, 8, merge);
+inject(#, 7, merge);
+inject(#, 8, factor, 2*M*G);
+inject(#, 14, expand);
+
+//inject(#, 20, expand);
+//inject(#, 8, merge);
+//inject(breakpoint(#), 7, merge);
