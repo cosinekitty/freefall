@@ -2,6 +2,7 @@
 // Symbolic algebra/physics helper.
 
 module Freefall.Expr
+open System.Collections.Generic
 open Scanner
 
 // FIXFIXFIX: Take a look at using BigRational, complex, etc, from https://github.com/fsprojects/powerpack
@@ -168,7 +169,7 @@ let InvertNumber number =        // calculate the numeric reciprocal
 
 type Expression =
     | Amount of PhysicalQuantity
-    | Variable of Token * PhysicalConcept      // (name, units)
+    | Variable of Token
     | Negative of Expression
     | Reciprocal of Expression
     | Sum of Expression list
@@ -263,7 +264,7 @@ let FormatQuantity (PhysicalQuantity(scalar,concept)) =
 let rec FormatExpression expr =
     match expr with
     | Amount quantity -> FormatQuantity quantity
-    | Variable(token,_) -> token.Text
+    | Variable(token) -> token.Text
     | Negative arg -> "neg(" + FormatExpression arg + ")"
     | Reciprocal arg -> "recip(" + FormatExpression arg + ")"
     | Sum terms -> "sum(" + FormatExprList terms + ")"
@@ -275,6 +276,38 @@ and FormatExprList list =
     | [] -> ""
     | [single] -> FormatExpression single
     | first :: rest -> FormatExpression first + "," + FormatExprList rest
+
+//-----------------------------------------------------------------------------------------------------
+//  Context provides mutable state needed to execute a series of Freefall statements.
+//  Some statements will define units and types of variables that are subsequently referenced.
+//  Executed statements will accumulate references that can be used by later statements.
+//  Some statements "forget" things statement references on purpose. 
+
+type SymbolEntry =
+    | VariableEntry of PhysicalConcept
+
+type Context = {SymbolTable:Dictionary<string,SymbolEntry>;}
+
+let DefineSymbol {SymbolTable=symtable;} ({Text=symbol; Kind=kind} as symtoken) symentry =
+    if kind <> TokenKind.Identifier then
+        raise (SyntaxException("Expected identifier for symbol name", symtoken))
+    elif (symtable.ContainsKey(symbol)) then
+        raise (SyntaxException("Symbol is already defined", symtoken))
+    else
+        (symtable.Add(symbol, symentry))    
+
+let FindSymbolEntry {SymbolTable=symtable;} ({Text=symbol; Kind=kind} as symtoken) =
+    if kind <> TokenKind.Identifier then
+        raise (SyntaxException("Expected symbol identifier", symtoken))
+    elif not (symtable.ContainsKey(symbol)) then
+        raise (SyntaxException("Undefined symbol", symtoken))
+    else
+        symtable.[symbol]
+
+let FindVariableConcept context ({Kind=kind; Text=varname;} as vartoken) =
+    match FindSymbolEntry context vartoken with
+    | VariableEntry(concept) -> concept
+//    | _ -> raise (SyntaxException("Expected variable", vartoken))
 
 //-----------------------------------------------------------------------------------------------------
 // Identity tester : determines if two expressions have equivalent values.
@@ -295,27 +328,30 @@ let rec AreIdenticalNumbers a b =
     | (Complex(_,_),Real(_)) -> AreIdenticalNumbers b a
     | (Complex(ar,ai),Complex(br,bi)) -> (ar = br) && (ai = bi)
 
-let rec AreIdentical a b =
+let rec AreIdentical context a b =
     match (a,b) with
     | (Amount(PhysicalQuantity(aNumber,aConcept)), Amount(PhysicalQuantity(bNumber,bConcept))) -> 
         AreIdenticalQuantities aNumber aConcept bNumber bConcept
     | (Amount(_), _) -> false
-    | (Variable(aToken,aConcept), Variable(bToken,bConcept)) ->
+    | (Variable(aToken), Variable(bToken)) ->
         (aToken.Text = bToken.Text) && (
+            let aConcept = FindVariableConcept context aToken
+            let bConcept = FindVariableConcept context bToken
+
             (aConcept = bConcept) || 
             // FIXFIXFIX : create exception type for attributing errors to tokens
             failwith (sprintf "Mismatching variable %s concepts : %s and %s" aToken.Text (FormatConcept aConcept) (FormatConcept bConcept))
         )
     | (Variable(_), _) -> false
-    | (Negative(na),Negative(nb)) -> AreIdentical na nb
+    | (Negative(na),Negative(nb)) -> AreIdentical context na nb
     | (Negative(_), _) -> false
-    | (Reciprocal(ra),Reciprocal(rb)) -> AreIdentical ra rb
+    | (Reciprocal(ra),Reciprocal(rb)) -> AreIdentical context ra rb
     | (Reciprocal(_), _) -> false
-    | (Sum(aterms),Sum(bterms)) -> ArePermutedLists aterms bterms
+    | (Sum(aterms),Sum(bterms)) -> ArePermutedLists context aterms bterms
     | (Sum(_), _) -> false
-    | (Product(afactors),Product(bfactors)) -> ArePermutedLists afactors bfactors
+    | (Product(afactors),Product(bfactors)) -> ArePermutedLists context afactors bfactors
     | (Product(_), _) -> false
-    | (Power(abase,aexp),Power(bbase,bexp)) -> (AreIdentical abase bbase) && (AreIdentical aexp bexp)
+    | (Power(abase,aexp),Power(bbase,bexp)) -> (AreIdentical context abase bbase) && (AreIdentical context aexp bexp)
     | (Power(_,_), _) -> false
 
 and AreIdenticalQuantities aNumber aConcept bNumber bConcept =
@@ -328,7 +364,7 @@ and AreIdenticalQuantities aNumber aConcept bNumber bConcept =
         // Neither is zero, so we must match numbers and concepts both.
         (aConcept = bConcept) && (AreIdenticalNumbers aNumber bNumber)
 
-and ArePermutedLists alist blist =
+and ArePermutedLists context alist blist =
     if List.length alist <> List.length blist then
         false   // cannot possibly match if the lists have different lengths (important optimization to avoid lots of pointless work)
     else
@@ -340,22 +376,22 @@ and ArePermutedLists alist blist =
                 // Try to find afirst in bterms.
                 // If not found, immediately return false.
                 // If found, cancel it with its buddy in bterms, yielding arest and bshorter, then recurse.
-                match FindIdenticalInList afirst blist with
+                match FindIdenticalInList context afirst blist with
                 | None -> false
-                | Some(bshorter) -> ArePermutedLists arest bshorter
+                | Some(bshorter) -> ArePermutedLists context arest bshorter
         
 // The following function searches for an element of list that
 // is mathematically identical to expr.  If found, returns Some(shorter)
 // where shorter is list with the identical element removed.
 // Otherwise, returns None.
-and FindIdenticalInList expr list =
+and FindIdenticalInList context expr list =
     match list with
     | [] -> None
     | first::rest -> 
-        if AreIdentical expr first then
+        if AreIdentical context expr first then
             Some(rest)
         else
-            match FindIdenticalInList expr rest with
+            match FindIdenticalInList context expr rest with
             | None -> None
             | Some(shorter) -> Some(first :: shorter)
 
@@ -368,13 +404,13 @@ let AddQuantities (PhysicalQuantity(aNumber,aConcept)) (PhysicalQuantity(bNumber
 let MultiplyQuantities (PhysicalQuantity(aNumber,aConcept)) (PhysicalQuantity(bNumber,bConcept)) =
     Amount(PhysicalQuantity(MultiplyNumbers aNumber bNumber, MultiplyConcepts aConcept bConcept))
 
-let AreOppositeTerms a b =
-    (AreIdentical a (Negative b)) ||
-    (AreIdentical b (Negative a))
+let AreOppositeTerms context a b =
+    (AreIdentical context a (Negative b)) ||
+    (AreIdentical context b (Negative a))
 
-let AreOppositeFactors a b =
-    (AreIdentical a (Reciprocal b)) ||
-    (AreIdentical b (Reciprocal a))
+let AreOppositeFactors context a b =
+    (AreIdentical context a (Reciprocal b)) ||
+    (AreIdentical context b (Reciprocal a))
 
 let rec CancelOpposite testfunc termlist =
     match termlist with
@@ -394,9 +430,11 @@ let rec CancelOpposite testfunc termlist =
                 else
                     CancelOpposite testfunc (next :: attempt)
 
-let CancelOppositeTerms termlist = CancelOpposite AreOppositeTerms termlist
+let CancelOppositeTerms context termlist = 
+    CancelOpposite (AreOppositeTerms context) termlist
 
-let CancelOppositeFactors factorlist = CancelOpposite AreOppositeFactors factorlist
+let CancelOppositeFactors context factorlist = 
+    CancelOpposite (AreOppositeFactors context) factorlist
 
 // Add together all constant terms in a sum list and move the result to the front of the list.
 let rec MergeConstants mergefunc terms =
@@ -410,26 +448,26 @@ let rec MergeConstants mergefunc terms =
         | (_, Amount(b) :: residue) -> Amount(b) :: first :: residue
         | _ -> first :: mrest
 
-let rec SimplifyStep expr =
+let rec SimplifyStep context expr =
     match expr with
     | Amount(_) -> expr     // already as simple as possible
     | Variable(_) -> expr   // already as simple as possible
-    | Negative(Negative(x)) -> SimplifyStep x
+    | Negative(Negative(x)) -> SimplifyStep context x
     | Negative(arg) -> 
-        match SimplifyStep arg with
+        match SimplifyStep context arg with
         | Amount(PhysicalQuantity(number,concept)) -> Amount(PhysicalQuantity((NegateNumber number),concept))
         | sarg -> Negative(sarg)
 
-    | Reciprocal(Reciprocal(x)) -> SimplifyStep x
+    | Reciprocal(Reciprocal(x)) -> SimplifyStep context x
     | Reciprocal(arg) -> 
-        match SimplifyStep arg with
+        match SimplifyStep context arg with
         | Amount(PhysicalQuantity(number,concept)) -> Amount(PhysicalQuantity((InvertNumber number), (InvertConcept concept)))
         | sarg -> Reciprocal(sarg)
 
     | Sum(termlist) ->
         let simpargs = 
-            SimplifySumArgs (List.map SimplifyStep termlist) 
-            |> CancelOppositeTerms 
+            SimplifySumArgs (List.map (SimplifyStep context) termlist) 
+            |> CancelOppositeTerms context 
             |> MergeConstants AddQuantities
         match simpargs with
         | [] -> ZeroAmount
@@ -438,8 +476,8 @@ let rec SimplifyStep expr =
 
     | Product(factorlist) ->
         let simpfactors = 
-            SimplifyProductArgs (List.map SimplifyStep factorlist) 
-            |> CancelOppositeFactors
+            SimplifyProductArgs (List.map (SimplifyStep context) factorlist) 
+            |> CancelOppositeFactors context
             |> MergeConstants MultiplyQuantities
         if List.exists IsZeroExpression simpfactors then
             ZeroAmount
@@ -449,8 +487,8 @@ let rec SimplifyStep expr =
             | [factor] -> factor
             | _ -> Product simpfactors
     | Power(x,y) ->
-        let sx = SimplifyStep x
-        let sy = SimplifyStep y
+        let sx = SimplifyStep context x
+        let sy = SimplifyStep context y
         // FIXFIXFIX - could use more simplification and validation rules here
         if (IsZeroExpression sx) && (IsZeroExpression sy) then
             failwith "Cannot evaluate 0^0."
@@ -474,13 +512,13 @@ and SimplifyProductArgs simpargs =
 //---------------------------------------------------------------------------
 // Aggressive, iterative simplifier...
 
-let Simplify expr =
+let Simplify context expr =
     // Keep iterating SimplifyStep until the expression stops changing.
     let mutable prev = expr
-    let mutable simp = SimplifyStep expr
+    let mutable simp = SimplifyStep context expr
     while simp <> prev do
         prev <- simp
-        simp <- SimplifyStep simp
+        simp <- SimplifyStep context simp
     simp
 
 //-----------------------------------------------------------------------------------------------------
@@ -491,22 +529,22 @@ let Simplify expr =
 // No other reason for returning None should be allowed;
 // must throw an exception for any unit compatibility violation.
 
-let rec ExpressionConcept expr =
+let rec ExpressionConcept context expr =
     match expr with
     | Amount(PhysicalQuantity(number,concept)) -> if IsNumberZero number then Zero else concept
-    | Variable(_,concept) -> concept
-    | Negative(arg) -> ExpressionConcept arg
-    | Reciprocal(arg) -> ReciprocalConcept arg
-    | Sum(terms) -> SumConcept terms
-    | Product(factors) -> ProductConcept factors
-    | Power(a,b) -> PowerConcept a b
+    | Variable(vartoken) -> FindVariableConcept context vartoken
+    | Negative(arg) -> ExpressionConcept context arg
+    | Reciprocal(arg) -> ReciprocalConcept context arg
+    | Sum(terms) -> SumConcept context terms
+    | Product(factors) -> ProductConcept context factors
+    | Power(a,b) -> PowerConcept context a b
 
-and SumConcept terms =
+and SumConcept context terms =
     match terms with 
     | [] -> Zero        // sum() = 0, which has no specific units -- see comments above.
     | first::rest -> 
-        let firstConcept = ExpressionConcept first
-        let restConcept = SumConcept rest
+        let firstConcept = ExpressionConcept context first
+        let restConcept = SumConcept context rest
         match (firstConcept, restConcept) with
         | (Zero,Zero) -> Zero                    // 0+0 = 0, which has no specific units
         | (Concept(_),Zero) -> firstConcept      // x+0 = x with specific units
@@ -517,15 +555,15 @@ and SumConcept terms =
             else
                 firstConcept
 
-and ProductConcept factors =
+and ProductConcept context factors =
     match factors with 
     | [] -> Dimensionless     // product() = 1, which has dimensionless units            
-    | first::rest -> MultiplyConcepts (ExpressionConcept first) (ProductConcept rest)
+    | first::rest -> MultiplyConcepts (ExpressionConcept context first) (ProductConcept context rest)
 
-and PowerConcept x y =
-    let yConcept = ExpressionConcept y
+and PowerConcept context x y =
+    let yConcept = ExpressionConcept context y
     if yConcept = Dimensionless then
-        let xConcept = ExpressionConcept x
+        let xConcept = ExpressionConcept context x
         if xConcept = Dimensionless then
             // If x is dimensionless, then y may be any dimensionless expression, e.g. 2.7182818^y.
             // A dimensionless value to a dimensionless power is dimensionless.
@@ -533,7 +571,7 @@ and PowerConcept x y =
         else
             // If x is dimensional, then y must be rational (e.g. x^(-3/4)).
             // In this case, multiply the exponent list of x's dimensions with the rational value of y.
-            let ySimp = Simplify y      // take any possible opportunity to boil this down to a number.
+            let ySimp = Simplify context y      // take any possible opportunity to boil this down to a number.
             match ySimp with
             | Amount(PhysicalQuantity(Rational(ynum,yden),ySimpConcept)) ->
                 if ySimpConcept <> Dimensionless then
@@ -544,8 +582,8 @@ and PowerConcept x y =
     else
         failwith "Cannot raise an expression to a dimensional power."
 
-and ReciprocalConcept arg =
-    match ExpressionConcept arg with
+and ReciprocalConcept context arg =
+    match ExpressionConcept context arg with
     | Zero -> Zero
     | Concept(dimlist) -> 
         // Take the reciprocal by negating each rational number in the list of dimensional exponents.

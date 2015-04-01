@@ -1,5 +1,6 @@
 ﻿module UnitTest
 
+open System.Collections.Generic
 open Freefall.Expr
 open Freefall.Scanner
 open Freefall.Parser
@@ -7,7 +8,15 @@ open Freefall.Parser
 let MakeIdentifierToken name : Token =
     {Text=name; Precedence=Precedence_Atom; Kind=TokenKind.Identifier; Origin=None; ColumnNumber=0;}
 
-let Unknown = Variable ((MakeIdentifierToken "x"), Dimensionless)
+let MyContext = {SymbolTable = new Dictionary<string, SymbolEntry>();}
+
+let VarTokenX = MakeIdentifierToken "x"
+let XVar = Variable(VarTokenX)
+DefineSymbol MyContext VarTokenX (VariableEntry(Dimensionless))
+
+let VarTokenF = MakeIdentifierToken "F"
+let ForceVar = Variable(VarTokenF)
+DefineSymbol MyContext VarTokenF (VariableEntry(ForceConcept))
 
 let AlmostPi = Amount(PhysicalQuantity(Rational(22L,7L), Dimensionless))
 
@@ -16,13 +25,13 @@ let Weight = Amount(PhysicalQuantity(Rational(3L,4L), ForceConcept))
 let WeightSquared = Product[Weight;Weight]
 
 let IdentityTest a b =
-    if not (AreIdentical a b) then
+    if not (AreIdentical MyContext a b) then
         failwith (sprintf "IdentityTest FAILED: %s <> %s" (FormatExpression a) (FormatExpression b))
     else
         printfn "%s = %s" (FormatExpression a) (FormatExpression b)
 
 let SimplifyTest raw expected =
-    let simp = Simplify raw
+    let simp = Simplify MyContext raw
     if simp <> expected then
         printfn "SimplifyTest failed:"
         printfn "raw      = %s" (FormatExpression raw)
@@ -48,22 +57,27 @@ let FileTokenizerTest filename =
 
 [<EntryPoint>]
 let main argv = 
-    printfn "AlmostPi = %s" (FormatExpression AlmostPi)
-    printfn "OneNewton = %s" (FormatExpression Weight)
-    printfn "WeightSquared = %s" (FormatExpression WeightSquared)
-    printfn "concept(WeightSquared) = %s" (FormatConcept (ExpressionConcept WeightSquared))
+    try
+        printfn "AlmostPi = %s" (FormatExpression AlmostPi)
+        printfn "OneNewton = %s" (FormatExpression Weight)
+        printfn "WeightSquared = %s" (FormatExpression WeightSquared)
+        printfn "concept(WeightSquared) = %s" (FormatConcept (ExpressionConcept MyContext WeightSquared))
 
-    let ForceVar = Variable((MakeIdentifierToken "F"), ForceConcept)
-    let MyScalar = Amount(PhysicalQuantity(Real(7.28), Dimensionless))
-    let WeirdValue = Power(ForceVar,AlmostPi)
-    printfn "WeirdValue = %s, concept = %s" (FormatExpression WeirdValue) (FormatConcept (ExpressionConcept WeirdValue))
+        let MyScalar = Amount(PhysicalQuantity(Real(7.28), Dimensionless))
+        let WeirdValue = Power(Variable(VarTokenF),AlmostPi)
+        printfn "WeirdValue = %s, concept = %s" 
+            (FormatExpression WeirdValue) 
+            (FormatConcept (ExpressionConcept MyContext WeirdValue))
 
-    IdentityTest (Product[AlmostPi;ForceVar;MyScalar]) (Product[MyScalar;AlmostPi;ForceVar])
+        IdentityTest (Product[AlmostPi;ForceVar;MyScalar]) (Product[MyScalar;AlmostPi;ForceVar])
 
-    SimplifyTest (Sum[Sum[];Sum[ForceVar]])  ForceVar
+        SimplifyTest (Sum[Sum[];Sum[ForceVar]])  ForceVar
 
-    FileTokenizerTest "token.ff"
-    FileTokenizerTest "pebble.ff"
+        FileTokenizerTest "token.ff"
+        FileTokenizerTest "pebble.ff"
 
-    0 // return an integer exit code
-
+        0   // success exit code
+    with SyntaxException(message,token) ->
+        printfn "ERROR: %s" message
+        PrintToken token
+        1   // failure exit code

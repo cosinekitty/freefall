@@ -38,6 +38,8 @@ type Token = {
     ColumnNumber: int;
 }
 
+exception SyntaxException of string * Token
+
 let Precedence_Or   = 2
 let Precedence_And  = 3
 let Precedence_Rel  = 4
@@ -75,8 +77,22 @@ let IsNumericLiteral (text:string) =
 let KeywordTable = Set.ofList(["concept"; "unit"; "forget"; "var"])
 let IsKeyword text = Set.contains text KeywordTable 
 
-let TypenameTable = Set.ofList(["integer"; "rational"; "real"; "complex";])
-let IsTypename text = Set.contains text TypenameTable
+type NumericRange =         // the set of values a variable, function, etc, is allowed to range over
+    | IntegerRange
+    | RationalRange
+    | RealRange
+    | ComplexRange
+
+let TypenameTable = 
+    Map.ofList(
+        [
+            ("integer",  IntegerRange); 
+            ("rational", RationalRange); 
+            ("real",     RealRange); 
+            ("complex",  ComplexRange);
+        ])
+
+let IsTypename text = Map.containsKey text TypenameTable
 
 let ClassifyToken text precedence =
     if precedence < Precedence_Atom then

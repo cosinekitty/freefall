@@ -1,4 +1,4 @@
-﻿module UnitTest.AssemblyInfo
+﻿module AssemblyInfo
 
 open System.Reflection
 open System.Runtime.CompilerServices
