@@ -67,3 +67,25 @@ and ParseAtom scan =
             (Amount(PhysicalQuantity(Real(realvalue), Dimensionless))), rscan
         else
             raise (SyntaxException("Real literal is not valid.", realtoken))
+
+    | ({Kind=TokenKind.IntegerLiteral; Text=text;} as inttoken) :: rscan ->
+        let isValid, intvalue = System.Int64.TryParse(text)
+        if isValid then
+            (Amount(PhysicalQuantity(Rational(intvalue,1L), Dimensionless))), rscan
+        else
+            raise (SyntaxException("Integer literal is not valid.", inttoken))
+
+    | {Kind=TokenKind.Punctuation; Text="(";} :: xscan ->
+        let expr, yscan = ParseExpression xscan
+        match yscan with
+        | {Text=")";} :: zscan -> expr, zscan
+        | [] -> raise UnexpectedEndException
+        | badtoken :: zscan -> raise (SyntaxException("Expected ')'", badtoken))
+
+    // FIXFIXFIX - support the following constructs
+    // "@" ident    ==>  derivative operator
+    // "#" [0-9]*   ==>  expression reference
+    // ident "(" arglist ")"   ==> function call or macro expansion
+
+    | badtoken :: _ -> 
+        raise (SyntaxException("Syntax error.", badtoken))
