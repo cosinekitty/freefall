@@ -2,7 +2,10 @@
 open Freefall.Scanner
 open Freefall.Parser
 
-let Unknown = Variable ("x", Dimensionless)
+let MakeIdentifierToken name : Token =
+    {Text=name; Precedence=Precedence_Atom; Kind=TokenKind.Identifier; Origin=None; ColumnNumber=0;}
+
+let Unknown = Variable ((MakeIdentifierToken "x"), Dimensionless)
 
 let AlmostPi = Amount(PhysicalQuantity(Rational(22L,7L), Dimensionless))
 
@@ -48,7 +51,7 @@ let main argv =
     printfn "WeightSquared = %s" (FormatExpression WeightSquared)
     printfn "concept(WeightSquared) = %s" (FormatConcept (ExpressionConcept WeightSquared))
 
-    let ForceVar = Variable("F", ForceConcept)
+    let ForceVar = Variable((MakeIdentifierToken "F"), ForceConcept)
     let MyScalar = Amount(PhysicalQuantity(Real(7.28), Dimensionless))
     let WeirdValue = Power(ForceVar,AlmostPi)
     printfn "WeirdValue = %s, concept = %s" (FormatExpression WeirdValue) (FormatConcept (ExpressionConcept WeirdValue))

@@ -2,6 +2,7 @@
 // Symbolic algebra/physics helper.
 
 module Freefall.Expr
+open Scanner
 
 // FIXFIXFIX: Take a look at using BigRational, complex, etc, from https://github.com/fsprojects/powerpack
 
@@ -167,7 +168,7 @@ let InvertNumber number =        // calculate the numeric reciprocal
 
 type Expression =
     | Amount of PhysicalQuantity
-    | Variable of string * PhysicalConcept      // (name, units)
+    | Variable of Token * PhysicalConcept      // (name, units)
     | Negative of Expression
     | Reciprocal of Expression
     | Sum of Expression list
@@ -262,7 +263,7 @@ let FormatQuantity (PhysicalQuantity(scalar,concept)) =
 let rec FormatExpression expr =
     match expr with
     | Amount quantity -> FormatQuantity quantity
-    | Variable(name,_) -> name
+    | Variable(token,_) -> token.Text
     | Negative arg -> "neg(" + FormatExpression arg + ")"
     | Reciprocal arg -> "recip(" + FormatExpression arg + ")"
     | Sum terms -> "sum(" + FormatExprList terms + ")"
@@ -299,10 +300,11 @@ let rec AreIdentical a b =
     | (Amount(PhysicalQuantity(aNumber,aConcept)), Amount(PhysicalQuantity(bNumber,bConcept))) -> 
         AreIdenticalQuantities aNumber aConcept bNumber bConcept
     | (Amount(_), _) -> false
-    | (Variable(aName,aConcept), Variable(bName,bConcept)) ->
-        (aName = bName) && (
+    | (Variable(aToken,aConcept), Variable(bToken,bConcept)) ->
+        (aToken.Text = bToken.Text) && (
             (aConcept = bConcept) || 
-            failwith (sprintf "Mismatching variable %s concepts : %s and %s" aName (FormatConcept aConcept) (FormatConcept bConcept))
+            // FIXFIXFIX : create exception type for attributing errors to tokens
+            failwith (sprintf "Mismatching variable %s concepts : %s and %s" aToken.Text (FormatConcept aConcept) (FormatConcept bConcept))
         )
     | (Variable(_), _) -> false
     | (Negative(na),Negative(nb)) -> AreIdentical na nb

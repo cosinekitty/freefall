@@ -110,5 +110,9 @@ let TokenizeFile (inFileName:string) =
         // Use regex to split up the line into lexical units.
         let mc = TokenRegex.Matches(lineText)
         [for m in mc do if not (m.Value.StartsWith("//")) then yield MakeToken (Some({Filename = inFileName; LineNumber = 1+zeroBasedLineNumber;})) m]
-
     List.mapi TokenizeFileLine linesInFile |> List.concat
+
+let NextTokenHasPrecedence (precedence:int) (scan:Token list) =
+    match scan with
+    | {Precedence=p} :: _ -> p = precedence
+    | _ -> false
