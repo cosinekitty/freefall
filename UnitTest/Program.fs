@@ -77,6 +77,7 @@ let main argv =
         FileTokenizerTest "pebble.ff"
 
         0   // success exit code
+
     with SyntaxException(message,token) ->
         printfn "ERROR: %s" message
         PrintToken token

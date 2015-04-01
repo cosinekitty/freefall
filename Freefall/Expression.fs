@@ -5,6 +5,9 @@ module Freefall.Expr
 open System.Collections.Generic
 open Scanner
 
+exception FreefallRuntimeException of string
+exception UnexpectedEndException
+
 // FIXFIXFIX: Take a look at using BigRational, complex, etc, from https://github.com/fsprojects/powerpack
 
 type Number = 
@@ -26,7 +29,7 @@ let rec GreatestCommonDivisor (a:int64) (b:int64) =         // caller must ensur
 
 let rec MakeRationalPair (numer:int64) (denom:int64) =
     if denom = 0L then 
-        failwith "Rational number cannot have zero denominator."
+        raise (FreefallRuntimeException("Rational number cannot have zero denominator."))
     elif numer = 0L then
         (0L,1L)
     elif denom < 0L then
@@ -91,7 +94,7 @@ let AddConcepts a b =
         if alist = blist then
             a
         else
-            failwith "Cannot add incompatible concepts."
+            raise (FreefallRuntimeException("Cannot add incompatible concepts."))
 
 let MultiplyConcepts a b =
     match (a,b) with
@@ -101,13 +104,13 @@ let MultiplyConcepts a b =
 
 let DivideConcepts a b =
     match (a,b) with
-    | (_,Zero) -> failwith "Cannot divide concept by 0."
+    | (_,Zero) -> raise (FreefallRuntimeException("Cannot divide concept by 0."))
     | (Zero,_) -> Zero
     | (Concept(alist),Concept(blist)) -> Concept(SubtractExponentLists alist blist)
 
 let InvertConcept c =
     match c with
-    | Zero -> failwith "Cannot take reciprocal of 0 concept."
+    | Zero -> raise (FreefallRuntimeException("Cannot take reciprocal of 0 concept."))
     | Concept(clist) -> Concept(NegateExponentList clist)
 
 let ExponentiateConcept xconcept ynum yden =
@@ -115,9 +118,9 @@ let ExponentiateConcept xconcept ynum yden =
     | Concept(xlist) -> Concept(List.map (fun (xnum,xden) -> MakeRationalPair (xnum*ynum) (xden*yden)) xlist)
     | Zero ->
         if ynum = 0L then
-            failwith "Cannot raise 0 to the 0 power."
+            raise (FreefallRuntimeException("Cannot raise 0 to the 0 power."))
         elif ynum < 0L then
-            failwith "Cannot raise 0 to a negative power."
+            raise (FreefallRuntimeException("Cannot raise 0 to a negative power."))
         else
             Zero    // 0^x = 0 for all positive rational x
 
@@ -157,7 +160,7 @@ let IsNumberZero = IsNumberEqualToInteger 0L
 
 let InvertNumber number =        // calculate the numeric reciprocal
     if IsNumberZero number then
-        failwith "Cannot take reciprocal of 0."
+        raise (FreefallRuntimeException("Cannot take reciprocal of 0."))
     else
         match number with
         | Rational(a,b) -> Rational(b,a)
@@ -208,7 +211,7 @@ let FormatNumber x =
     match x with
     | Rational(numer,denom) ->
         if denom = 0L then
-            failwith "Rational number had zero denominator."
+            raise (FreefallRuntimeException("Rational number had zero denominator."))
         elif denom = 1L then
             numer.ToString()
         else
@@ -338,9 +341,10 @@ let rec AreIdentical context a b =
             let aConcept = FindVariableConcept context aToken
             let bConcept = FindVariableConcept context bToken
 
-            (aConcept = bConcept) || 
-            // FIXFIXFIX : create exception type for attributing errors to tokens
-            failwith (sprintf "Mismatching variable %s concepts : %s and %s" aToken.Text (FormatConcept aConcept) (FormatConcept bConcept))
+            if aConcept <> bConcept then
+                raise (SyntaxException((sprintf "Mismatching variable concepts : %s and %s" (FormatConcept aConcept) (FormatConcept bConcept)), aToken))
+            else
+                true
         )
     | (Variable(_), _) -> false
     | (Negative(na),Negative(nb)) -> AreIdentical context na nb
@@ -491,7 +495,7 @@ let rec SimplifyStep context expr =
         let sy = SimplifyStep context y
         // FIXFIXFIX - could use more simplification and validation rules here
         if (IsZeroExpression sx) && (IsZeroExpression sy) then
-            failwith "Cannot evaluate 0^0."
+            raise (FreefallRuntimeException("Cannot evaluate 0^0."))
         else
             Power(sx,sy)            
 
@@ -551,7 +555,7 @@ and SumConcept context terms =
         | (Zero,Concept(_)) -> restConcept       // 0+y = y
         | (Concept(f),Concept(r)) ->
             if f <> r then
-                failwith (sprintf "Incompatible units: cannot add %s and %s" (FormatConcept firstConcept) (FormatConcept restConcept))
+                raise (FreefallRuntimeException(sprintf "Incompatible units: cannot add %s and %s" (FormatConcept firstConcept) (FormatConcept restConcept)))
             else
                 firstConcept
 
@@ -578,9 +582,9 @@ and PowerConcept context x y =
                     failwith "IMPOSSIBLE - y concept changed after simplification."
                 else
                     ExponentiateConcept xConcept ynum yden
-            | _ -> failwith "Cannot raise a dimensional expression to a non-rational power."
+            | _ -> raise (FreefallRuntimeException("Cannot raise a dimensional expression to a non-rational power."))
     else
-        failwith "Cannot raise an expression to a dimensional power."
+        raise (FreefallRuntimeException("Cannot raise an expression to a dimensional power."))
 
 and ReciprocalConcept context arg =
     match ExpressionConcept context arg with
