@@ -12,7 +12,7 @@ let TokenRegex =
         | :=                                        # assignment operator
         | \S                                        # all other non-whitespace single chars are tokens
     """ 
-    , RegexOptions.IgnorePatternWhitespace ||| RegexOptions.Compiled)
+    , RegexOptions.IgnorePatternWhitespace)
 
 type TokenKind = 
     | Keyword
