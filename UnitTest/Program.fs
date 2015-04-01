@@ -43,10 +43,10 @@ let PrintToken ({Text=text; Kind=kind; Precedence=precedence; ColumnNumber=colum
     let kindString = sprintf "%A" kind
     let originText = 
         match origin with
-        | Some({Filename=filename; LineNumber=lineNumber}) -> sprintf "%s %5d " filename lineNumber 
+        | Some({Filename=filename; LineNumber=lineNumber}) -> sprintf "%s L[%5d] " filename lineNumber 
         | None -> ""
 
-    printfn "%s %5d %d %-20s %-10s" originText columnNumber precedence kindString text
+    printfn "%s C[%5d] %d %-20s %-10s" originText columnNumber precedence kindString text
 
 let FileTokenizerTest filename =
     let filepath = System.IO.Path.Combine("..", "..", "scripts", filename)
@@ -54,6 +54,15 @@ let FileTokenizerTest filename =
     let tokenlist = TokenizeFile filepath
     for token in tokenlist do
         PrintToken token
+
+let ParseStatementsTest filename =
+    let filepath = System.IO.Path.Combine("..", "..", "scripts", filename)
+    let tokenlist = TokenizeFile filepath
+    let mutable scan = tokenlist
+    while scan <> [] do
+        let statement, scan2 = ParseStatement scan
+        printfn "Statement: %A" statement
+        scan <- scan2
 
 [<EntryPoint>]
 let main argv = 
@@ -73,8 +82,9 @@ let main argv =
 
         SimplifyTest (Sum[Sum[];Sum[ForceVar]])  ForceVar
 
-        FileTokenizerTest "token.ff"
-        FileTokenizerTest "pebble.ff"
+        //FileTokenizerTest "token.ff"
+        //FileTokenizerTest "pebble.ff"
+        ParseStatementsTest "statement.ff"
 
         0   // success exit code
 

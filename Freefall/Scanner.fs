@@ -16,7 +16,7 @@ let TokenRegex =
 
 type TokenKind = 
     | Keyword
-    | Typename
+    | NumericRangeName
     | Operator
     | Identifier
     | ExpressionReference
@@ -83,7 +83,7 @@ type NumericRange =         // the set of values a variable, function, etc, is a
     | RealRange
     | ComplexRange
 
-let TypenameTable = 
+let RangeNameTable = 
     Map.ofList(
         [
             ("integer",  IntegerRange); 
@@ -92,15 +92,15 @@ let TypenameTable =
             ("complex",  ComplexRange);
         ])
 
-let IsTypename text = Map.containsKey text TypenameTable
+let IsRangeName text = Map.containsKey text RangeNameTable
 
 let ClassifyToken text precedence =
     if precedence < Precedence_Atom then
         TokenKind.Operator
     elif IsKeyword text then
         TokenKind.Keyword
-    elif IsTypename text then
-        TokenKind.Typename
+    elif IsRangeName text then
+        TokenKind.NumericRangeName
     elif IsIdentifier text then
         TokenKind.Identifier
     elif IsNumericLiteral text then

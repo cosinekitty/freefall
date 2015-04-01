@@ -4,6 +4,19 @@
 module Freefall.Parser
 open Freefall.Scanner
 open Freefall.Expr
+open Freefall.Stmt
+
+//---------------------------------------------------------------------------------------
+// Parser utility functions
+
+let ExpectToken text scan =
+    match scan with
+    | [] -> raise UnexpectedEndException
+    | {Text=actual;} :: scan2 as token when actual=text -> scan2
+    | token :: _ -> raise (SyntaxException((sprintf "Expected '%s'" text), token))
+
+//---------------------------------------------------------------------------------------
+// Expression parser
 
 let rec ParseExpression scan =
     ParseAddSub scan
@@ -89,3 +102,77 @@ and ParseAtom scan =
 
     | badtoken :: _ -> 
         raise (SyntaxException("Syntax error.", badtoken))
+
+//---------------------------------------------------------------------------------------
+// Statement parser
+
+let rec ParseIdentList scan =
+    match scan with
+
+    | [] ->
+        raise UnexpectedEndException
+
+    | ({Kind=TokenKind.Identifier} as vartoken) :: punc :: xscan ->
+        match punc.Text with
+
+        | "," ->
+            let restlist, yscan = ParseIdentList xscan
+            (vartoken::restlist), yscan
+
+        | ":" ->
+            [vartoken], xscan
+
+        | _ ->
+            raise (SyntaxException("Expected ',' or ':' after variable name", punc))
+
+    | token :: _ ->
+        raise (SyntaxException("Expected variable name identifier", token))
+
+let ParseTypeAndSemicolon scan =
+    // type ::= typename [expr] | expr 
+    //
+    //      In the above rule, expr is a concept expression, e.g., distance/time
+    //
+    // typename ::= "complex" | "real" | "rational" | "integer" [intrange]
+    // intrange ::= "(" numexpr "," numexpr ")"       // both numexpr must evaluate to integers
+    //
+    //      FIXFIXFIX - intrange not yet implemented
+    match scan with 
+
+    | [] ->
+        raise UnexpectedEndException
+
+    | {Kind=TokenKind.NumericRangeName; Text=text;} :: {Text=";";} :: scan2 ->
+        RangeNameTable.[text], UnityAmount, scan2   // range present but concept absent means concept defaults to dimensionless unity
+
+    | {Kind=TokenKind.NumericRangeName; Text=text} :: scan2 ->
+        let conceptExpr, scan3 = ParseExpression scan2
+        RangeNameTable.[text], conceptExpr, (ExpectToken ";" scan3)
+
+    | _ ->
+        let conceptExpr, scan2 = ParseExpression scan
+        RealRange, conceptExpr, (ExpectToken ";" scan2)       // variables declared without range, e.g. "var t : time;" default to real.
+
+
+let ParseStatement scan =
+    match scan with 
+
+    | [] -> 
+        raise UnexpectedEndException
+
+    | {Text="var";} :: scan2 ->
+        // vardecl ::= "var" ident { "," ident } ":" type ";"
+        let identList, scan3 = ParseIdentList scan2
+        let range, conceptExpr, scan4 = ParseTypeAndSemicolon scan3
+        VarDecl{VarNameList=identList; Range=range; ConceptExpr=conceptExpr;}, scan4
+
+    | {Text=";";} :: rscan -> 
+        (DoNothing, rscan)
+
+    | ({Kind=TokenKind.Identifier} as target) :: {Text=":=";} :: rscan ->
+        let expr, xscan = ParseExpression rscan
+        Assignment{TargetName=Some(target); Expr=expr}, xscan
+
+    | _ ->
+        let expr, xscan = ParseExpression scan
+        Assignment{TargetName=None; Expr=expr}, xscan
