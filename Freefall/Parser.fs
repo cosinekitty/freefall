@@ -49,13 +49,11 @@ and ParseNegPow scan =
     | _ ->
         let atom, xscan = ParseAtom scan
         match xscan with
-        | ({Text=powtext} as powtoken) :: yscan ->
-            if powtext <> "^" then
-                raise (SyntaxException("Expected '^'", powtoken))
-            else
-                let right, zscan = ParseNegPow yscan
-                Power(atom, right), zscan
-        | [] -> raise UnexpectedEndException
+        | ({Text="^"} as powtoken) :: yscan ->
+            let right, zscan = ParseNegPow yscan
+            Power(atom, right), zscan
+        | _ ->
+            atom, xscan
 
 and ParseAtom scan =
     match scan with

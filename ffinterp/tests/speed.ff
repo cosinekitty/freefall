@@ -1,0 +1,10 @@
+// speed.ff
+
+var n: integer;
+var t: real time;
+var x: distance;
+var v: distance/time;
+
+v = x/t;
+
+

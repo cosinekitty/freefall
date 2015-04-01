@@ -291,6 +291,10 @@ type SymbolEntry =
 
 type Context = {SymbolTable:Dictionary<string,SymbolEntry>;}
 
+let MakeContext () = {
+    SymbolTable = new Dictionary<string, SymbolEntry>();
+}
+
 let DefineSymbol {SymbolTable=symtable;} ({Text=symbol; Kind=kind} as symtoken) symentry =
     if kind <> TokenKind.Identifier then
         raise (SyntaxException("Expected identifier for symbol name", symtoken))
