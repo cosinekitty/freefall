@@ -1,15 +1,15 @@
 ﻿// Freefall command-line interpreter program.
 // Don Cross - http://cosinekitty.com
-
-open Freefall.Expr
 open Freefall.Scanner
+open Freefall.Expr
+open Freefall.Stmt
 open Freefall.Parser
 
 let ExecuteFile filename =
     let mutable scan = TokenizeFile filename
     while scan <> [] do
         let statement, scan2 = ParseStatement scan
-        printfn "Statement: %A" statement
+        printfn "=== Statement: %s" (FormatStatement statement)
         scan <- scan2
 
 [<EntryPoint>]

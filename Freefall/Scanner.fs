@@ -83,16 +83,23 @@ type NumericRange =         // the set of values a variable, function, etc, is a
     | RealRange
     | ComplexRange
 
-let RangeNameTable = 
-    Map.ofList(
+let RangeTupleList = 
         [
             ("integer",  IntegerRange); 
             ("rational", RationalRange); 
             ("real",     RealRange); 
             ("complex",  ComplexRange);
-        ])
+        ]
+
+let RangeNameTable = Map.ofList RangeTupleList
+
+let RangeTypeTable = 
+    List.map (fun (name,enum) -> (enum,name)) RangeTupleList
+    |> Map.ofList
 
 let IsRangeName text = Map.containsKey text RangeNameTable
+
+let RangeName r = Map.find r RangeTypeTable
 
 let ClassifyToken text precedence =
     if precedence < Precedence_Atom then
