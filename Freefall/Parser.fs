@@ -206,7 +206,7 @@ let ParseStatement scan =
 
     | ({Kind=TokenKind.Identifier} as target) :: {Text=":=";} :: rscan ->
         let expr, xscan = ParseExpression rscan
-        Assignment{TargetName=Some(target); Expr=expr}, xscan
+        Assignment{TargetName=Some(target); Expr=expr}, (ExpectSemicolon xscan)
 
     | _ ->
         let expr, xscan = ParseExpression scan
