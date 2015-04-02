@@ -178,6 +178,7 @@ type Expression =
     | Sum of Expression list
     | Product of Expression list
     | Power of Expression * Expression
+    | Equals of Expression * Expression
  
 let ZeroAmount = Amount(ZeroQuantity)
 let UnityAmount = Amount(Unity)
@@ -273,6 +274,7 @@ let rec FormatExpression expr =
     | Sum terms -> "sum(" + FormatExprList terms + ")"
     | Product factors -> "prod(" + FormatExprList factors + ")"
     | Power(a,b) -> "pow(" + FormatExpression a + "," + FormatExpression b + ")"
+    | Equals(a,b) -> FormatExpression a + " = " + FormatExpression b
 
 and FormatExprList list =
     match list with
@@ -340,6 +342,7 @@ let rec AreIdentical context a b =
     | (Amount(PhysicalQuantity(aNumber,aConcept)), Amount(PhysicalQuantity(bNumber,bConcept))) -> 
         AreIdenticalQuantities aNumber aConcept bNumber bConcept
     | (Amount(_), _) -> false
+    | (_, Amount(_)) -> false
     | (Variable(aToken), Variable(bToken)) ->
         (aToken.Text = bToken.Text) && (
             let aConcept = FindVariableConcept context aToken
@@ -351,16 +354,25 @@ let rec AreIdentical context a b =
                 true
         )
     | (Variable(_), _) -> false
+    | (_, Variable(_)) -> false
     | (Negative(na),Negative(nb)) -> AreIdentical context na nb
     | (Negative(_), _) -> false
+    | (_, Negative(_)) -> false
     | (Reciprocal(ra),Reciprocal(rb)) -> AreIdentical context ra rb
     | (Reciprocal(_), _) -> false
+    | (_, Reciprocal(_)) -> false
     | (Sum(aterms),Sum(bterms)) -> ArePermutedLists context aterms bterms
     | (Sum(_), _) -> false
+    | (_, Sum(_)) -> false
     | (Product(afactors),Product(bfactors)) -> ArePermutedLists context afactors bfactors
     | (Product(_), _) -> false
     | (Power(abase,aexp),Power(bbase,bexp)) -> (AreIdentical context abase bbase) && (AreIdentical context aexp bexp)
     | (Power(_,_), _) -> false
+    | (_, Power(_,_)) -> false
+    | (Equals(aleft,aright),Equals(bleft,bright)) -> 
+        ((AreIdentical context aleft bleft)  && (AreIdentical context aright bright)) ||
+        ((AreIdentical context aleft bright) && (AreIdentical context aright bleft))
+    | (Equals(_,_), (_)) -> false
 
 and AreIdenticalQuantities aNumber aConcept bNumber bConcept =
     let aIsZero = IsZeroNumberConceptPair aNumber aConcept
@@ -501,7 +513,9 @@ let rec SimplifyStep context expr =
         if (IsZeroExpression sx) && (IsZeroExpression sy) then
             raise (FreefallRuntimeException("Cannot evaluate 0^0."))
         else
-            Power(sx,sy)            
+            Power(sx,sy)
+    | Equals(a,b) ->
+        Equals((SimplifyStep context a), (SimplifyStep context b))
 
 // Sum(Sum(A,B,C), Sum(D,E)) = Sum(A,B,C,D,E)
 // We want to "lift" all inner Sum() contents to the top level of a list.
@@ -546,6 +560,15 @@ let rec ExpressionConcept context expr =
     | Sum(terms) -> SumConcept context terms
     | Product(factors) -> ProductConcept context factors
     | Power(a,b) -> PowerConcept context a b
+    | Equals(a,b) -> EquationConcept context a b
+
+and EquationConcept context a b =
+    let aConcept = ExpressionConcept context a
+    let bConcept = ExpressionConcept context b
+    if aConcept <> bConcept then
+        raise (FreefallRuntimeException(sprintf "Incompatible units: cannot equate/compare %s and %s" (FormatConcept aConcept) (FormatConcept bConcept)))
+    else
+        aConcept
 
 and SumConcept context terms =
     match terms with 

@@ -15,12 +15,19 @@ let ExpectToken text scan =
     | {Text=actual;} :: scan2 as token when actual=text -> scan2
     | token :: _ -> raise (SyntaxException((sprintf "Expected '%s'" text), token))
 
+let ExpectSemicolon = ExpectToken ";"
+
 //---------------------------------------------------------------------------------------
 // Expression parser
 
 let rec ParseExpression scan =
-    ParseAddSub scan
-    // FIXFIXFIX - need to decide how to implement relational expressions
+    let expr, scan2 = ParseAddSub scan
+    match scan2 with
+    | {Text="=";} :: scan3 ->
+        let right, scan4 = ParseAddSub scan3
+        (Equals(expr,right)), scan4
+    | _ ->
+        expr, scan2
 
 and ParseAddSub scan =
     let mutable expr, xscan = ParseDivMul scan
@@ -37,7 +44,12 @@ and ParseDivMul scan =
         let op = List.head xscan
         let right, yscan = ParseDivMul (List.tail xscan)
         xscan <- yscan
-        expr <- (Sum([expr ; right]))
+        if op.Text = "*" then 
+            expr <- Product([expr ; right])
+        elif op.Text = "/" then
+            expr <- Product([expr; Reciprocal(right)])
+        else
+            raise (SyntaxException("Unsupported multop", op))
     expr, xscan
 
 and ParseNegPow scan =
@@ -145,11 +157,11 @@ let ParseTypeAndSemicolon scan =
 
     | {Kind=TokenKind.NumericRangeName; Text=text} :: scan2 ->
         let conceptExpr, scan3 = ParseExpression scan2
-        RangeNameTable.[text], conceptExpr, (ExpectToken ";" scan3)
+        RangeNameTable.[text], conceptExpr, (ExpectSemicolon scan3)
 
     | _ ->
         let conceptExpr, scan2 = ParseExpression scan
-        RealRange, conceptExpr, (ExpectToken ";" scan2)       // variables declared without range, e.g. "var t : time;" default to real.
+        RealRange, conceptExpr, (ExpectSemicolon scan2)       // variables declared without range, e.g. "var t : time;" default to real.
 
 
 let ParseStatement scan =
@@ -173,4 +185,4 @@ let ParseStatement scan =
 
     | _ ->
         let expr, xscan = ParseExpression scan
-        Assignment{TargetName=None; Expr=expr}, xscan
+        Assignment{TargetName=None; Expr=expr}, (ExpectSemicolon xscan)
