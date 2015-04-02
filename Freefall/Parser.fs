@@ -14,12 +14,19 @@ let FileNameFromOrigin origin =
     | None -> None
     | Some {Filename=filename;} -> Some(filename)
 
-let ExpectToken text scan =
+let RequireToken scan =
     match scan with
     | [] -> raise (UnexpectedEndException None)
     | {Kind=TokenKind.EndOfFile; Origin=origin} :: _ -> raise (UnexpectedEndException (FileNameFromOrigin origin))
+    | _::_ -> scan
+
+let Impossible () = failwith "Internal error - this should not be possible!"
+
+let ExpectToken text scan =
+    match RequireToken scan with
     | {Text=actual;} :: scan2 as token when actual=text -> scan2
     | token :: _ -> raise (SyntaxException((sprintf "Expected '%s'" text), token))
+    | _ -> Impossible ()
 
 let ExpectSemicolon = ExpectToken ";"
 
@@ -79,6 +86,35 @@ and ParseNegPow scan =
         | _ ->
             atom, xscan
 
+and ParseArgList scan =
+    // Open parenthesis has already been scanned.
+    // arglist ::= [ expr { "," expr } ] ")"
+    match scan with
+    | [] -> 
+        raise (UnexpectedEndException None)
+
+    | {Kind=TokenKind.EndOfFile; Origin=origin} :: _ -> 
+        raise (UnexpectedEndException (FileNameFromOrigin origin))
+
+    | {Text=")";} :: scan2 -> 
+        [], scan2
+
+    | _ ->
+        let expr, scan2 = ParseExpression scan
+        match scan2 with
+        | {Text=",";} :: scan3 ->
+            let restArgs, scan4 = ParseArgList scan3
+            (expr :: restArgs), scan4
+        
+        | {Text=")";} :: scan3 ->
+            [expr], scan3
+
+        | badtoken :: _ ->
+            raise (SyntaxException("Expected ',' or ')' after function argument expression.", badtoken))
+
+        | [] ->
+            raise (UnexpectedEndException None)
+
 and ParseAtom scan =
     match scan with
     | [] -> 
@@ -87,8 +123,15 @@ and ParseAtom scan =
     | {Kind=TokenKind.EndOfFile; Origin=origin} :: _ -> 
         raise (UnexpectedEndException (FileNameFromOrigin origin))
 
+    | ({Kind=TokenKind.Identifier;} as funcName) :: {Text="(";} :: scan2 ->
+        let argList, scan3 = ParseArgList scan2
+        match funcName.Text with
+        | "sum"  -> Sum(argList), scan3
+        | "prod" -> Product(argList), scan3
+        | _      -> FunctionCall(funcName,argList), scan3
+
     | ({Kind=TokenKind.Identifier;} as vartoken) :: rscan ->
-        (Variable(vartoken)), rscan     // FIXFIXFIX - need to handle non-variable identifiers, e.g. function calls, macro expansions
+        (Variable(vartoken)), rscan
 
     | ({Kind=TokenKind.ImagFloatLiteral; Text=text;} as imagtoken) :: rscan ->
         if not (text.EndsWith("i")) then
@@ -124,7 +167,6 @@ and ParseAtom scan =
     // FIXFIXFIX - support the following constructs
     // "@" ident    ==>  derivative operator
     // "#" [0-9]*   ==>  expression reference
-    // ident "(" arglist ")"   ==> function call or macro expansion
 
     | badtoken :: _ -> 
         raise (SyntaxException("Syntax error.", badtoken))

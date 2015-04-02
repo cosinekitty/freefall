@@ -173,6 +173,7 @@ let InvertNumber number =        // calculate the numeric reciprocal
 type Expression =
     | Amount of PhysicalQuantity
     | Variable of Token
+    | FunctionCall of Token * (Expression list)     // (funcname, [args...])
     | Negative of Expression
     | Reciprocal of Expression
     | Sum of Expression list
@@ -269,6 +270,7 @@ let rec FormatExpression expr =
     match expr with
     | Amount quantity -> FormatQuantity quantity
     | Variable(token) -> token.Text
+    | FunctionCall(funcName, argList) -> funcName.Text + "(" + FormatExprList argList + ")"
     | Negative arg -> "neg(" + FormatExpression arg + ")"
     | Reciprocal arg -> "recip(" + FormatExpression arg + ")"
     | Sum terms -> "sum(" + FormatExprList terms + ")"
@@ -313,7 +315,7 @@ let FindSymbolEntry {SymbolTable=symtable;} ({Text=symbol; Kind=kind} as symtoke
     else
         symtable.[symbol]
 
-let FindVariableConcept context ({Kind=kind; Text=varname;} as vartoken) =
+let FindVariableConcept context vartoken =
     match FindSymbolEntry context vartoken with
     | VariableEntry(concept) -> concept
 //    | _ -> raise (SyntaxException("Expected variable", vartoken))
@@ -324,6 +326,9 @@ let FindVariableConcept context ({Kind=kind; Text=varname;} as vartoken) =
 
 let IsZeroNumberConceptPair number concept =
     (concept = Zero) || (IsNumberZero number)
+
+let IsDeterministicFunctionName funcName =
+    true        // FIXFIXFIX - adjust this in case we have something like random() in the future (I hope not!)
 
 let rec AreIdenticalNumbers a b =
     match (a,b) with
@@ -355,6 +360,12 @@ let rec AreIdentical context a b =
         )
     | (Variable(_), _) -> false
     | (_, Variable(_)) -> false
+    | (FunctionCall(funcName1,argList1), FunctionCall(funcName2,argList2)) -> 
+        (funcName1.Text = funcName2.Text) &&
+        (IsDeterministicFunctionName funcName1.Text) &&
+        (AreIdenticalExprLists context argList1 argList2)
+    | (FunctionCall(_), _) -> false
+    | (_, FunctionCall(_)) -> false
     | (Negative(na),Negative(nb)) -> AreIdentical context na nb
     | (Negative(_), _) -> false
     | (_, Negative(_)) -> false
@@ -373,6 +384,20 @@ let rec AreIdentical context a b =
         ((AreIdentical context aleft bleft)  && (AreIdentical context aright bright)) ||
         ((AreIdentical context aleft bright) && (AreIdentical context aright bleft))
     | (Equals(_,_), (_)) -> false
+
+and AreIdenticalExprLists context list1 list2 =
+    if (List.length list1) <> (List.length list2) then
+        false
+    else
+        match list1, list2 with
+        | [], [] -> 
+            true
+
+        | f1::r1, f2::r2 -> 
+            (AreIdentical context f1 f2) && (AreIdenticalExprLists context r1 r2)
+        
+        | _ ->
+            false
 
 and AreIdenticalQuantities aNumber aConcept bNumber bConcept =
     let aIsZero = IsZeroNumberConceptPair aNumber aConcept
@@ -472,6 +497,10 @@ let rec SimplifyStep context expr =
     match expr with
     | Amount(_) -> expr     // already as simple as possible
     | Variable(_) -> expr   // already as simple as possible
+
+    | FunctionCall(funcName,argList) ->
+        FunctionCall(funcName, (List.map (SimplifyStep context) argList))
+
     | Negative(Negative(x)) -> SimplifyStep context x
     | Negative(arg) -> 
         match SimplifyStep context arg with
@@ -506,6 +535,7 @@ let rec SimplifyStep context expr =
             | [] -> UnityAmount
             | [factor] -> factor
             | _ -> Product simpfactors
+
     | Power(x,y) ->
         let sx = SimplifyStep context x
         let sy = SimplifyStep context y
@@ -514,6 +544,7 @@ let rec SimplifyStep context expr =
             raise (FreefallRuntimeException("Cannot evaluate 0^0."))
         else
             Power(sx,sy)
+
     | Equals(a,b) ->
         Equals((SimplifyStep context a), (SimplifyStep context b))
 
@@ -555,12 +586,16 @@ let rec ExpressionConcept context expr =
     match expr with
     | Amount(PhysicalQuantity(number,concept)) -> if IsNumberZero number then Zero else concept
     | Variable(vartoken) -> FindVariableConcept context vartoken
+    | FunctionCall(funcName,argList) -> FindFunctionConcept context funcName argList
     | Negative(arg) -> ExpressionConcept context arg
     | Reciprocal(arg) -> ReciprocalConcept context arg
     | Sum(terms) -> SumConcept context terms
     | Product(factors) -> ProductConcept context factors
     | Power(a,b) -> PowerConcept context a b
     | Equals(a,b) -> EquationConcept context a b
+
+and FindFunctionConcept context funcNameToken argExprList =
+    failwith "Function concepts not yet implemented."
 
 and EquationConcept context a b =
     let aConcept = ExpressionConcept context a

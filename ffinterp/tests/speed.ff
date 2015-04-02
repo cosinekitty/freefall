@@ -7,4 +7,6 @@ var v: distance/time;
 
 v = x/t;
 
+BillyBob := sum(3.0, 4.0);
+
 
