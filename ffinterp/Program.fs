@@ -5,18 +5,19 @@ open Freefall.Expr
 open Freefall.Stmt
 open Freefall.Parser
 
-let ExecuteFile filename =
+let ExecuteFile context filename =
     let mutable scan = TokenizeFile filename
     while MoreTokensIn scan do
         let statement, scan2 = ParseStatement scan
         printfn "=== Statement: %s" (FormatStatement statement)
+        ExecuteStatement context statement
         scan <- scan2
 
 [<EntryPoint>]
 let main argv = 
     try
         let context = MakeContext ()
-        Array.map ExecuteFile argv |> ignore
+        Array.map (ExecuteFile context) argv |> ignore
         0
     with 
         | SyntaxException(message,token) ->

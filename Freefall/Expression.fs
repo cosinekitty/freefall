@@ -129,7 +129,7 @@ let ExponentiateConcept xconcept ynum yden =
 // A concept to represent any dimensionless quantity...
 let Dimensionless       = Concept[(0L,1L); (0L,1L); (0L,1L); (0L,1L); (0L,1L); (0L,1L); (0L,1L)]
 
-// Fundamental base concepts...
+// Base concepts...
 let MassConcept         = Concept[(1L,1L); (0L,1L); (0L,1L); (0L,1L); (0L,1L); (0L,1L); (0L,1L)]
 let DistanceConcept     = Concept[(0L,1L); (1L,1L); (0L,1L); (0L,1L); (0L,1L); (0L,1L); (0L,1L)]
 let TimeConcept         = Concept[(0L,1L); (0L,1L); (1L,1L); (0L,1L); (0L,1L); (0L,1L); (0L,1L)]
@@ -138,11 +138,29 @@ let SubstanceConcept    = Concept[(0L,1L); (0L,1L); (0L,1L); (0L,1L); (1L,1L); (
 let CurrentConcept      = Concept[(0L,1L); (0L,1L); (0L,1L); (0L,1L); (0L,1L); (1L,1L); (0L,1L)]
 let LuminosityConcept   = Concept[(0L,1L); (0L,1L); (0L,1L); (0L,1L); (0L,1L); (0L,1L); (1L,1L)]
 
-// Compound concepts...
+let BaseConcepts = [
+//   concept name       base unit       concept
+    ("mass",            "kilogram",     MassConcept);
+    ("distance",        "meter",        DistanceConcept);
+    ("time",            "second",       TimeConcept);
+    ("temperature",     "kelvin",       TemperatureConcept);
+    ("substance",       "mole",         SubstanceConcept);
+    ("current",         "ampere",       CurrentConcept);
+    ("luminosity",      "candela",      LuminosityConcept);
+]
+
+// Derived concepts...
 
 let SpeedConcept = DivideConcepts DistanceConcept TimeConcept           // speed = distance/time
 let AccelerationConcept = DivideConcepts SpeedConcept TimeConcept       // accleration = speed/time
 let ForceConcept = MultiplyConcepts MassConcept AccelerationConcept     // force = mass * acceleration
+
+let DerivedConcepts = [
+//   concept name       concept
+    ("speed",           SpeedConcept);
+    ("acceleration",    AccelerationConcept);
+    ("force",           ForceConcept);
+]
 
 // A physical quantity is a numeric scalar attached to a physical concept.
 type PhysicalQuantity = PhysicalQuantity of Number * PhysicalConcept
@@ -172,7 +190,7 @@ let InvertNumber number =        // calculate the numeric reciprocal
 
 type Expression =
     | Amount of PhysicalQuantity
-    | Variable of Token
+    | Solitaire of Token                            // a symbol representing a unit, concept, or variable.
     | FunctionCall of Token * (Expression list)     // (funcname, [args...])
     | Negative of Expression
     | Reciprocal of Expression
@@ -269,7 +287,7 @@ let FormatQuantity (PhysicalQuantity(scalar,concept)) =
 let rec FormatExpression expr =
     match expr with
     | Amount quantity -> FormatQuantity quantity
-    | Variable(token) -> token.Text
+    | Solitaire(token) -> token.Text
     | FunctionCall(funcName, argList) -> funcName.Text + "(" + FormatExprList argList + ")"
     | Negative arg -> "neg(" + FormatExpression arg + ")"
     | Reciprocal arg -> "recip(" + FormatExpression arg + ")"
@@ -291,13 +309,24 @@ and FormatExprList list =
 //  Some statements "forget" things statement references on purpose. 
 
 type SymbolEntry =
-    | VariableEntry of PhysicalConcept
+    | VariableEntry of NumericRange * PhysicalConcept
+    | ConceptEntry of PhysicalConcept
+    | UnitEntry of PhysicalQuantity
+    | AssignmentEntry of Expression
 
-type Context = {SymbolTable:Dictionary<string,SymbolEntry>;}
-
-let MakeContext () = {
-    SymbolTable = new Dictionary<string, SymbolEntry>();
+type Context = {
+    SymbolTable: Dictionary<string,SymbolEntry>;
+    NumberedExpressionList: System.Collections.Generic.List<Expression>;
 }
+
+let AppendNumberedExpression {NumberedExpressionList=numExprList;} expr =
+    numExprList.Add(expr)
+
+let DefineIntrinsicSymbol {SymbolTable=symtable;} symbol entry =
+    if symtable.ContainsKey(symbol) then
+        failwith (sprintf "Symbol '%s' is already defined" symbol)
+    else
+        symtable.Add(symbol, entry)
 
 let DefineSymbol {SymbolTable=symtable;} ({Text=symbol; Kind=kind} as symtoken) symentry =
     if kind <> TokenKind.Identifier then
@@ -305,7 +334,7 @@ let DefineSymbol {SymbolTable=symtable;} ({Text=symbol; Kind=kind} as symtoken) 
     elif (symtable.ContainsKey(symbol)) then
         raise (SyntaxException("Symbol is already defined", symtoken))
     else
-        (symtable.Add(symbol, symentry))    
+        (symtable.Add(symbol, symentry))
 
 let FindSymbolEntry {SymbolTable=symtable;} ({Text=symbol; Kind=kind} as symtoken) =
     if kind <> TokenKind.Identifier then
@@ -315,10 +344,27 @@ let FindSymbolEntry {SymbolTable=symtable;} ({Text=symbol; Kind=kind} as symtoke
     else
         symtable.[symbol]
 
-let FindVariableConcept context vartoken =
-    match FindSymbolEntry context vartoken with
-    | VariableEntry(concept) -> concept
-//    | _ -> raise (SyntaxException("Expected variable", vartoken))
+let FindSolitaireConcept context token =
+    match FindSymbolEntry context token with
+    | VariableEntry(_,concept) -> concept
+    | ConceptEntry(concept) -> concept
+    | UnitEntry(PhysicalQuantity(_,concept)) -> concept
+    | _ -> raise (SyntaxException("Expected unit name, concept name, or variable.", token))
+
+let ValidateSolitaire context token =
+    FindSolitaireConcept context token |> ignore
+    true
+
+let MakeContext () = 
+    let context = {
+        SymbolTable = new Dictionary<string, SymbolEntry>();
+        NumberedExpressionList = new System.Collections.Generic.List<Expression>();
+    }
+
+    for conceptName, baseUnitName, concept in BaseConcepts do
+        DefineIntrinsicSymbol context conceptName (ConceptEntry(concept))
+
+    context
 
 //-----------------------------------------------------------------------------------------------------
 // Identity tester : determines if two expressions have equivalent values.
@@ -348,18 +394,9 @@ let rec AreIdentical context a b =
         AreIdenticalQuantities aNumber aConcept bNumber bConcept
     | (Amount(_), _) -> false
     | (_, Amount(_)) -> false
-    | (Variable(aToken), Variable(bToken)) ->
-        (aToken.Text = bToken.Text) && (
-            let aConcept = FindVariableConcept context aToken
-            let bConcept = FindVariableConcept context bToken
-
-            if aConcept <> bConcept then
-                raise (SyntaxException((sprintf "Mismatching variable concepts : %s and %s" (FormatConcept aConcept) (FormatConcept bConcept)), aToken))
-            else
-                true
-        )
-    | (Variable(_), _) -> false
-    | (_, Variable(_)) -> false
+    | (Solitaire(aToken), Solitaire(bToken)) -> (aToken.Text = bToken.Text) && (ValidateSolitaire context aToken)
+    | (Solitaire(_), _) -> false
+    | (_, Solitaire(_)) -> false
     | (FunctionCall(funcName1,argList1), FunctionCall(funcName2,argList2)) -> 
         (funcName1.Text = funcName2.Text) &&
         (IsDeterministicFunctionName funcName1.Text) &&
@@ -496,7 +533,7 @@ let rec MergeConstants mergefunc terms =
 let rec SimplifyStep context expr =
     match expr with
     | Amount(_) -> expr     // already as simple as possible
-    | Variable(_) -> expr   // already as simple as possible
+    | Solitaire(_) -> expr   // already as simple as possible
 
     | FunctionCall(funcName,argList) ->
         FunctionCall(funcName, (List.map (SimplifyStep context) argList))
@@ -585,7 +622,7 @@ let Simplify context expr =
 let rec ExpressionConcept context expr =
     match expr with
     | Amount(PhysicalQuantity(number,concept)) -> if IsNumberZero number then Zero else concept
-    | Variable(vartoken) -> FindVariableConcept context vartoken
+    | Solitaire(vartoken) -> FindSolitaireConcept context vartoken
     | FunctionCall(funcName,argList) -> FindFunctionConcept context funcName argList
     | Negative(arg) -> ExpressionConcept context arg
     | Reciprocal(arg) -> ReciprocalConcept context arg
@@ -655,3 +692,7 @@ and ReciprocalConcept context arg =
         // Take the reciprocal by negating each rational number in the list of dimensional exponents.
         Concept(List.map (fun (numer,denom) -> MakeRationalPair (-numer) denom) dimlist)
 
+
+let ValidateExpressionConcept context expr =
+    // Call ExpressionConcept just for the side-effect of looking for errors
+    ExpressionConcept context expr |> ignore

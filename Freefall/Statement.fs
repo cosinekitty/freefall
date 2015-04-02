@@ -51,3 +51,25 @@ let FormatStatement statement =
 
     | DoNothing ->
         ";"
+
+//--------------------------------------------------------------------------------------------------
+
+let ExecuteStatement context statement =
+    match statement with
+
+    | VarDecl {VarNameList=vlist; Range=range; ConceptExpr=conceptExpr;} ->
+        let concept = ExpressionConcept context conceptExpr
+        for vname in vlist do
+            DefineSymbol context vname (VariableEntry(range,concept))
+    
+    | Assignment {TargetName=None; Expr=expr;} ->
+        ValidateExpressionConcept context expr
+        AppendNumberedExpression context expr
+
+    | Assignment {TargetName=Some(assignToken); Expr=expr;} ->
+        ValidateExpressionConcept context expr
+        DefineSymbol context assignToken (AssignmentEntry(expr))
+        AppendNumberedExpression context expr
+
+    | DoNothing ->
+        ()

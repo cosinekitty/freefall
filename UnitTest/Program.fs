@@ -8,15 +8,14 @@ open Freefall.Parser
 let MakeIdentifierToken name : Token =
     {Text=name; Precedence=Precedence_Atom; Kind=TokenKind.Identifier; Origin=None; ColumnNumber=0;}
 
-let MyContext = {SymbolTable = new Dictionary<string, SymbolEntry>();}
+let MyContext = MakeContext ()
 
 let VarTokenX = MakeIdentifierToken "x"
-let XVar = Variable(VarTokenX)
-DefineSymbol MyContext VarTokenX (VariableEntry(Dimensionless))
+DefineSymbol MyContext VarTokenX (VariableEntry(RealRange,Dimensionless))
 
 let VarTokenF = MakeIdentifierToken "F"
-let ForceVar = Variable(VarTokenF)
-DefineSymbol MyContext VarTokenF (VariableEntry(ForceConcept))
+let ForceVar = Solitaire(VarTokenF)
+DefineSymbol MyContext VarTokenF (VariableEntry(RealRange,ForceConcept))
 
 let AlmostPi = Amount(PhysicalQuantity(Rational(22L,7L), Dimensionless))
 
@@ -73,7 +72,7 @@ let main argv =
         printfn "concept(WeightSquared) = %s" (FormatConcept (ExpressionConcept MyContext WeightSquared))
 
         let MyScalar = Amount(PhysicalQuantity(Real(7.28), Dimensionless))
-        let WeirdValue = Power(Variable(VarTokenF),AlmostPi)
+        let WeirdValue = Power(Solitaire(VarTokenF),AlmostPi)
         printfn "WeirdValue = %s, concept = %s" 
             (FormatExpression WeirdValue) 
             (FormatConcept (ExpressionConcept MyContext WeirdValue))

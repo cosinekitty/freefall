@@ -134,8 +134,8 @@ and ParseAtom scan =
             | _       -> FunctionCall(funcName,argList)
         expr, scan3
 
-    | ({Kind=TokenKind.Identifier;} as vartoken) :: rscan ->
-        (Variable(vartoken)), rscan
+    | ({Kind=TokenKind.Identifier;} as token) :: rscan ->
+        (Solitaire(token)), rscan     // "solitaire" is a word for a lone symbol that only context can distinguish between variable, unit, or concept.
 
     | ({Kind=TokenKind.ImagFloatLiteral; Text=text;} as imagtoken) :: rscan ->
         if not (text.EndsWith("i")) then
