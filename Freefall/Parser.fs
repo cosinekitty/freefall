@@ -9,9 +9,15 @@ open Freefall.Stmt
 //---------------------------------------------------------------------------------------
 // Parser utility functions
 
+let FileNameFromOrigin origin =
+    match origin with
+    | None -> None
+    | Some {Filename=filename;} -> Some(filename)
+
 let ExpectToken text scan =
     match scan with
-    | [] -> raise UnexpectedEndException
+    | [] -> raise (UnexpectedEndException None)
+    | {Kind=TokenKind.EndOfFile; Origin=origin} :: _ -> raise (UnexpectedEndException (FileNameFromOrigin origin))
     | {Text=actual;} :: scan2 as token when actual=text -> scan2
     | token :: _ -> raise (SyntaxException((sprintf "Expected '%s'" text), token))
 
@@ -54,10 +60,16 @@ and ParseDivMul scan =
 
 and ParseNegPow scan =
     match scan with
-    | [] -> raise UnexpectedEndException
+    | [] -> 
+        raise (UnexpectedEndException None)
+
+    | {Kind=TokenKind.EndOfFile; Origin=origin} :: _ -> 
+        raise (UnexpectedEndException (FileNameFromOrigin origin))
+
     | ({Text="-"} as negop) :: rscan ->
         let right, xscan = ParseNegPow rscan
         Negative(right), xscan
+
     | _ ->
         let atom, xscan = ParseAtom scan
         match xscan with
@@ -69,7 +81,11 @@ and ParseNegPow scan =
 
 and ParseAtom scan =
     match scan with
-    | [] -> raise UnexpectedEndException
+    | [] -> 
+        raise (UnexpectedEndException None)
+
+    | {Kind=TokenKind.EndOfFile; Origin=origin} :: _ -> 
+        raise (UnexpectedEndException (FileNameFromOrigin origin))
 
     | ({Kind=TokenKind.Identifier;} as vartoken) :: rscan ->
         (Variable(vartoken)), rscan     // FIXFIXFIX - need to handle non-variable identifiers, e.g. function calls, macro expansions
@@ -102,7 +118,7 @@ and ParseAtom scan =
         let expr, yscan = ParseExpression xscan
         match yscan with
         | {Text=")";} :: zscan -> expr, zscan
-        | [] -> raise UnexpectedEndException
+        | [] -> raise (UnexpectedEndException None)
         | badtoken :: zscan -> raise (SyntaxException("Expected ')'", badtoken))
 
     // FIXFIXFIX - support the following constructs
@@ -120,7 +136,10 @@ let rec ParseIdentList scan =
     match scan with
 
     | [] ->
-        raise UnexpectedEndException
+        raise (UnexpectedEndException None)
+
+    | {Kind=TokenKind.EndOfFile; Origin=origin} :: _ ->
+        raise (UnexpectedEndException (FileNameFromOrigin origin))
 
     | ({Kind=TokenKind.Identifier} as vartoken) :: punc :: xscan ->
         match punc.Text with
@@ -150,7 +169,10 @@ let ParseTypeAndSemicolon scan =
     match scan with 
 
     | [] ->
-        raise UnexpectedEndException
+        raise (UnexpectedEndException None)
+
+    | {Kind=TokenKind.EndOfFile; Origin=origin} :: _ ->
+        raise (UnexpectedEndException (FileNameFromOrigin origin))
 
     | {Kind=TokenKind.NumericRangeName; Text=text;} :: {Text=";";} :: scan2 ->
         RangeNameTable.[text], UnityAmount, scan2   // range present but concept absent means concept defaults to dimensionless unity
@@ -168,7 +190,10 @@ let ParseStatement scan =
     match scan with 
 
     | [] -> 
-        raise UnexpectedEndException
+        raise (UnexpectedEndException None)
+
+    | {Kind=TokenKind.EndOfFile; Origin=origin} :: _ ->
+        raise (UnexpectedEndException (FileNameFromOrigin origin))
 
     | {Text="var";} :: scan2 ->
         // vardecl ::= "var" ident { "," ident } ":" type ";"

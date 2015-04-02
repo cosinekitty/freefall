@@ -7,7 +7,7 @@ open Freefall.Parser
 
 let ExecuteFile filename =
     let mutable scan = TokenizeFile filename
-    while scan <> [] do
+    while MoreTokensIn scan do
         let statement, scan2 = ParseStatement scan
         printfn "=== Statement: %s" (FormatStatement statement)
         scan <- scan2
@@ -26,6 +26,10 @@ let main argv =
             | Some({Filename=fn; LineNumber=ln;}) -> printfn "File %s [line %d]" fn ln
             1
 
-        | UnexpectedEndException ->
-            printfn "Syntax error: unexpected end of file"   // FIXFIXFIX: determine WHICH file!
+        | UnexpectedEndException(None) ->
+            printfn "Syntax error: unexpected end of input"
+            1
+
+        | UnexpectedEndException(Some(filename)) ->
+            printfn "Syntax error: unexpected end of file '%s'" filename
             1

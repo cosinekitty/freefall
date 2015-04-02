@@ -24,6 +24,7 @@ type TokenKind =
     | RealFloatLiteral
     | ImagFloatLiteral
     | Punctuation
+    | EndOfFile         // sentinel value that lets us report which file we found unexpected EOF in
 
 type TokenOrigin = {
     Filename: string;
@@ -36,6 +37,14 @@ type Token = {
     Kind: TokenKind;
     Origin: TokenOrigin option;
     ColumnNumber: int;
+}
+
+let EndOfFileToken origin = {
+    Text = "";
+    Precedence = -1;
+    Kind = EndOfFile;
+    Origin = origin;
+    ColumnNumber = -1;
 }
 
 exception SyntaxException of string * Token
@@ -133,7 +142,15 @@ let TokenizeFile (inFileName:string) =
         // Use regex to split up the line into lexical units.
         let mc = TokenRegex.Matches(lineText)
         [for m in mc do if not (m.Value.StartsWith("//")) then yield MakeToken (Some({Filename = inFileName; LineNumber = 1+zeroBasedLineNumber;})) m]
-    List.mapi TokenizeFileLine linesInFile |> List.concat
+    let tokensFromFile = List.mapi TokenizeFileLine linesInFile |> List.concat
+    let eofSentinelToken = EndOfFileToken (Some{Filename=inFileName; LineNumber=linesInFile.Length;})
+    tokensFromFile @ [eofSentinelToken]
+
+let MoreTokensIn scan =
+    match scan with
+    | [] -> false
+    | {Kind=TokenKind.EndOfFile;} :: _ -> false
+    | _ -> true
 
 let NextTokenHasPrecedence (precedence:int) (scan:Token list) =
     match scan with

@@ -6,7 +6,7 @@ open System.Collections.Generic
 open Scanner
 
 exception FreefallRuntimeException of string
-exception UnexpectedEndException
+exception UnexpectedEndException of string option       // Some(filename) or None
 
 // FIXFIXFIX: Take a look at using BigRational, complex, etc, from https://github.com/fsprojects/powerpack
 
