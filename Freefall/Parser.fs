@@ -30,6 +30,16 @@ let ExpectToken text scan =
 
 let ExpectSemicolon = ExpectToken ";"
 
+let RequireExactlyOneArg funcName argList =
+    match argList with
+    | [arg] -> arg
+    | _ -> raise (SyntaxException("Function requires exactly 1 argument.", funcName))
+
+let RequireExactlyTwoArgs funcName argList =
+    match argList with
+    | [a; b;] -> (a, b)
+    | _ -> raise (SyntaxException("Function requires exactly 2 arguments.", funcName))
+
 //---------------------------------------------------------------------------------------
 // Expression parser
 
@@ -66,12 +76,7 @@ and ParseDivMul scan =
     expr, xscan
 
 and ParseNegPow scan =
-    match scan with
-    | [] -> 
-        raise (UnexpectedEndException None)
-
-    | {Kind=TokenKind.EndOfFile; Origin=origin} :: _ -> 
-        raise (UnexpectedEndException (FileNameFromOrigin origin))
+    match RequireToken scan with
 
     | ({Text="-"} as negop) :: rscan ->
         let right, xscan = ParseNegPow rscan
@@ -89,12 +94,7 @@ and ParseNegPow scan =
 and ParseArgList scan =
     // Open parenthesis has already been scanned.
     // arglist ::= [ expr { "," expr } ] ")"
-    match scan with
-    | [] -> 
-        raise (UnexpectedEndException None)
-
-    | {Kind=TokenKind.EndOfFile; Origin=origin} :: _ -> 
-        raise (UnexpectedEndException (FileNameFromOrigin origin))
+    match RequireToken scan with
 
     | {Text=")";} :: scan2 -> 
         [], scan2
@@ -116,19 +116,23 @@ and ParseArgList scan =
             raise (UnexpectedEndException None)
 
 and ParseAtom scan =
-    match scan with
-    | [] -> 
-        raise (UnexpectedEndException None)
+    match RequireToken scan with
 
-    | {Kind=TokenKind.EndOfFile; Origin=origin} :: _ -> 
-        raise (UnexpectedEndException (FileNameFromOrigin origin))
+    | [] -> failwith "Impossible."    // RequireToken already checks this case, but I want to eliminate warning here.
 
     | ({Kind=TokenKind.Identifier;} as funcName) :: {Text="(";} :: scan2 ->
         let argList, scan3 = ParseArgList scan2
-        match funcName.Text with
-        | "sum"  -> Sum(argList), scan3
-        | "prod" -> Product(argList), scan3
-        | _      -> FunctionCall(funcName,argList), scan3
+        let expr = 
+            match funcName.Text with
+            | "neg"   -> Negative(RequireExactlyOneArg funcName argList)
+            | "recip" -> Reciprocal(RequireExactlyOneArg funcName argList)
+            | "sum"   -> Sum(argList)
+            | "prod"  -> Product(argList)
+            | "pow"   -> 
+                let a, b = RequireExactlyTwoArgs funcName argList
+                Power(a,b)
+            | _       -> FunctionCall(funcName,argList)
+        expr, scan3
 
     | ({Kind=TokenKind.Identifier;} as vartoken) :: rscan ->
         (Variable(vartoken)), rscan
@@ -169,19 +173,15 @@ and ParseAtom scan =
     // "#" [0-9]*   ==>  expression reference
 
     | badtoken :: _ -> 
-        raise (SyntaxException("Syntax error.", badtoken))
+        raise (SyntaxException("Syntax error.", badtoken))    
 
 //---------------------------------------------------------------------------------------
 // Statement parser
 
 let rec ParseIdentList scan =
-    match scan with
+    match RequireToken scan with
 
-    | [] ->
-        raise (UnexpectedEndException None)
-
-    | {Kind=TokenKind.EndOfFile; Origin=origin} :: _ ->
-        raise (UnexpectedEndException (FileNameFromOrigin origin))
+    | [] -> failwith "Impossible."    // RequireToken already checks this case, but I want to eliminate warning here.
 
     | ({Kind=TokenKind.Identifier} as vartoken) :: punc :: xscan ->
         match punc.Text with
@@ -208,13 +208,7 @@ let ParseTypeAndSemicolon scan =
     // intrange ::= "(" numexpr "," numexpr ")"       // both numexpr must evaluate to integers
     //
     //      FIXFIXFIX - intrange not yet implemented
-    match scan with 
-
-    | [] ->
-        raise (UnexpectedEndException None)
-
-    | {Kind=TokenKind.EndOfFile; Origin=origin} :: _ ->
-        raise (UnexpectedEndException (FileNameFromOrigin origin))
+    match RequireToken scan with 
 
     | {Kind=TokenKind.NumericRangeName; Text=text;} :: {Text=";";} :: scan2 ->
         RangeNameTable.[text], UnityAmount, scan2   // range present but concept absent means concept defaults to dimensionless unity
@@ -229,13 +223,7 @@ let ParseTypeAndSemicolon scan =
 
 
 let ParseStatement scan =
-    match scan with 
-
-    | [] -> 
-        raise (UnexpectedEndException None)
-
-    | {Kind=TokenKind.EndOfFile; Origin=origin} :: _ ->
-        raise (UnexpectedEndException (FileNameFromOrigin origin))
+    match RequireToken scan with 
 
     | {Text="var";} :: scan2 ->
         // vardecl ::= "var" ident { "," ident } ":" type ";"
