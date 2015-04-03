@@ -54,26 +54,45 @@ let rec ParseExpression scan =
 
 and ParseAddSub scan =
     let mutable expr, xscan = ParseDivMul scan
+    let termlist = new System.Collections.Generic.List<Expression>()
+    termlist.Add(expr)
+
     while NextTokenHasPrecedence Precedence_Add xscan do
         let op = List.head xscan
         let right, yscan = ParseDivMul (List.tail xscan)
         xscan <- yscan
-        expr <- (Sum([expr ; right]))
-    expr, xscan
+        if op.Text = "+" then
+            termlist.Add(right)
+        elif op.Text = "-" then
+            termlist.Add(Negative(right))
+        else
+            raise (SyntaxException("Unsupported addop", op))
+
+    if termlist.Count = 1 then
+        expr, xscan
+    else
+        Sum(List.ofSeq termlist), xscan
 
 and ParseDivMul scan =
     let mutable expr, xscan = ParseNegPow scan
+    let factorlist = new System.Collections.Generic.List<Expression>()
+    factorlist.Add(expr)
+
     while NextTokenHasPrecedence Precedence_Mul xscan do
         let op = List.head xscan
         let right, yscan = ParseDivMul (List.tail xscan)
         xscan <- yscan
         if op.Text = "*" then 
-            expr <- Product([expr ; right])
+            factorlist.Add(right)
         elif op.Text = "/" then
-            expr <- Product([expr; Reciprocal(right)])
+            factorlist.Add(Reciprocal(right))
         else
             raise (SyntaxException("Unsupported multop", op))
-    expr, xscan
+
+    if factorlist.Count = 1 then
+        expr, xscan
+    else
+        Product(List.ofSeq factorlist), xscan
 
 and ParseNegPow scan =
     match RequireToken scan with
