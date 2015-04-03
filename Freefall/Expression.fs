@@ -198,8 +198,11 @@ type Expression =
     | Product of Expression list
     | Power of Expression * Expression
     | Equals of Expression * Expression
-    | NumExprRef of int                             // a reference to a prior expression indexed by automatic integer counter
-    | PrevExprRef                                   // a reference to the previous expression
+    | NumExprRef of Token * int                     // a reference to a prior expression indexed by automatic integer counter
+    | PrevExprRef of Token                          // a reference to the previous expression
+
+let FailLingeringMacro token =
+    raise (SyntaxException("Internal error - lingering macro after macro expansion. Should not be possible.", token))
  
 let ZeroAmount = Amount(ZeroQuantity)
 let UnityAmount = Amount(Unity)
@@ -297,8 +300,8 @@ let rec FormatExpression expr =
     | Product factors -> "prod(" + FormatExprList factors + ")"
     | Power(a,b) -> "pow(" + FormatExpression a + "," + FormatExpression b + ")"
     | Equals(a,b) -> FormatExpression a + " = " + FormatExpression b
-    | NumExprRef(i) -> "#" + i.ToString()
-    | PrevExprRef -> "#"
+    | NumExprRef(_,i) -> "#" + i.ToString()
+    | PrevExprRef(_) -> "#"
 
 and FormatExprList list =
     match list with
@@ -326,17 +329,17 @@ type Context = {
 let AppendNumberedExpression {NumberedExpressionList=numExprList;} expr =
     numExprList.Add(expr)
 
-let FindNumberedExpression {NumberedExpressionList=numExprList;} index =
+let FindNumberedExpression {NumberedExpressionList=numExprList;} token index =
     if (index >= 0) && (index < numExprList.Count) then
         numExprList.[index]
     else
-        failwith (sprintf "Invalid expression index %d" index)      // FIXFIXFIX - NumExprRef should hold originating token so we can use it to report error here
+        raise (SyntaxException((sprintf "Invalid expression index: expected 0..%d" (numExprList.Count-1)), token))
 
-let FindPreviousExpression {NumberedExpressionList=numExprList;} =
+let FindPreviousExpression {NumberedExpressionList=numExprList;} token =
     if numExprList.Count > 0 then
         numExprList.[numExprList.Count - 1]
     else
-        failwith "Cannot refer to previous expression because expression list is empty."    // FIXFIXFIX - PrevExprRef should include originating token
+        raise (SyntaxException("Cannot refer to previous expression because expression list is empty.", token))
 
 let DefineIntrinsicSymbol {SymbolTable=symtable;} symbol entry =
     if symtable.ContainsKey(symbol) then
@@ -422,10 +425,10 @@ let rec AreIdentical context a b =
     | (Power(abase,aexp),Power(bbase,bexp)) -> (AreIdentical context abase bbase) && (AreIdentical context aexp bexp)
     | (Power(_,_), _) -> false
     | (_, Power(_,_)) -> false
-    | (NumExprRef(_), _) -> failwith "Internal error - numbered expression ref should not still be here (left)."
-    | (_, NumExprRef(_)) -> failwith "Internal error - numbered expression ref should not still be here (right)."
-    | (PrevExprRef, _)   -> failwith "Internal error - prev-expr-ref should not still be here (left)."
-    | (_, PrevExprRef)   -> failwith "Internal error - prev-expr-ref should not still be here (right)."
+    | (NumExprRef(t,_), _) -> FailLingeringMacro t
+    | (_, NumExprRef(t,_)) -> FailLingeringMacro t
+    | (PrevExprRef(t), _)  -> FailLingeringMacro t
+    | (_, PrevExprRef(t))  -> FailLingeringMacro t
     | (Equals(aleft,aright),Equals(bleft,bright)) -> 
         ((AreIdentical context aleft bleft)  && (AreIdentical context aright bright)) ||
         ((AreIdentical context aleft bright) && (AreIdentical context aright bleft))
@@ -594,11 +597,11 @@ let rec SimplifyStep context expr =
     | Equals(a,b) ->
         Equals((SimplifyStep context a), (SimplifyStep context b))
 
-    | NumExprRef(_) ->
-        failwith "Internal error - Lingering numbered expression reference."
+    | NumExprRef(t,_) ->
+        FailLingeringMacro t
 
-    | PrevExprRef ->
-        failwith "Internal error - Lingering prev-expr-ref."
+    | PrevExprRef(t) ->
+        FailLingeringMacro t
 
 // Sum(Sum(A,B,C), Sum(D,E)) = Sum(A,B,C,D,E)
 // We want to "lift" all inner Sum() contents to the top level of a list.
@@ -645,8 +648,8 @@ let rec ExpressionConcept context expr =
     | Product(factors) -> ProductConcept context factors
     | Power(a,b) -> PowerConcept context a b
     | Equals(a,b) -> EquationConcept context a b
-    | NumExprRef(_) -> failwith "Lingering numbered expression reference."
-    | PrevExprRef -> failwith "Lingering prev-expr-ref."
+    | NumExprRef(t,_) -> FailLingeringMacro t
+    | PrevExprRef(t) -> FailLingeringMacro t
 
 and FindSolitaireConcept context token =
     match FindSymbolEntry context token with

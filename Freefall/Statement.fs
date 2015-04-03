@@ -70,8 +70,8 @@ let rec ExpandMacros context rawexpr =
     | Product(factors) -> Product(List.map (ExpandMacros context) factors)
     | Power(a,b) -> Power((ExpandMacros context a), (ExpandMacros context b))
     | Equals(a,b) -> Equals((ExpandMacros context a), (ExpandMacros context b))
-    | NumExprRef(index) -> FindNumberedExpression context index
-    | PrevExprRef -> FindPreviousExpression context
+    | NumExprRef(token,index) -> FindNumberedExpression context token index
+    | PrevExprRef(token) -> FindPreviousExpression context token
 
 //--------------------------------------------------------------------------------------------------
 
