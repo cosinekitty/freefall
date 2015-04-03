@@ -86,9 +86,13 @@ let ExecuteStatement context statement =
     | Assignment {TargetName=target; Expr=rawexpr;} ->
         let expr = ExpandMacros context rawexpr
         ValidateExpressionConcept context expr
+        let refIndex = context.NumberedExpressionList.Count
         match target with
-        | Some(assignToken) -> DefineSymbol context assignToken (AssignmentEntry(expr))
-        | None -> ()
+        | Some(assignToken) -> 
+            DefineSymbol context assignToken (AssignmentEntry(expr))
+            context.AssignmentHook (Some(assignToken.Text)) refIndex expr
+        | None ->
+            context.AssignmentHook None refIndex expr
         AppendNumberedExpression context expr
 
     | DoNothing ->

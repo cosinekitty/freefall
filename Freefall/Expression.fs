@@ -324,6 +324,7 @@ type SymbolEntry =
 type Context = {
     SymbolTable: Dictionary<string,SymbolEntry>;
     NumberedExpressionList: System.Collections.Generic.List<Expression>;
+    AssignmentHook: option<string> -> int -> Expression -> unit;            // AssignmentHook targetName refIndex assignedExpr
 }
 
 let AppendNumberedExpression {NumberedExpressionList=numExprList;} expr =
@@ -363,10 +364,11 @@ let FindSymbolEntry {SymbolTable=symtable;} ({Text=symbol; Kind=kind} as symtoke
     else
         symtable.[symbol]
 
-let MakeContext () = 
+let MakeContext assignmentHook = 
     let context = {
         SymbolTable = new Dictionary<string, SymbolEntry>();
         NumberedExpressionList = new System.Collections.Generic.List<Expression>();
+        AssignmentHook = assignmentHook
     }
 
     for conceptName, baseUnitName, concept in BaseConcepts do

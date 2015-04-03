@@ -9,14 +9,21 @@ let ExecuteFile context filename =
     let mutable scan = TokenizeFile filename
     while MoreTokensIn scan do
         let statement, scan2 = ParseStatement scan
-        printfn "=== Statement: %s" (FormatStatement statement)
+        printfn "Statement: %s" (FormatStatement statement)
         ExecuteStatement context statement
         scan <- scan2
+
+let MyAssignmentHook (targetName:option<string>) (refIndex:int) (assignedExpr:Expression) =
+    match targetName with
+    | None -> ()
+    | Some(name) -> printf "%s := " name
+    printfn "#%d := %s" refIndex (FormatExpression assignedExpr)
+    printfn ""
 
 [<EntryPoint>]
 let main argv = 
     try
-        let context = MakeContext ()
+        let context = MakeContext MyAssignmentHook
         Array.map (ExecuteFile context) argv |> ignore
         0
     with 

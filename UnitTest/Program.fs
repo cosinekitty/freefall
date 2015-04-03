@@ -8,7 +8,14 @@ open Freefall.Parser
 let MakeIdentifierToken name : Token =
     {Text=name; Precedence=Precedence_Atom; Kind=TokenKind.Identifier; Origin=None; ColumnNumber=0;}
 
-let MyContext = MakeContext ()
+let MyAssignmentHook (targetName:option<string>) (refIndex:int) (assignedExpr:Expression) =
+    printf "ASSIGNMENT: "
+    match targetName with
+    | None -> ()
+    | Some(name) -> printf "%s := " name
+    printfn "#%d := %s" refIndex (FormatExpression assignedExpr)
+
+let MyContext = MakeContext MyAssignmentHook
 
 let VarTokenX = MakeIdentifierToken "x"
 DefineSymbol MyContext VarTokenX (VariableEntry(RealRange,Dimensionless))
