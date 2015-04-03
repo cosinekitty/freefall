@@ -78,7 +78,7 @@ let rec MultiplyNumbers anum bnum =
 
 let ConceptNames  = [ "mass"     ; "distance" ; "time"   ; "temperature" ; "substance" ; "current" ; "luminosity" ]
 let BaseUnitNames = [ "kilogram" ; "meter"    ; "second" ; "kelvin"      ; "mole"      ; "ampere"  ; "candela"    ]
-let NumDimensions = List.length ConceptNames
+let NumDimensions = ConceptNames.Length
 
 type PhysicalConcept = 
     | Zero
@@ -432,7 +432,7 @@ let rec AreIdentical context a b =
     | (Equals(_,_), (_)) -> false
 
 and AreIdenticalExprLists context list1 list2 =
-    if (List.length list1) <> (List.length list2) then
+    if list1.Length <> list2.Length then
         false
     else
         match list1, list2 with
@@ -456,7 +456,7 @@ and AreIdenticalQuantities aNumber aConcept bNumber bConcept =
         (aConcept = bConcept) && (AreIdenticalNumbers aNumber bNumber)
 
 and ArePermutedLists context alist blist =
-    if List.length alist <> List.length blist then
+    if alist.Length <> blist.Length then
         false   // cannot possibly match if the lists have different lengths (important optimization to avoid lots of pointless work)
     else
         match (alist, blist) with
