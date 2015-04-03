@@ -54,6 +54,27 @@ let FormatStatement statement =
 
 //--------------------------------------------------------------------------------------------------
 
+let rec ExpandMacros context rawexpr =
+    match rawexpr with
+    | Amount(_) -> rawexpr
+    | Solitaire(nameToken) -> 
+        match FindSymbolEntry context nameToken with
+        | VariableEntry(_) -> rawexpr
+        | ConceptEntry(_) -> rawexpr
+        | UnitEntry(_) -> rawexpr
+        | AssignmentEntry(expr) -> expr
+    | FunctionCall(funcName,argList) -> rawexpr     // FIXFIXFIX - check for macros when we start implementing them
+    | Negative(arg) -> Negative(ExpandMacros context arg)
+    | Reciprocal(arg) -> Reciprocal(ExpandMacros context arg)
+    | Sum(terms) -> Sum(List.map (ExpandMacros context) terms)
+    | Product(factors) -> Product(List.map (ExpandMacros context) factors)
+    | Power(a,b) -> Power((ExpandMacros context a), (ExpandMacros context b))
+    | Equals(a,b) -> Equals((ExpandMacros context a), (ExpandMacros context b))
+    | NumExprRef(index) -> FindNumberedExpression context index
+    | PrevExprRef -> FindPreviousExpression context
+
+//--------------------------------------------------------------------------------------------------
+
 let ExecuteStatement context statement =
     match statement with
 
@@ -62,11 +83,15 @@ let ExecuteStatement context statement =
         for vname in vlist do
             DefineSymbol context vname (VariableEntry(range,concept))
     
-    | Assignment {TargetName=None; Expr=expr;} ->
+    | Assignment {TargetName=None; Expr=rawexpr;} ->
+        let expr = ExpandMacros context rawexpr
+        printfn "ExpandMacros (1) ==> %s" (FormatExpression expr)       //!!!!!!!!!!!!!!!
         ValidateExpressionConcept context expr
         AppendNumberedExpression context expr
 
-    | Assignment {TargetName=Some(assignToken); Expr=expr;} ->
+    | Assignment {TargetName=Some(assignToken); Expr=rawexpr;} ->
+        let expr = ExpandMacros context rawexpr
+        printfn "ExpandMacros (2) ==> %s" (FormatExpression expr)       //!!!!!!!!!!!!!!!
         ValidateExpressionConcept context expr
         DefineSymbol context assignToken (AssignmentEntry(expr))
         AppendNumberedExpression context expr

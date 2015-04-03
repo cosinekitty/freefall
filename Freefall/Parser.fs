@@ -168,6 +168,20 @@ and ParseAtom scan =
         | [] -> raise (UnexpectedEndException None)
         | badtoken :: zscan -> raise (SyntaxException("Expected ')'", badtoken))
 
+    | ({Kind=TokenKind.ExpressionReference; Text=reftext;} as reftoken) :: xscan ->
+        if reftext = "#" then
+            // A reference to the previous expression statement.
+            PrevExprRef, xscan
+        elif reftext.StartsWith("#") then
+            // A reference to a particular expression statement.
+            let isValid, index = System.Int32.TryParse(reftext.Substring(1))
+            if isValid && (index >= 0) then
+                NumExprRef(index), xscan
+            else
+                raise (SyntaxException("Internal error - invalid integer after '#'", reftoken))
+        else
+            raise (SyntaxException("Internal error - parsed invalid expression reference", reftoken))
+
     // FIXFIXFIX - support the following constructs
     // "@" ident    ==>  derivative operator
     // "#" [0-9]*   ==>  expression reference

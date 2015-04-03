@@ -4,9 +4,12 @@ var n: integer;
 var t: real time;
 var x: distance;
 var v: distance/time;
+var Ratio: real;
 
 v = x/t;
 
 BillyBob := sum(3.0, 4.0);
 
+99 - BillyBob;
 
+# + 12 = Ratio - 7.5;

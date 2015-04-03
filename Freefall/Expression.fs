@@ -190,7 +190,7 @@ let InvertNumber number =        // calculate the numeric reciprocal
 
 type Expression =
     | Amount of PhysicalQuantity
-    | Solitaire of Token                            // a symbol representing a unit, concept, or variable.
+    | Solitaire of Token                            // a symbol representing a unit, concept, named expression, or variable.
     | FunctionCall of Token * (Expression list)     // (funcname, [args...])
     | Negative of Expression
     | Reciprocal of Expression
@@ -198,6 +198,8 @@ type Expression =
     | Product of Expression list
     | Power of Expression * Expression
     | Equals of Expression * Expression
+    | NumExprRef of int                             // a reference to a prior expression indexed by automatic integer counter
+    | PrevExprRef                                   // a reference to the previous expression
  
 let ZeroAmount = Amount(ZeroQuantity)
 let UnityAmount = Amount(Unity)
@@ -295,6 +297,8 @@ let rec FormatExpression expr =
     | Product factors -> "prod(" + FormatExprList factors + ")"
     | Power(a,b) -> "pow(" + FormatExpression a + "," + FormatExpression b + ")"
     | Equals(a,b) -> FormatExpression a + " = " + FormatExpression b
+    | NumExprRef(i) -> "#" + i.ToString()
+    | PrevExprRef -> "#"
 
 and FormatExprList list =
     match list with
@@ -312,7 +316,7 @@ type SymbolEntry =
     | VariableEntry of NumericRange * PhysicalConcept
     | ConceptEntry of PhysicalConcept
     | UnitEntry of PhysicalQuantity
-    | AssignmentEntry of Expression
+    | AssignmentEntry of Expression         // the value of a named expression is the expression itself
 
 type Context = {
     SymbolTable: Dictionary<string,SymbolEntry>;
@@ -321,6 +325,18 @@ type Context = {
 
 let AppendNumberedExpression {NumberedExpressionList=numExprList;} expr =
     numExprList.Add(expr)
+
+let FindNumberedExpression {NumberedExpressionList=numExprList;} index =
+    if (index >= 0) && (index < numExprList.Count) then
+        numExprList.[index]
+    else
+        failwith (sprintf "Invalid expression index %d" index)      // FIXFIXFIX - NumExprRef should hold originating token so we can use it to report error here
+
+let FindPreviousExpression {NumberedExpressionList=numExprList;} =
+    if numExprList.Count > 0 then
+        numExprList.[numExprList.Count - 1]
+    else
+        failwith "Cannot refer to previous expression because expression list is empty."    // FIXFIXFIX - PrevExprRef should include originating token
 
 let DefineIntrinsicSymbol {SymbolTable=symtable;} symbol entry =
     if symtable.ContainsKey(symbol) then
@@ -343,17 +359,6 @@ let FindSymbolEntry {SymbolTable=symtable;} ({Text=symbol; Kind=kind} as symtoke
         raise (SyntaxException("Undefined symbol", symtoken))
     else
         symtable.[symbol]
-
-let FindSolitaireConcept context token =
-    match FindSymbolEntry context token with
-    | VariableEntry(_,concept) -> concept
-    | ConceptEntry(concept) -> concept
-    | UnitEntry(PhysicalQuantity(_,concept)) -> concept
-    | _ -> raise (SyntaxException("Expected unit name, concept name, or variable.", token))
-
-let ValidateSolitaire context token =
-    FindSolitaireConcept context token |> ignore
-    true
 
 let MakeContext () = 
     let context = {
@@ -394,7 +399,7 @@ let rec AreIdentical context a b =
         AreIdenticalQuantities aNumber aConcept bNumber bConcept
     | (Amount(_), _) -> false
     | (_, Amount(_)) -> false
-    | (Solitaire(aToken), Solitaire(bToken)) -> (aToken.Text = bToken.Text) && (ValidateSolitaire context aToken)
+    | (Solitaire(aToken), Solitaire(bToken)) -> aToken.Text = bToken.Text
     | (Solitaire(_), _) -> false
     | (_, Solitaire(_)) -> false
     | (FunctionCall(funcName1,argList1), FunctionCall(funcName2,argList2)) -> 
@@ -417,6 +422,10 @@ let rec AreIdentical context a b =
     | (Power(abase,aexp),Power(bbase,bexp)) -> (AreIdentical context abase bbase) && (AreIdentical context aexp bexp)
     | (Power(_,_), _) -> false
     | (_, Power(_,_)) -> false
+    | (NumExprRef(_), _) -> failwith "Internal error - numbered expression ref should not still be here (left)."
+    | (_, NumExprRef(_)) -> failwith "Internal error - numbered expression ref should not still be here (right)."
+    | (PrevExprRef, _)   -> failwith "Internal error - prev-expr-ref should not still be here (left)."
+    | (_, PrevExprRef)   -> failwith "Internal error - prev-expr-ref should not still be here (right)."
     | (Equals(aleft,aright),Equals(bleft,bright)) -> 
         ((AreIdentical context aleft bleft)  && (AreIdentical context aright bright)) ||
         ((AreIdentical context aleft bright) && (AreIdentical context aright bleft))
@@ -533,7 +542,7 @@ let rec MergeConstants mergefunc terms =
 let rec SimplifyStep context expr =
     match expr with
     | Amount(_) -> expr     // already as simple as possible
-    | Solitaire(_) -> expr   // already as simple as possible
+    | Solitaire(_) -> expr  // already as simple as possible
 
     | FunctionCall(funcName,argList) ->
         FunctionCall(funcName, (List.map (SimplifyStep context) argList))
@@ -585,6 +594,12 @@ let rec SimplifyStep context expr =
     | Equals(a,b) ->
         Equals((SimplifyStep context a), (SimplifyStep context b))
 
+    | NumExprRef(_) ->
+        failwith "Internal error - Lingering numbered expression reference."
+
+    | PrevExprRef ->
+        failwith "Internal error - Lingering prev-expr-ref."
+
 // Sum(Sum(A,B,C), Sum(D,E)) = Sum(A,B,C,D,E)
 // We want to "lift" all inner Sum() contents to the top level of a list.
 and SimplifySumArgs simpargs =           
@@ -630,6 +645,15 @@ let rec ExpressionConcept context expr =
     | Product(factors) -> ProductConcept context factors
     | Power(a,b) -> PowerConcept context a b
     | Equals(a,b) -> EquationConcept context a b
+    | NumExprRef(_) -> failwith "Lingering numbered expression reference."
+    | PrevExprRef -> failwith "Lingering prev-expr-ref."
+
+and FindSolitaireConcept context token =
+    match FindSymbolEntry context token with
+    | VariableEntry(_,concept) -> concept
+    | ConceptEntry(concept) -> concept
+    | UnitEntry(PhysicalQuantity(_,concept)) -> concept
+    | AssignmentEntry(expr) -> ExpressionConcept context expr
 
 and FindFunctionConcept context funcNameToken argExprList =
     failwith "Function concepts not yet implemented."
@@ -691,7 +715,6 @@ and ReciprocalConcept context arg =
     | Concept(dimlist) -> 
         // Take the reciprocal by negating each rational number in the list of dimensional exponents.
         Concept(List.map (fun (numer,denom) -> MakeRationalPair (-numer) denom) dimlist)
-
 
 let ValidateExpressionConcept context expr =
     // Call ExpressionConcept just for the side-effect of looking for errors
