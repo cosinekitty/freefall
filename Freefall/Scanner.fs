@@ -35,7 +35,7 @@ type Token = {
     Text: string;
     Precedence: int;
     Kind: TokenKind;
-    Origin: TokenOrigin option;
+    Origin: option<TokenOrigin>;
     ColumnNumber: int;
 }
 
@@ -152,7 +152,7 @@ let MoreTokensIn scan =
     | {Kind=TokenKind.EndOfFile;} :: _ -> false
     | _ -> true
 
-let NextTokenHasPrecedence (precedence:int) (scan:Token list) =
+let NextTokenHasPrecedence (precedence:int) (scan:list<Token>) =
     match scan with
     | {Precedence=p} :: _ -> p = precedence
     | _ -> false

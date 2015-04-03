@@ -6,7 +6,7 @@ open System.Collections.Generic
 open Scanner
 
 exception FreefallRuntimeException of string
-exception UnexpectedEndException of string option       // Some(filename) or None
+exception UnexpectedEndException of option<string>       // Some(filename) or None
 
 // FIXFIXFIX: Take a look at using BigRational, complex, etc, from https://github.com/fsprojects/powerpack
 
@@ -41,13 +41,13 @@ let rec MakeRationalPair (numer:int64) (denom:int64) =
 let MakeRational (numer:int64) (denom:int64) =
     Rational(MakeRationalPair numer denom)
 
-let AddExponentLists (alist:(int64 * int64) list) (blist:(int64 * int64) list) =
+let AddExponentLists (alist:list<int64 * int64>) (blist:list<int64 * int64>) =
     List.map2 (fun (a,b) (c,d) -> MakeRationalPair (a*d + c*b) (b*d)) alist blist
 
-let SubtractExponentLists (alist:(int64 * int64) list) (blist:(int64 * int64) list) =
+let SubtractExponentLists (alist:list<int64 * int64>) (blist:list<int64 * int64>) =
     List.map2 (fun (a,b) (c,d) -> MakeRationalPair (a*d - c*b) (b*d)) alist blist        
 
-let NegateExponentList (clist:(int64 * int64) list) =
+let NegateExponentList (clist:list<int64 * int64>) =
     List.map (fun (a,b) -> MakeRationalPair (-a) b) clist
 
 let rec AddNumbers anum bnum =
@@ -82,7 +82,7 @@ let NumDimensions = ConceptNames.Length
 
 type PhysicalConcept = 
     | Zero
-    | Concept of (int64 * int64) list       // list must have NumDimensions elements, each representing a rational number for the exponent of that dimension
+    | Concept of list<int64 * int64>       // list must have NumDimensions elements, each representing a rational number for the exponent of that dimension
 
 // Functions to help build concepts from other concepts...
 
@@ -191,11 +191,11 @@ let InvertNumber number =        // calculate the numeric reciprocal
 type Expression =
     | Amount of PhysicalQuantity
     | Solitaire of Token                            // a symbol representing a unit, concept, named expression, or variable.
-    | FunctionCall of Token * (Expression list)     // (funcname, [args...])
+    | FunctionCall of Token * list<Expression>     // (funcname, [args...])
     | Negative of Expression
     | Reciprocal of Expression
-    | Sum of Expression list
-    | Product of Expression list
+    | Sum of list<Expression>
+    | Product of list<Expression>
     | Power of Expression * Expression
     | Equals of Expression * Expression
     | NumExprRef of Token * int                     // a reference to a prior expression indexed by automatic integer counter
@@ -303,8 +303,8 @@ let rec FormatExpression expr =
     | NumExprRef(_,i) -> "#" + i.ToString()
     | PrevExprRef(_) -> "#"
 
-and FormatExprList list =
-    match list with
+and FormatExprList exprlist =
+    match exprlist with
     | [] -> ""
     | [single] -> FormatExpression single
     | first :: rest -> FormatExpression first + "," + FormatExprList rest
@@ -478,8 +478,8 @@ and ArePermutedLists context alist blist =
 // is mathematically identical to expr.  If found, returns Some(shorter)
 // where shorter is list with the identical element removed.
 // Otherwise, returns None.
-and FindIdenticalInList context expr list =
-    match list with
+and FindIdenticalInList context expr elist =
+    match elist with
     | [] -> None
     | first::rest -> 
         if AreIdentical context expr first then
