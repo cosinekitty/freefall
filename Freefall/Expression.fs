@@ -315,11 +315,23 @@ and FormatExprList exprlist =
 //  Executed statements will accumulate references that can be used by later statements.
 //  Some statements "forget" things statement references on purpose. 
 
+type Macro = {
+    Expander: Token -> list<Expression> -> Expression;
+}
+
+(*      // coming soon!
+type Function = {
+    Simplifier: list<Expression> -> Expression;
+}
+*)
+
 type SymbolEntry =
     | VariableEntry of NumericRange * PhysicalConcept
     | ConceptEntry of PhysicalConcept
     | UnitEntry of PhysicalQuantity
     | AssignmentEntry of Expression         // the value of a named expression is the expression itself
+    | MacroEntry of Macro
+//    | FunctionEntry of Function
 
 type Context = {
     SymbolTable: Dictionary<string,SymbolEntry>;
@@ -363,18 +375,6 @@ let FindSymbolEntry {SymbolTable=symtable;} ({Text=symbol; Kind=kind} as symtoke
         raise (SyntaxException("Undefined symbol", symtoken))
     else
         symtable.[symbol]
-
-let MakeContext assignmentHook = 
-    let context = {
-        SymbolTable = new Dictionary<string, SymbolEntry>();
-        NumberedExpressionList = new System.Collections.Generic.List<Expression>();
-        AssignmentHook = assignmentHook
-    }
-
-    for conceptName, baseUnitName, concept in BaseConcepts do
-        DefineIntrinsicSymbol context conceptName (ConceptEntry(concept))
-
-    context
 
 //-----------------------------------------------------------------------------------------------------
 // Identity tester : determines if two expressions have equivalent values.
@@ -659,6 +659,7 @@ and FindSolitaireConcept context token =
     | ConceptEntry(concept) -> concept
     | UnitEntry(PhysicalQuantity(_,concept)) -> concept
     | AssignmentEntry(expr) -> ExpressionConcept context expr
+    | MacroEntry(_) -> raise (SyntaxException("Attempt to use macro name without parenthesized argument list.", token))
 
 and FindFunctionConcept context funcNameToken argExprList =
     failwith "Function concepts not yet implemented."
@@ -724,3 +725,38 @@ and ReciprocalConcept context arg =
 let ValidateExpressionConcept context expr =
     // Call ExpressionConcept just for the side-effect of looking for errors
     ExpressionConcept context expr |> ignore
+
+//-------------------------------------------------------------------------------------------------
+// Intrinsic macros
+
+let FailExactArgCount symbolType requiredCount actualCount token =
+    raise (SyntaxException((sprintf "%s requires exactly %d argument(s), but %d were found" symbolType requiredCount actualCount), token))
+
+let SimplifyMacroExpander context macroToken (argList: list<Expression>) =
+    match argList with
+    | [arg] -> Simplify context arg
+    | _ -> FailExactArgCount "Macro" 1 argList.Length macroToken
+
+let IntrinsicMacros =
+    [
+        ("simp", SimplifyMacroExpander);
+    ]
+
+//-------------------------------------------------------------------------------------------------
+// Create a context with intrinsic symbols built it.
+
+let MakeContext assignmentHook = 
+    let context = {
+        SymbolTable = new Dictionary<string, SymbolEntry>();
+        NumberedExpressionList = new System.Collections.Generic.List<Expression>();
+        AssignmentHook = assignmentHook;
+    }
+
+    for conceptName, baseUnitName, concept in BaseConcepts do
+        DefineIntrinsicSymbol context conceptName (ConceptEntry(concept))
+
+    for macroName, macroFunc in IntrinsicMacros do
+        DefineIntrinsicSymbol context macroName (MacroEntry({Expander=(macroFunc context);}))
+
+    context
+

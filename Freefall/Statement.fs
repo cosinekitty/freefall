@@ -54,6 +54,9 @@ let FormatStatement statement =
 
 //--------------------------------------------------------------------------------------------------
 
+let FailNonFuncMacro token expected =
+    raise (SyntaxException((sprintf "This symbol is %s, but is being as if it were a function or macro." expected), token))
+
 let rec ExpandMacros context rawexpr =
     match rawexpr with
     | Amount(_) -> rawexpr
@@ -63,7 +66,15 @@ let rec ExpandMacros context rawexpr =
         | ConceptEntry(_) -> rawexpr
         | UnitEntry(_) -> rawexpr
         | AssignmentEntry(expr) -> expr
-    | FunctionCall(funcName,argList) -> rawexpr     // FIXFIXFIX - check for macros when we start implementing them
+        | MacroEntry(_) -> raise (SyntaxException("Cannot use macro name as solitary symbol.", nameToken))
+    | FunctionCall(funcName,argList) -> 
+        // Look up function name in the context to see if it is actually a macro name.
+        match FindSymbolEntry context funcName with
+        | MacroEntry({Expander=expander;}) -> expander funcName (List.map (ExpandMacros context) argList)
+        | VariableEntry(_) -> FailNonFuncMacro funcName "a variable"
+        | ConceptEntry(_) -> FailNonFuncMacro funcName "a concept"
+        | UnitEntry(_) -> FailNonFuncMacro funcName "a unit"
+        | AssignmentEntry(_) -> FailNonFuncMacro funcName "an assignment target"
     | Negative(arg) -> Negative(ExpandMacros context arg)
     | Reciprocal(arg) -> Reciprocal(ExpandMacros context arg)
     | Sum(terms) -> Sum(List.map (ExpandMacros context) terms)
