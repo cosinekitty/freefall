@@ -83,17 +83,12 @@ let ExecuteStatement context statement =
         for vname in vlist do
             DefineSymbol context vname (VariableEntry(range,concept))
     
-    | Assignment {TargetName=None; Expr=rawexpr;} ->
+    | Assignment {TargetName=target; Expr=rawexpr;} ->
         let expr = ExpandMacros context rawexpr
-        printfn "ExpandMacros (1) ==> %s" (FormatExpression expr)       //!!!!!!!!!!!!!!!
         ValidateExpressionConcept context expr
-        AppendNumberedExpression context expr
-
-    | Assignment {TargetName=Some(assignToken); Expr=rawexpr;} ->
-        let expr = ExpandMacros context rawexpr
-        printfn "ExpandMacros (2) ==> %s" (FormatExpression expr)       //!!!!!!!!!!!!!!!
-        ValidateExpressionConcept context expr
-        DefineSymbol context assignToken (AssignmentEntry(expr))
+        match target with
+        | Some(assignToken) -> DefineSymbol context assignToken (AssignmentEntry(expr))
+        | None -> ()
         AppendNumberedExpression context expr
 
     | DoNothing ->
