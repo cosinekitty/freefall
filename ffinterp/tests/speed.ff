@@ -6,7 +6,7 @@ var x: distance;
 var v: distance/time;
 var Ratio: real;
 
-v = x/t;
+v = x/t + 7*meter/second;
 
 BillyBob := sum(3.0, 4.0);
 
