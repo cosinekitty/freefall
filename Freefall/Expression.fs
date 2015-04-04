@@ -76,13 +76,9 @@ let rec MultiplyNumbers anum bnum =
     | (Complex(_,_), Real(_)) -> MultiplyNumbers bnum anum
     | (Complex(x,y), Complex(u,v)) -> Complex(x*u - y*v, x*v + y*u)
 
-let ConceptNames  = [ "mass"     ; "distance" ; "time"   ; "temperature" ; "substance" ; "current" ; "luminosity" ]
-let BaseUnitNames = [ "kilogram" ; "meter"    ; "second" ; "kelvin"      ; "mole"      ; "ampere"  ; "candela"    ]
-let NumDimensions = ConceptNames.Length
-
 type PhysicalConcept = 
-    | Zero
-    | Concept of list<int64 * int64>       // list must have NumDimensions elements, each representing a rational number for the exponent of that dimension
+    | Zero                              // a special case because 0 is considered compatible with any concept: 0*meter = 0*second. Weird but necessary.
+    | Concept of list<int64 * int64>    // list must have NumDimensions elements, each representing a rational number for the exponent of that dimension
 
 // Functions to help build concepts from other concepts...
 
@@ -138,16 +134,25 @@ let SubstanceConcept    = Concept[(0L,1L); (0L,1L); (0L,1L); (0L,1L); (1L,1L); (
 let CurrentConcept      = Concept[(0L,1L); (0L,1L); (0L,1L); (0L,1L); (0L,1L); (1L,1L); (0L,1L)]
 let LuminosityConcept   = Concept[(0L,1L); (0L,1L); (0L,1L); (0L,1L); (0L,1L); (0L,1L); (1L,1L)]
 
+type BaseConceptEntry = {
+    ConceptName: string;
+    BaseUnitName: string;
+    ConceptValue: PhysicalConcept;
+}
+
 let BaseConcepts = [
-//   concept name       base unit       concept
-    ("mass",            "kilogram",     MassConcept);
-    ("distance",        "meter",        DistanceConcept);
-    ("time",            "second",       TimeConcept);
-    ("temperature",     "kelvin",       TemperatureConcept);
-    ("substance",       "mole",         SubstanceConcept);
-    ("current",         "ampere",       CurrentConcept);
-    ("luminosity",      "candela",      LuminosityConcept);
+    {ConceptName="mass";            BaseUnitName="kilogram";    ConceptValue=MassConcept};
+    {ConceptName="distance";        BaseUnitName="meter";       ConceptValue=DistanceConcept};
+    {ConceptName="time";            BaseUnitName="second";      ConceptValue=TimeConcept};
+    {ConceptName="temperature";     BaseUnitName="kelvin";      ConceptValue=TemperatureConcept};
+    {ConceptName="substance";       BaseUnitName="mole";        ConceptValue=SubstanceConcept};
+    {ConceptName="current";         BaseUnitName="ampere";      ConceptValue=CurrentConcept};
+    {ConceptName="luminosity";      BaseUnitName="candela";     ConceptValue=LuminosityConcept};
 ]
+
+let NumDimensions = BaseConcepts.Length
+let BaseUnitNames = List.map (fun {BaseUnitName=name} -> name) BaseConcepts
+let ConceptNames  = List.map (fun {ConceptName=name}  -> name) BaseConcepts
 
 // Derived concepts...
 
@@ -256,7 +261,7 @@ let FormatDimension name (numer,denom) =
         if numer < 0L then
             name + "^(" + numer.ToString() + ")"        // meter^(-1)
         else
-            name + "^" + numer.ToString()               // meter^(3)
+            name + "^" + numer.ToString()               // meter^3
     else
         name + "^(" + numer.ToString() + "/" + denom.ToString() + ")"       // meter^(-1/3)
 
@@ -826,7 +831,7 @@ let MakeContext assignmentHook =
         AssignmentHook = assignmentHook;
     }
 
-    for conceptName, baseUnitName, concept in BaseConcepts do
+    for {ConceptName=conceptName; BaseUnitName=baseUnitName; ConceptValue=concept} in BaseConcepts do
         DefineIntrinsicSymbol context conceptName (ConceptEntry(concept))
 
     for macroName, macroFunc in IntrinsicMacros do
