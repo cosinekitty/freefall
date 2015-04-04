@@ -337,7 +337,7 @@ type SymbolEntry =
 
 type Context = {
     SymbolTable: Dictionary<string,SymbolEntry>;
-    NumberedExpressionList: System.Collections.Generic.List<Expression>;
+    NumberedExpressionList: ResizeArray<Expression>;
     AssignmentHook: option<string> -> int -> Expression -> unit;            // AssignmentHook targetName refIndex assignedExpr
 }
 
@@ -822,7 +822,7 @@ let IntrinsicFunctions =
 let MakeContext assignmentHook = 
     let context = {
         SymbolTable = new Dictionary<string, SymbolEntry>();
-        NumberedExpressionList = new System.Collections.Generic.List<Expression>();
+        NumberedExpressionList = new ResizeArray<Expression>();
         AssignmentHook = assignmentHook;
     }
 

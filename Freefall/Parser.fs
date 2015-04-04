@@ -54,7 +54,7 @@ let rec ParseExpression scan =
 
 and ParseAddSub scan =
     let mutable expr, xscan = ParseDivMul scan
-    let termlist = new System.Collections.Generic.List<Expression>()
+    let termlist = new ResizeArray<Expression>()
     termlist.Add(expr)
 
     while NextTokenHasPrecedence Precedence_Add xscan do
@@ -75,7 +75,7 @@ and ParseAddSub scan =
 
 and ParseDivMul scan =
     let mutable expr, xscan = ParseNegPow scan
-    let factorlist = new System.Collections.Generic.List<Expression>()
+    let factorlist = new ResizeArray<Expression>()
     factorlist.Add(expr)
 
     while NextTokenHasPrecedence Precedence_Mul xscan do
