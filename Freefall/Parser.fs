@@ -150,7 +150,7 @@ and ParseAtom scan =
             | "pow"   -> 
                 let a, b = RequireExactlyTwoArgs funcName argList
                 Power(a,b)
-            | _       -> FunctionCall(funcName,argList)
+            | _       -> Functor(funcName,argList)
         expr, scan3
 
     | ({Kind=TokenKind.Identifier;} as token) :: rscan ->

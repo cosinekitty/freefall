@@ -191,7 +191,7 @@ let InvertNumber number =        // calculate the numeric reciprocal
 type Expression =
     | Amount of PhysicalQuantity
     | Solitaire of Token                            // a symbol representing a unit, concept, named expression, or variable.
-    | FunctionCall of Token * list<Expression>     // (funcname, [args...])
+    | Functor of Token * list<Expression>           // (func-or-macro-name, [args...])
     | Negative of Expression
     | Reciprocal of Expression
     | Sum of list<Expression>
@@ -216,6 +216,9 @@ let IsUnityExpression expr =
     match expr with
     | Amount(PhysicalQuantity(number,concept)) -> (concept = Dimensionless) && (IsNumberEqualToInteger 1L number)
     | _ -> false
+
+let IsConceptDimensionless concept =
+    (concept = Zero) || (concept = Dimensionless)
 
 let RemoveZeroes terms = 
     List.filter (fun t -> not (IsZeroExpression t)) terms
@@ -293,7 +296,7 @@ let rec FormatExpression expr =
     match expr with
     | Amount quantity -> FormatQuantity quantity
     | Solitaire(token) -> token.Text
-    | FunctionCall(funcName, argList) -> funcName.Text + "(" + FormatExprList argList + ")"
+    | Functor(funcName, argList) -> funcName.Text + "(" + FormatExprList argList + ")"
     | Negative arg -> "neg(" + FormatExpression arg + ")"
     | Reciprocal arg -> "recip(" + FormatExpression arg + ")"
     | Sum terms -> "sum(" + FormatExprList terms + ")"
@@ -319,11 +322,10 @@ type Macro = {
     Expander: Token -> list<Expression> -> Expression;
 }
 
-(*      // coming soon!
 type Function = {
-    Simplifier: list<Expression> -> Expression;
+    Concepter:  Token -> list<Expression> -> PhysicalConcept;
+    StepSimplifier: Token -> list<Expression> -> Expression;
 }
-*)
 
 type SymbolEntry =
     | VariableEntry of NumericRange * PhysicalConcept
@@ -331,7 +333,7 @@ type SymbolEntry =
     | UnitEntry of PhysicalQuantity
     | AssignmentEntry of Expression         // the value of a named expression is the expression itself
     | MacroEntry of Macro
-//    | FunctionEntry of Function
+    | FunctionEntry of Function
 
 type Context = {
     SymbolTable: Dictionary<string,SymbolEntry>;
@@ -407,12 +409,12 @@ let rec AreIdentical context a b =
     | (Solitaire(aToken), Solitaire(bToken)) -> aToken.Text = bToken.Text
     | (Solitaire(_), _) -> false
     | (_, Solitaire(_)) -> false
-    | (FunctionCall(funcName1,argList1), FunctionCall(funcName2,argList2)) -> 
+    | (Functor(funcName1,argList1), Functor(funcName2,argList2)) -> 
         (funcName1.Text = funcName2.Text) &&
         (IsDeterministicFunctionName funcName1.Text) &&
         (AreIdenticalExprLists context argList1 argList2)
-    | (FunctionCall(_), _) -> false
-    | (_, FunctionCall(_)) -> false
+    | (Functor(_), _) -> false
+    | (_, Functor(_)) -> false
     | (Negative(na),Negative(nb)) -> AreIdentical context na nb
     | (Negative(_), _) -> false
     | (_, Negative(_)) -> false
@@ -544,13 +546,23 @@ let rec MergeConstants mergefunc terms =
         | (_, Amount(b) :: residue) -> Amount(b) :: first :: residue
         | _ -> first :: mrest
 
+let FailNonFunction token found =
+    raise (SyntaxException((sprintf "Expected function but found %s" found), token))
+
 let rec SimplifyStep context expr =
     match expr with
     | Amount(_) -> expr     // already as simple as possible
     | Solitaire(_) -> expr  // already as simple as possible
 
-    | FunctionCall(funcName,argList) ->
-        FunctionCall(funcName, (List.map (SimplifyStep context) argList))
+    | Functor(funcName, argList) ->
+        let simpArgList = List.map (SimplifyStep context) argList
+        match FindSymbolEntry context funcName with
+        | VariableEntry(_,_) -> FailNonFunction funcName "variable"
+        | ConceptEntry(_) -> FailNonFunction funcName "concept"
+        | UnitEntry(_) -> FailNonFunction funcName "unit"
+        | AssignmentEntry(expr) -> FailNonFunction funcName "assignment target"
+        | MacroEntry(_) -> FailLingeringMacro funcName
+        | FunctionEntry{StepSimplifier=stepSimplifier;} -> stepSimplifier funcName simpArgList
 
     | Negative(Negative(x)) -> SimplifyStep context x
     | Negative(arg) -> 
@@ -643,7 +655,7 @@ let rec ExpressionConcept context expr =
     match expr with
     | Amount(PhysicalQuantity(number,concept)) -> if IsNumberZero number then Zero else concept
     | Solitaire(vartoken) -> FindSolitaireConcept context vartoken
-    | FunctionCall(funcName,argList) -> FindFunctionConcept context funcName argList
+    | Functor(funcName,argList) -> FindFunctorConcept context funcName argList
     | Negative(arg) -> ExpressionConcept context arg
     | Reciprocal(arg) -> ReciprocalConcept context arg
     | Sum(terms) -> SumConcept context terms
@@ -660,9 +672,16 @@ and FindSolitaireConcept context token =
     | UnitEntry(PhysicalQuantity(_,concept)) -> concept
     | AssignmentEntry(expr) -> ExpressionConcept context expr
     | MacroEntry(_) -> raise (SyntaxException("Attempt to use macro name without parenthesized argument list.", token))
+    | FunctionEntry(_) -> raise(SyntaxException("Attempt to use function name without parenthesized argument list.", token))
 
-and FindFunctionConcept context funcNameToken argExprList =
-    failwith "Function concepts not yet implemented."
+and FindFunctorConcept context funcNameToken argExprList =
+    match FindSymbolEntry context funcNameToken with
+    | FunctionEntry({Concepter=concepter;}) -> concepter funcNameToken argExprList
+    | MacroEntry(_) -> FailLingeringMacro funcNameToken
+    | VariableEntry(_) -> raise(SyntaxException("Attempt to use a variable as a function/macro.", funcNameToken))
+    | ConceptEntry(_) -> raise(SyntaxException("Attempt to use a concept as a function/macro.", funcNameToken))
+    | UnitEntry(_) -> raise(SyntaxException("Attempt to use a unit as a function/macro.", funcNameToken))
+    | AssignmentEntry(_) -> raise(SyntaxException("Attempt to use an assignment target as a function/macro.", funcNameToken))
 
 and EquationConcept context a b =
     let aConcept = ExpressionConcept context a
@@ -695,11 +714,16 @@ and ProductConcept context factors =
 
 and PowerConcept context x y =
     let yConcept = ExpressionConcept context y
-    if yConcept = Dimensionless then
+    if yConcept = Zero then
+        if yConcept = Zero then
+            failwith "Cannot raise 0 to 0 power."
+        else
+            Dimensionless
+    elif yConcept = Dimensionless then
         let xConcept = ExpressionConcept context x
-        if xConcept = Dimensionless then
+        if IsConceptDimensionless xConcept then     // 0^(-3) is an error, but is dimensionless nontheless
             // If x is dimensionless, then y may be any dimensionless expression, e.g. 2.7182818^y.
-            // A dimensionless value to a dimensionless power is dimensionless.
+            // A dimensionless value to a dimensionless power is dimensionless.        
             Dimensionless
         else
             // If x is dimensional, then y must be rational (e.g. x^(-3/4)).
@@ -732,7 +756,7 @@ let ValidateExpressionConcept context expr =
 let FailExactArgCount symbolType requiredCount actualCount token =
     raise (SyntaxException((sprintf "%s requires exactly %d argument(s), but %d were found" symbolType requiredCount actualCount), token))
 
-let SimplifyMacroExpander context macroToken (argList: list<Expression>) =
+let SimplifyMacroExpander context macroToken argList =
     match argList with
     | [arg] -> Simplify context arg
     | _ -> FailExactArgCount "Macro" 1 argList.Length macroToken
@@ -740,6 +764,56 @@ let SimplifyMacroExpander context macroToken (argList: list<Expression>) =
 let IntrinsicMacros =
     [
         ("simp", SimplifyMacroExpander);
+    ]
+
+//-------------------------------------------------------------------------------------------------
+// Intrinsic functions
+
+// Token -> list<Expression> -> PhysicalConcept;
+let Concept_Exp context funcToken argList =
+    match argList with
+    | [arg] -> 
+        let argConcept = ExpressionConcept context arg
+        if IsConceptDimensionless argConcept then
+            Dimensionless
+        else
+            raise (SyntaxException(("exp() requires a dimensionless argument, but found " + FormatConcept argConcept), funcToken))
+    | _ -> FailExactArgCount "Function" 1 argList.Length funcToken
+
+let SimplifyStep_Exp context funcToken argList =        // caller will step-simplify argList for us.
+    match argList with
+    | [arg] -> 
+        if IsZeroExpression arg then
+            UnityAmount
+        else 
+            match arg with
+            | Amount(PhysicalQuantity(number,concept)) -> 
+                if concept <> Dimensionless then
+                    raise (SyntaxException(("exp() requires a dimensionless argument, but found " + FormatConcept concept), funcToken))
+                else
+                    match number with
+
+                    | Rational(a,b) -> 
+                        let expx = (System.Math.Exp((float a)/(float b)))
+                        Amount(PhysicalQuantity(Real(expx), Dimensionless))
+
+                    | Real(x) -> 
+                        let expx = System.Math.Exp(x)
+                        Amount(PhysicalQuantity(Real(expx), Dimensionless))
+
+                    | Complex(x,y) ->
+                        // exp(x + iy) = exp(x)*exp(iy) = exp(x)*(cos(y) + i*sin(y))
+                        let expx = System.Math.Exp(x)
+                        let cosy = System.Math.Cos(y)
+                        let siny = System.Math.Sin(y)
+                        Amount(PhysicalQuantity(Complex(expx*cosy, expx*siny), Dimensionless))
+
+            | _ -> Functor(funcToken, [arg])
+    | _ -> FailExactArgCount "Function" 1 argList.Length funcToken
+
+let IntrinsicFunctions = 
+    [
+        ("exp", Concept_Exp, SimplifyStep_Exp);
     ]
 
 //-------------------------------------------------------------------------------------------------
@@ -758,5 +832,7 @@ let MakeContext assignmentHook =
     for macroName, macroFunc in IntrinsicMacros do
         DefineIntrinsicSymbol context macroName (MacroEntry({Expander=(macroFunc context);}))
 
-    context
+    for funcName, concepter, stepSimplifier in IntrinsicFunctions do
+        DefineIntrinsicSymbol context funcName (FunctionEntry{Concepter=(concepter context); StepSimplifier=(stepSimplifier context);})
 
+    context
