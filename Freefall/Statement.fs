@@ -15,8 +15,14 @@ type AssignmentStatement = {
     Expr : Expression;
 }
 
+type ConceptDefinition = {
+    ConceptName : Token;
+    Expr : Expression;
+}
+
 type Statement =
     | VarDecl of MultiVariableDeclaration
+    | ConceptDef of ConceptDefinition
     | Assignment of AssignmentStatement
     | DoNothing
 
@@ -42,6 +48,9 @@ let FormatStatement statement =
             else
                 rangeText + " " + conceptText
         "var " + varNamesText + ": " + typeText + ";"
+
+    | ConceptDef {ConceptName=idtoken; Expr=expr;} ->
+        sprintf "concept %s = %s;" idtoken.Text (FormatExpression expr)
 
     | Assignment {TargetName=None; Expr=expr;} ->
         (FormatExpression expr) + ";"
@@ -94,6 +103,10 @@ let ExecuteStatement context statement =
         let concept = EvalConcept context conceptExpr
         for vname in vlist do
             DefineSymbol context vname (VariableEntry(range,concept))
+
+    | ConceptDef {ConceptName=idtoken; Expr=expr;} ->
+        let concept = EvalConcept context expr
+        DefineSymbol context idtoken (ConceptEntry(concept))
     
     | Assignment {TargetName=target; Expr=rawexpr;} ->
         let expr = ExpandMacros context rawexpr

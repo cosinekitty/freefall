@@ -263,6 +263,15 @@ let ParseStatement scan =
         let range, conceptExpr, scan4 = ParseTypeAndSemicolon scan3
         VarDecl{VarNameList=identList; Range=range; ConceptExpr=conceptExpr;}, scan4
 
+    | ({Text="concept"} as conceptKeywordToken) :: scan2 ->
+        // concept ::= "concept" ident "=" expr ";"
+        match scan2 with
+        | ({Kind=TokenKind.Identifier} as idtoken) :: {Text="="} :: scan3 ->
+            let expr, scan4 = ParseExpression scan3
+            let scan5 = ExpectSemicolon scan4
+            ConceptDef{ConceptName=idtoken; Expr=expr}, scan5
+        | _ -> SyntaxError conceptKeywordToken "Expected 'ident = expr;' after 'concept'."
+
     | {Text=";";} :: rscan -> 
         (DoNothing, rscan)
 

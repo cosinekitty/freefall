@@ -1,5 +1,7 @@
 // speed.ff
 
+concept jerk = acceleration / time;
+
 var n: integer;
 var t: real time;
 var x: distance;
@@ -7,6 +9,7 @@ var v: speed;
 var Ratio: real;
 var a: acceleration;
 var freq: frequency;
+
 
 v = x/t + 7*meter/second;
 a = v/t;
