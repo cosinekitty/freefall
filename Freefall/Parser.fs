@@ -80,7 +80,7 @@ and ParseDivMul scan =
 
     while NextTokenHasPrecedence Precedence_Mul xscan do
         let op = List.head xscan
-        let right, yscan = ParseDivMul (List.tail xscan)
+        let right, yscan = ParseNegPow (List.tail xscan)
         xscan <- yscan
         if op.Text = "*" then 
             factorlist.Add(right)
