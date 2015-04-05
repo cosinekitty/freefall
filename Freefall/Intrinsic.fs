@@ -81,7 +81,11 @@ type DerivedConceptEntry = {
 }
 
 let DerivedConcepts = [
-    {ConceptName="speed"; Definition="distance/time"};
+    {ConceptName="speed";           Definition="distance/time"};
+    {ConceptName="acceleration";    Definition="speed/time"};
+    {ConceptName="force";           Definition="mass*acceleration"};
+    {ConceptName="energy";          Definition="force*distance"};
+    {ConceptName="frequency";       Definition="1/time"};
 ]
 
 //-------------------------------------------------------------------------------------------------

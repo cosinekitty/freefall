@@ -5,8 +5,12 @@ var t: real time;
 var x: distance;
 var v: speed;
 var Ratio: real;
+var a: acceleration;
+var freq: frequency;
 
 v = x/t + 7*meter/second;
+a = v/t;
+freq = 90.7e+6 / second;
 
 BillyBob := sum(3.0, 4.0);
 
