@@ -272,8 +272,17 @@ let ParseStatement scan =
             ConceptDef{ConceptName=idtoken; Expr=expr}, scan5
         | _ -> SyntaxError conceptKeywordToken "Expected 'ident = expr;' after 'concept'."
 
+    | ({Text="unit"} as unitKeywordToken) :: scan2 ->
+        // unit ::= "unit" ident "=" expr ";"
+        match scan2 with
+        | ({Kind=TokenKind.Identifier} as idtoken) :: {Text="="} :: scan3 ->
+            let expr, scan4 = ParseExpression scan3
+            let scan5 = ExpectSemicolon scan4
+            UnitDef{UnitName=idtoken; Expr=expr}, scan5
+        | _ -> SyntaxError unitKeywordToken "Expected 'ident = expr;' after 'unit'."
+
     | {Text=";";} :: rscan -> 
-        (DoNothing, rscan)
+        DoNothing, rscan
 
     | ({Kind=TokenKind.Identifier} as target) :: {Text=":=";} :: rscan ->
         let expr, xscan = ParseExpression rscan

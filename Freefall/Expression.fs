@@ -76,6 +76,25 @@ let rec MultiplyNumbers anum bnum =
     | (Complex(_,_), Real(_)) -> MultiplyNumbers bnum anum
     | (Complex(x,y), Complex(u,v)) -> Complex(x*u - y*v, x*v + y*u)
 
+let PowerNumbers anum bnum =
+    match (anum, bnum) with
+    | (Rational(an,ad), Rational(bn,bd)) ->
+        let a = (float an) / (float ad)
+        let b = (float bn) / (float bd)
+        Real(System.Math.Pow(a,b))
+    | (Rational(an,ad), Real(b)) ->
+        let a = (float an) / (float ad)
+        Real(System.Math.Pow(a,b))
+    | (Real(a), Rational(bn,bd)) ->
+        let b = (float bn) / (float bd)
+        Real(System.Math.Pow(a,b))
+    | (Real(a), Real(b)) ->
+        Real(System.Math.Pow(a,b))
+    | (_, Complex(_,_)) ->
+        failwith "Raising number to complex power not yet implemented."  // FIXFIXFIX
+    | (Complex(_,_), _) ->
+        failwith "Raising complex number to a power not yet implemented."  // FIXFIXFIX
+        
 type PhysicalConcept = 
     | Zero                              // a special case because 0 is considered compatible with any concept: 0*meter = 0*second. Weird but necessary.
     | Concept of list<int64 * int64>    // list must have NumDimensions elements, each representing a rational number for the exponent of that dimension
@@ -120,10 +139,30 @@ let ExponentiateConcept xconcept ynum yden =
         else
             Zero    // 0^x = 0 for all positive rational x
 
-// Handy concepts by name...
-
 // A concept to represent any dimensionless quantity...
-let Dimensionless       = Concept[(0L,1L); (0L,1L); (0L,1L); (0L,1L); (0L,1L); (0L,1L); (0L,1L)]
+let Dimensionless = Concept[(0L,1L); (0L,1L); (0L,1L); (0L,1L); (0L,1L); (0L,1L); (0L,1L)]
+
+let RaiseConceptToNumberPower concept number =
+    match number with
+    | Rational(a,b) -> 
+        ExponentiateConcept concept a b
+    | Real(x) ->
+        if concept = Zero then
+            if x > 0.0 then
+                Zero
+            else
+                failwith "Cannot raise 0 concept to a non-positive power."
+        elif concept = Dimensionless then
+            Dimensionless
+        else
+            failwith "Cannot raise dimensional concept to non-rational power."
+    | Complex(x,y) ->
+        if concept = Zero then
+            failwith "Cannot raise 0 concept to a complex power."
+        elif concept = Dimensionless then
+            Dimensionless
+        else
+            failwith "Cannot raise dimensional concept to complex power."
 
 // Base concepts...
 
@@ -172,6 +211,26 @@ let InvertNumber number =        // calculate the numeric reciprocal
             // 1/(x+iy) = (x-iy)/(x^2+y^2)
             let denom = x*x + y*y
             Complex(x/denom, -y/denom)
+
+let InvertQuantity (PhysicalQuantity(number,concept)) =
+    PhysicalQuantity((InvertNumber number),(InvertConcept concept))
+
+let NegateQuantity (PhysicalQuantity(number,concept)) =
+    PhysicalQuantity((NegateNumber number),concept)
+
+let rec AddQuantityList qlist =
+    match qlist with
+    | [] -> ZeroQuantity
+    | PhysicalQuantity(fnumber,fconcept) :: rest -> 
+        let (PhysicalQuantity(rnumber,rconcept)) = AddQuantityList rest
+        PhysicalQuantity((AddNumbers fnumber rnumber), (AddConcepts fconcept rconcept))
+
+let rec MultiplyQuantityList qlist =
+    match qlist with
+    | [] -> Unity
+    | PhysicalQuantity(fnumber,fconcept) :: rest ->
+        let (PhysicalQuantity(rnumber,rconcept)) = MultiplyQuantityList rest
+        PhysicalQuantity((MultiplyNumbers fnumber rnumber), (MultiplyConcepts fconcept rconcept))
 
 type Expression =
     | Amount of PhysicalQuantity
@@ -329,6 +388,7 @@ type Macro = {
 type Function = {
     Concepter:  Token -> list<Expression> -> PhysicalConcept;
     StepSimplifier: Token -> list<Expression> -> Expression;
+    Evaluator: Token -> list<PhysicalQuantity> -> PhysicalQuantity;
 }
 
 type SymbolEntry =
@@ -553,6 +613,15 @@ let rec MergeConstants mergefunc terms =
 let FailNonFunction token found =
     SyntaxError token (sprintf "Expected function but found %s" found)
 
+let FindFunctionEntry context funcNameToken =
+    match FindSymbolEntry context funcNameToken with
+    | VariableEntry(_,_) -> FailNonFunction funcNameToken "variable"
+    | ConceptEntry(_) -> FailNonFunction funcNameToken "concept"
+    | UnitEntry(_) -> FailNonFunction funcNameToken "unit"
+    | AssignmentEntry(expr) -> FailNonFunction funcNameToken "assignment target"
+    | MacroEntry(_) -> FailLingeringMacro funcNameToken
+    | FunctionEntry(fe) -> fe
+
 let rec SimplifyStep context expr =
     match expr with
     | Amount(_) -> expr     // already as simple as possible
@@ -560,13 +629,8 @@ let rec SimplifyStep context expr =
 
     | Functor(funcName, argList) ->
         let simpArgList = List.map (SimplifyStep context) argList
-        match FindSymbolEntry context funcName with
-        | VariableEntry(_,_) -> FailNonFunction funcName "variable"
-        | ConceptEntry(_) -> FailNonFunction funcName "concept"
-        | UnitEntry(_) -> FailNonFunction funcName "unit"
-        | AssignmentEntry(expr) -> FailNonFunction funcName "assignment target"
-        | MacroEntry(_) -> FailLingeringMacro funcName
-        | FunctionEntry{StepSimplifier=stepSimplifier;} -> stepSimplifier funcName simpArgList
+        let {StepSimplifier=stepSimplifier} = FindFunctionEntry context funcName
+        stepSimplifier funcName simpArgList
 
     | Negative(Negative(x)) -> SimplifyStep context x
     | Negative(arg) -> 
@@ -810,3 +874,52 @@ let rec EvalConcept context expr =
     | Equals(a,b) -> ExpressionError expr "Equality operator not allowed in concept expression."
     | NumExprRef(t,_) -> ExpressionError expr "Numbered expression reference not allowed in concept expression."
     | PrevExprRef(t) -> ExpressionError expr "Previous-expression reference not allowed in concept expression."
+
+//-----------------------------------------------------------------------------------------------------
+// Quantity evaluator - forces an expression to reduce to a physical quantity.
+// Fails if the expression cannot be reduced to a quantity.
+
+let PowerQuantities expr (PhysicalQuantity(aNumber,aConcept)) (PhysicalQuantity(bNumber,bConcept)) =
+    if (IsNumberZero bNumber) || (bConcept = Zero) then
+        if (IsNumberZero aNumber) || (aConcept = Zero) then
+            ExpressionError expr "Cannot evaluate 0^0."
+        else
+            Unity
+    elif bConcept <> Dimensionless then
+        ExpressionError expr "Cannot raise a number to a dimensional power."
+    else
+        let cNumber = PowerNumbers aNumber bNumber
+        let cConcept = RaiseConceptToNumberPower aConcept bNumber
+        PhysicalQuantity(cNumber,cConcept)
+
+let rec EvalQuantity context expr =
+    match expr with
+    | Amount(quantity) -> quantity
+    | Solitaire(vartoken) -> 
+        match FindSymbolEntry context vartoken with
+        | UnitEntry(quantity) -> quantity
+        | _ -> SyntaxError vartoken "Expected unit name."
+    | Functor(funcName,argList) -> 
+        let {Evaluator=evaluator} = FindFunctionEntry context funcName 
+        List.map (EvalQuantity context) argList
+        |> evaluator funcName
+    | Negative(arg) -> 
+        EvalQuantity context arg
+        |> NegateQuantity
+    | Reciprocal(arg) ->
+        EvalQuantity context arg
+        |> InvertQuantity
+    | Sum(terms) -> 
+        List.map (EvalQuantity context) terms
+        |> AddQuantityList
+    | Product(factors) -> 
+        List.map (EvalQuantity context) factors
+        |> MultiplyQuantityList
+    | Power(a,b) -> 
+        let aval = EvalQuantity context a
+        let bval = EvalQuantity context b
+        PowerQuantities expr aval bval
+    | Equals(a,b) -> ExpressionError expr "Equality operator not allowed in numeric expression."
+    | NumExprRef(t,_) -> FailLingeringMacro t
+    | PrevExprRef(t) -> FailLingeringMacro t
+

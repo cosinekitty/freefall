@@ -2,6 +2,9 @@
 
 concept jerk = acceleration / time;
 
+unit inch = 0.0254 * meter;
+unit hour = 3600 * second;
+
 var n: integer;
 var t: real time;
 var x: distance;
@@ -11,7 +14,7 @@ var a: acceleration;
 var freq: frequency;
 
 
-v = x/t + 7*meter/second;
+v = x/t + 7*inch/hour;
 a = v/t;
 freq = 90.7e+6 / second;
 

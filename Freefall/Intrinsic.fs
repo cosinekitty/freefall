@@ -43,34 +43,37 @@ let SimplifyStep_Exp context funcToken argList =        // caller will step-simp
         if IsZeroExpression arg then
             UnityAmount
         else 
-            match arg with
-            | Amount(PhysicalQuantity(number,concept)) -> 
-                if concept <> Dimensionless then
-                    SyntaxError funcToken ("exp() requires a dimensionless argument, but found " + FormatConcept concept)
-                else
-                    match number with
-
-                    | Rational(a,b) -> 
-                        let expx = (System.Math.Exp((float a)/(float b)))
-                        Amount(PhysicalQuantity(Real(expx), Dimensionless))
-
-                    | Real(x) -> 
-                        let expx = System.Math.Exp(x)
-                        Amount(PhysicalQuantity(Real(expx), Dimensionless))
-
-                    | Complex(x,y) ->
-                        // exp(x + iy) = exp(x)*exp(iy) = exp(x)*(cos(y) + i*sin(y))
-                        let expx = System.Math.Exp(x)
-                        let cosy = System.Math.Cos(y)
-                        let siny = System.Math.Sin(y)
-                        Amount(PhysicalQuantity(Complex(expx*cosy, expx*siny), Dimensionless))
-
-            | _ -> Functor(funcToken, [arg])
+            Functor(funcToken, [arg])
     | _ -> FailExactArgCount "Function" 1 argList.Length funcToken
+
+let Evaluate_Exp context funcToken qlist =
+    match qlist with
+    | [PhysicalQuantity(number,concept)] -> 
+        if (IsNumberZero number) || (concept = Zero) then
+            Unity
+        elif concept <> Dimensionless then
+            SyntaxError funcToken ("exp() requires a dimensionless argument, but found " + FormatConcept concept)
+        else
+            match number with
+            | Rational(a,b) -> 
+                let expx = (System.Math.Exp((float a)/(float b)))
+                PhysicalQuantity(Real(expx), Dimensionless)
+
+            | Real(x) -> 
+                let expx = System.Math.Exp(x)
+                PhysicalQuantity(Real(expx), Dimensionless)
+
+            | Complex(x,y) ->
+                // exp(x + iy) = exp(x)*exp(iy) = exp(x)*(cos(y) + i*sin(y))
+                let expx = System.Math.Exp(x)
+                let cosy = System.Math.Cos(y)
+                let siny = System.Math.Sin(y)
+                PhysicalQuantity(Complex(expx*cosy, expx*siny), Dimensionless)
+    | _ -> FailExactArgCount "Function" 1 qlist.Length funcToken
 
 let IntrinsicFunctions = 
     [
-        ("exp", Concept_Exp, SimplifyStep_Exp);
+        ("exp", Concept_Exp, SimplifyStep_Exp, Evaluate_Exp);
     ]
 
 //-------------------------------------------------------------------------------------------------
@@ -118,8 +121,13 @@ let MakeContext assignmentHook =
     for macroName, macroFunc in IntrinsicMacros do
         DefineIntrinsicSymbol context macroName (MacroEntry({Expander=(macroFunc context);}))
 
-    for funcName, concepter, stepSimplifier in IntrinsicFunctions do
-        DefineIntrinsicSymbol context funcName (FunctionEntry{Concepter=(concepter context); StepSimplifier=(stepSimplifier context);})
+    for funcName, concepter, stepSimplifier, evaluator in IntrinsicFunctions do
+        DefineIntrinsicSymbol context funcName 
+            (FunctionEntry {
+                Concepter=(concepter context); 
+                StepSimplifier=(stepSimplifier context);
+                Evaluator=(evaluator context);
+            })
 
     context
 

@@ -20,9 +20,15 @@ type ConceptDefinition = {
     Expr : Expression;
 }
 
+type UnitDefinition = {
+    UnitName : Token;
+    Expr : Expression;
+}
+
 type Statement =
     | VarDecl of MultiVariableDeclaration
     | ConceptDef of ConceptDefinition
+    | UnitDef of UnitDefinition
     | Assignment of AssignmentStatement
     | DoNothing
 
@@ -51,6 +57,9 @@ let FormatStatement statement =
 
     | ConceptDef {ConceptName=idtoken; Expr=expr;} ->
         sprintf "concept %s = %s;" idtoken.Text (FormatExpression expr)
+
+    | UnitDef {UnitName=idtoken; Expr=expr;} ->
+        sprintf "unit %s = %s;" idtoken.Text (FormatExpression expr)
 
     | Assignment {TargetName=None; Expr=expr;} ->
         (FormatExpression expr) + ";"
@@ -107,6 +116,10 @@ let ExecuteStatement context statement =
     | ConceptDef {ConceptName=idtoken; Expr=expr;} ->
         let concept = EvalConcept context expr
         DefineSymbol context idtoken (ConceptEntry(concept))
+
+    | UnitDef {UnitName=idtoken; Expr=expr;} ->
+        let quantity = EvalQuantity context expr
+        DefineSymbol context idtoken (UnitEntry(quantity))
     
     | Assignment {TargetName=target; Expr=rawexpr;} ->
         let expr = ExpandMacros context rawexpr
