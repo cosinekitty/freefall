@@ -1,0 +1,8 @@
+// pebble.ff
+
+var m: mass;
+var v: speed;
+var T: energy;      // kinetic energy
+var V: energy;      // potential energy
+
+T = 1/2 * m * v^2;

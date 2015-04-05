@@ -308,7 +308,7 @@ let FormatNumber x =
         else
             numer.ToString() + "/" + denom.ToString()
     | Real re -> re.ToString()
-    | Complex(re,im) -> "(" + re.ToString() + "," + im.ToString() + ")"
+    | Complex(re,im) -> "(" + re.ToString() + "," + im.ToString() + ")"     // FIXFIXFIX - make re-parsable "(a+bi)" format
 
 let FormatDimension name (numer,denom) =
     if numer = 0L then
@@ -796,6 +796,7 @@ and PowerConcept context x y =
         else
             // If x is dimensional, then y must be rational (e.g. x^(-3/4)).
             // In this case, multiply the exponent list of x's dimensions with the rational value of y.
+            // FIXFIXFIX - may need to rework 'Simplify context y' as 'EvalQuantity context y' in the following line...
             let ySimp = Simplify context y      // take any possible opportunity to boil this down to a number.
             match ySimp with
             | Amount(PhysicalQuantity(Rational(ynum,yden),ySimpConcept)) ->
