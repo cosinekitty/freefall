@@ -21,6 +21,12 @@ let MyAssignmentHook (targetName:option<string>) (refIndex:int) (assignedExpr:Ex
     printfn "#%d := %s" refIndex (FormatExpression assignedExpr)
     printfn ""
 
+let PrintTokenDiagnostic token =
+    printfn "Near '%s' @ col %d" token.Text token.ColumnNumber
+    match token.Origin with
+    | None -> ()
+    | Some({Filename=fn; LineNumber=ln;}) -> printfn "File %s [line %d]" fn ln
+
 [<EntryPoint>]
 let main argv = 
     try
@@ -29,14 +35,15 @@ let main argv =
         0
     with 
         | SyntaxException(token,message) ->
-            printfn "Syntax error near '%s' @ col %d: %s" token.Text token.ColumnNumber message
-            match token.Origin with
-            | None -> ()
-            | Some({Filename=fn; LineNumber=ln;}) -> printfn "File %s [line %d]" fn ln
+            printfn "SYNTAX ERROR : %s" message
+            PrintTokenDiagnostic token
             1
 
         | ExpressionException(expr,message) ->
             printfn "Error in subexpression '%s': %s" (FormatExpression expr) message
+            match PrimaryToken expr with
+            | None -> ()
+            | Some(token) -> PrintTokenDiagnostic token
             1
 
         | UnexpectedEndException(None) ->

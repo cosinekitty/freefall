@@ -193,6 +193,20 @@ type Expression =
     | NumExprRef of Token * int                     // a reference to a prior expression indexed by automatic integer counter
     | PrevExprRef of Token                          // a reference to the previous expression
 
+let PrimaryToken expr =     // FIXFIXFIX - rework Expression so that this function can always return a primary token
+    match expr with
+    | Amount(_) -> None
+    | Solitaire(t) -> Some(t)
+    | Functor(t,_) -> Some(t)
+    | Negative(_) -> None
+    | Reciprocal(_) -> None
+    | Sum(_) -> None
+    | Product(_) -> None
+    | Power(_) -> None
+    | Equals(_) -> None
+    | NumExprRef(t,_) -> Some(t)
+    | PrevExprRef(t) -> Some(t)
+
 let FailLingeringMacro token =
     SyntaxError token "Internal error - lingering macro after macro expansion. Should not be possible."
 
