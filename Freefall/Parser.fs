@@ -180,10 +180,10 @@ and ParseAtom scan =
         else
             SyntaxError inttoken "Integer literal is not valid."
 
-    | {Kind=TokenKind.Punctuation; Text="(";} :: xscan ->
+    | {Text="("} :: xscan ->
         let expr, yscan = ParseExpression xscan
         match yscan with
-        | {Text=")";} :: zscan -> expr, zscan
+        | {Text=")"} :: zscan -> expr, zscan
         | [] -> raise (UnexpectedEndException None)
         | badtoken :: zscan -> SyntaxError badtoken "Expected ')'"
 

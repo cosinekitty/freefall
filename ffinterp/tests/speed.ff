@@ -4,6 +4,11 @@ concept jerk = acceleration / time;
 
 unit inch = 0.0254 * meter;
 unit hour = 3600 * second;
+unit one = inch ^ 0;
+
+eval(inch/hour);
+eval((1));
+eval((1/second)^-1);
 
 var n: integer;
 var t: real time;
