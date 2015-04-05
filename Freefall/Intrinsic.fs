@@ -85,14 +85,17 @@ let DerivedConcepts = [
 ]
 
 //-------------------------------------------------------------------------------------------------
-// Create a context with intrinsic symbols built it.
+// Parse a string and evaluate it as a concept.
 
-let EvaluateDefinition context definition =
+let EvaluateConceptDefinition context definition =
     // Split the definition string into tokens
     let expr, emptyScan = TokenizeLine definition |> ParseExpression
     match emptyScan with
     | badtoken :: _ -> failwith (sprintf "Syntax error in definition '%s'" definition)
     | [] -> EvalConcept context expr
+
+//-------------------------------------------------------------------------------------------------
+// Create a context with intrinsic symbols built it.
 
 let MakeContext assignmentHook = 
     let context = {
@@ -106,7 +109,7 @@ let MakeContext assignmentHook =
         DefineIntrinsicSymbol context baseUnitName (UnitEntry(PhysicalQuantity(Rational(1L,1L), concept)))
 
     for {ConceptName=conceptName; Definition=definition} in DerivedConcepts do
-        DefineIntrinsicSymbol context conceptName (ConceptEntry(EvaluateDefinition context definition))
+        DefineIntrinsicSymbol context conceptName (ConceptEntry(EvaluateConceptDefinition context definition))
 
     for macroName, macroFunc in IntrinsicMacros do
         DefineIntrinsicSymbol context macroName (MacroEntry({Expander=(macroFunc context);}))

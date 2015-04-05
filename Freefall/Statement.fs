@@ -91,7 +91,7 @@ let ExecuteStatement context statement =
     match statement with
 
     | VarDecl {VarNameList=vlist; Range=range; ConceptExpr=conceptExpr;} ->
-        let concept = ExpressionConcept context conceptExpr
+        let concept = EvalConcept context conceptExpr
         for vname in vlist do
             DefineSymbol context vname (VariableEntry(range,concept))
     
