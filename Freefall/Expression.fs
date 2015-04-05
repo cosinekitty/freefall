@@ -126,13 +126,6 @@ let ExponentiateConcept xconcept ynum yden =
 let Dimensionless       = Concept[(0L,1L); (0L,1L); (0L,1L); (0L,1L); (0L,1L); (0L,1L); (0L,1L)]
 
 // Base concepts...
-let MassConcept         = Concept[(1L,1L); (0L,1L); (0L,1L); (0L,1L); (0L,1L); (0L,1L); (0L,1L)]
-let DistanceConcept     = Concept[(0L,1L); (1L,1L); (0L,1L); (0L,1L); (0L,1L); (0L,1L); (0L,1L)]
-let TimeConcept         = Concept[(0L,1L); (0L,1L); (1L,1L); (0L,1L); (0L,1L); (0L,1L); (0L,1L)]
-let TemperatureConcept  = Concept[(0L,1L); (0L,1L); (0L,1L); (1L,1L); (0L,1L); (0L,1L); (0L,1L)]
-let SubstanceConcept    = Concept[(0L,1L); (0L,1L); (0L,1L); (0L,1L); (1L,1L); (0L,1L); (0L,1L)]
-let CurrentConcept      = Concept[(0L,1L); (0L,1L); (0L,1L); (0L,1L); (0L,1L); (1L,1L); (0L,1L)]
-let LuminosityConcept   = Concept[(0L,1L); (0L,1L); (0L,1L); (0L,1L); (0L,1L); (0L,1L); (1L,1L)]
 
 type BaseConceptEntry = {
     ConceptName: string;
@@ -141,13 +134,13 @@ type BaseConceptEntry = {
 }
 
 let BaseConcepts = [
-    {ConceptName="mass";            BaseUnitName="kilogram";    ConceptValue=MassConcept};
-    {ConceptName="distance";        BaseUnitName="meter";       ConceptValue=DistanceConcept};
-    {ConceptName="time";            BaseUnitName="second";      ConceptValue=TimeConcept};
-    {ConceptName="temperature";     BaseUnitName="kelvin";      ConceptValue=TemperatureConcept};
-    {ConceptName="substance";       BaseUnitName="mole";        ConceptValue=SubstanceConcept};
-    {ConceptName="current";         BaseUnitName="ampere";      ConceptValue=CurrentConcept};
-    {ConceptName="luminosity";      BaseUnitName="candela";     ConceptValue=LuminosityConcept};
+    {ConceptName="mass";            BaseUnitName="kilogram";    ConceptValue=Concept[(1L,1L); (0L,1L); (0L,1L); (0L,1L); (0L,1L); (0L,1L); (0L,1L)]};
+    {ConceptName="distance";        BaseUnitName="meter";       ConceptValue=Concept[(0L,1L); (1L,1L); (0L,1L); (0L,1L); (0L,1L); (0L,1L); (0L,1L)]};
+    {ConceptName="time";            BaseUnitName="second";      ConceptValue=Concept[(0L,1L); (0L,1L); (1L,1L); (0L,1L); (0L,1L); (0L,1L); (0L,1L)]};
+    {ConceptName="temperature";     BaseUnitName="kelvin";      ConceptValue=Concept[(0L,1L); (0L,1L); (0L,1L); (1L,1L); (0L,1L); (0L,1L); (0L,1L)]};
+    {ConceptName="substance";       BaseUnitName="mole";        ConceptValue=Concept[(0L,1L); (0L,1L); (0L,1L); (0L,1L); (1L,1L); (0L,1L); (0L,1L)]};
+    {ConceptName="current";         BaseUnitName="ampere";      ConceptValue=Concept[(0L,1L); (0L,1L); (0L,1L); (0L,1L); (0L,1L); (1L,1L); (0L,1L)]};
+    {ConceptName="luminosity";      BaseUnitName="candela";     ConceptValue=Concept[(0L,1L); (0L,1L); (0L,1L); (0L,1L); (0L,1L); (0L,1L); (1L,1L)]};
 ]
 
 let NumDimensions = BaseConcepts.Length

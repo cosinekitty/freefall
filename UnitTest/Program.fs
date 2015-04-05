@@ -21,9 +21,7 @@ let MyContext = MakeContext MyAssignmentHook
 let VarTokenX = MakeIdentifierToken "x"
 DefineSymbol MyContext VarTokenX (VariableEntry(RealRange,Dimensionless))
 
-let SpeedConcept = DivideConcepts DistanceConcept TimeConcept
-let AccelerationConcept = DivideConcepts SpeedConcept TimeConcept
-let ForceConcept = MultiplyConcepts MassConcept AccelerationConcept
+let ForceConcept = EvaluateConceptDefinition MyContext "force"
 
 let VarTokenF = MakeIdentifierToken "F"
 let ForceVar = Solitaire(VarTokenF)
@@ -70,7 +68,7 @@ let ParseStatementsTest filename =
     let filepath = System.IO.Path.Combine("..", "..", "scripts", filename)
     let tokenlist = TokenizeFile filepath
     let mutable scan = tokenlist
-    while scan <> [] do
+    while MoreTokensIn scan do
         let statement, scan2 = ParseStatement scan
         printfn "Statement: %A" statement
         scan <- scan2
