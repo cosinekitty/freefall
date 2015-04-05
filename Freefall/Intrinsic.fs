@@ -11,7 +11,7 @@ open Freefall.Parser
 // Intrinsic macros
 
 let FailExactArgCount symbolType requiredCount actualCount token =
-    raise (SyntaxException((sprintf "%s requires exactly %d argument(s), but %d were found" symbolType requiredCount actualCount), token))
+    SyntaxError token (sprintf "%s requires exactly %d argument(s), but %d were found" symbolType requiredCount actualCount)
 
 let SimplifyMacroExpander context macroToken argList =
     match argList with
@@ -34,7 +34,7 @@ let Concept_Exp context funcToken argList =
         if IsConceptDimensionless argConcept then
             Dimensionless
         else
-            raise (SyntaxException(("exp() requires a dimensionless argument, but found " + FormatConcept argConcept), funcToken))
+            SyntaxError funcToken ("exp() requires a dimensionless argument, but found " + FormatConcept argConcept)
     | _ -> FailExactArgCount "Function" 1 argList.Length funcToken
 
 let SimplifyStep_Exp context funcToken argList =        // caller will step-simplify argList for us.
@@ -46,7 +46,7 @@ let SimplifyStep_Exp context funcToken argList =        // caller will step-simp
             match arg with
             | Amount(PhysicalQuantity(number,concept)) -> 
                 if concept <> Dimensionless then
-                    raise (SyntaxException(("exp() requires a dimensionless argument, but found " + FormatConcept concept), funcToken))
+                    SyntaxError funcToken ("exp() requires a dimensionless argument, but found " + FormatConcept concept)
                 else
                     match number with
 

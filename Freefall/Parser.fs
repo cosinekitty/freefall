@@ -25,7 +25,7 @@ let Impossible () = failwith "Internal error - this should not be possible!"
 let ExpectToken text scan =
     match RequireToken scan with
     | {Text=actual;} :: scan2 as token when actual=text -> scan2
-    | token :: _ -> raise (SyntaxException((sprintf "Expected '%s'" text), token))
+    | token :: _ -> SyntaxError token (sprintf "Expected '%s'" text)
     | _ -> Impossible ()
 
 let ExpectSemicolon = ExpectToken ";"
@@ -33,12 +33,12 @@ let ExpectSemicolon = ExpectToken ";"
 let RequireExactlyOneArg funcName argList =
     match argList with
     | [arg] -> arg
-    | _ -> raise (SyntaxException("Function requires exactly 1 argument.", funcName))
+    | _ -> SyntaxError funcName "Function requires exactly 1 argument."
 
 let RequireExactlyTwoArgs funcName argList =
     match argList with
     | [a; b;] -> (a, b)
-    | _ -> raise (SyntaxException("Function requires exactly 2 arguments.", funcName))
+    | _ -> SyntaxError funcName "Function requires exactly 2 arguments."
 
 //---------------------------------------------------------------------------------------
 // Expression parser
@@ -66,7 +66,7 @@ and ParseAddSub scan =
         elif op.Text = "-" then
             termlist.Add(Negative(right))
         else
-            raise (SyntaxException("Unsupported addop", op))
+            SyntaxError op "Unsupported addop."
 
     if termlist.Count = 1 then
         expr, xscan
@@ -87,7 +87,7 @@ and ParseDivMul scan =
         elif op.Text = "/" then
             factorlist.Add(Reciprocal(right))
         else
-            raise (SyntaxException("Unsupported multop", op))
+            SyntaxError op "Unsupported multop"
 
     if factorlist.Count = 1 then
         expr, xscan
@@ -129,7 +129,7 @@ and ParseArgList scan =
             [expr], scan3
 
         | badtoken :: _ ->
-            raise (SyntaxException("Expected ',' or ')' after function argument expression.", badtoken))
+            SyntaxError badtoken "Expected ',' or ')' after function argument expression."
 
         | [] ->
             raise (UnexpectedEndException None)
@@ -158,34 +158,34 @@ and ParseAtom scan =
 
     | ({Kind=TokenKind.ImagFloatLiteral; Text=text;} as imagtoken) :: rscan ->
         if not (text.EndsWith("i")) then
-            raise (SyntaxException("Internal error - imaginary literal should have ended with 'i'", imagtoken))
+            SyntaxError imagtoken "Internal error - imaginary literal should have ended with 'i'"
         else
             let isValid, imagvalue = System.Double.TryParse(text.Substring(0, text.Length-1))
             if isValid then
                 (Amount(PhysicalQuantity(Complex(0.0, imagvalue), Dimensionless))), rscan
             else
-                raise (SyntaxException("Imaginary literal is not valid.", imagtoken))
+                SyntaxError imagtoken "Imaginary literal is not valid."
 
     | ({Kind=TokenKind.RealFloatLiteral; Text=text;} as realtoken) :: rscan ->
         let isValid, realvalue = System.Double.TryParse(text)
         if isValid then
             (Amount(PhysicalQuantity(Real(realvalue), Dimensionless))), rscan
         else
-            raise (SyntaxException("Real literal is not valid.", realtoken))
+            SyntaxError realtoken "Real literal is not valid."
 
     | ({Kind=TokenKind.IntegerLiteral; Text=text;} as inttoken) :: rscan ->
         let isValid, intvalue = System.Int64.TryParse(text)
         if isValid then
             (Amount(PhysicalQuantity(Rational(intvalue,1L), Dimensionless))), rscan
         else
-            raise (SyntaxException("Integer literal is not valid.", inttoken))
+            SyntaxError inttoken "Integer literal is not valid."
 
     | {Kind=TokenKind.Punctuation; Text="(";} :: xscan ->
         let expr, yscan = ParseExpression xscan
         match yscan with
         | {Text=")";} :: zscan -> expr, zscan
         | [] -> raise (UnexpectedEndException None)
-        | badtoken :: zscan -> raise (SyntaxException("Expected ')'", badtoken))
+        | badtoken :: zscan -> SyntaxError badtoken "Expected ')'"
 
     | ({Kind=TokenKind.ExpressionReference; Text=reftext;} as reftoken) :: xscan ->
         if reftext = "#" then
@@ -197,15 +197,15 @@ and ParseAtom scan =
             if isValid && (index >= 0) then
                 NumExprRef(reftoken,index), xscan
             else
-                raise (SyntaxException("Internal error - invalid integer after '#'", reftoken))
+                SyntaxError reftoken "Internal error - invalid integer after '#'"
         else
-            raise (SyntaxException("Internal error - parsed invalid expression reference", reftoken))
+            SyntaxError reftoken "Internal error - parsed invalid expression reference"
 
     // FIXFIXFIX - support the following constructs
     // "@" ident    ==>  derivative operator
 
     | badtoken :: _ -> 
-        raise (SyntaxException("Syntax error.", badtoken))    
+        SyntaxError badtoken "Syntax error."
 
 //---------------------------------------------------------------------------------------
 // Statement parser
@@ -226,10 +226,10 @@ let rec ParseIdentList scan =
             [vartoken], xscan
 
         | _ ->
-            raise (SyntaxException("Expected ',' or ':' after variable name", punc))
+            SyntaxError punc "Expected ',' or ':' after variable name"
 
     | token :: _ ->
-        raise (SyntaxException("Expected variable name identifier", token))
+        SyntaxError token "Expected variable name identifier"
 
 let ParseTypeAndSemicolon scan =
     // type ::= typename [expr] | expr 

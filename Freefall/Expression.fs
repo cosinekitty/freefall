@@ -194,7 +194,7 @@ type Expression =
     | PrevExprRef of Token                          // a reference to the previous expression
 
 let FailLingeringMacro token =
-    raise (SyntaxException("Internal error - lingering macro after macro expansion. Should not be possible.", token))
+    SyntaxError token "Internal error - lingering macro after macro expansion. Should not be possible."
 
 exception ExpressionException of Expression * string
 
@@ -345,13 +345,13 @@ let FindNumberedExpression {NumberedExpressionList=numExprList;} token index =
     if (index >= 0) && (index < numExprList.Count) then
         numExprList.[index]
     else
-        raise (SyntaxException((sprintf "Invalid expression index: expected 0..%d" (numExprList.Count-1)), token))
+        SyntaxError token (sprintf "Invalid expression index: expected 0..%d" (numExprList.Count-1))
 
 let FindPreviousExpression {NumberedExpressionList=numExprList;} token =
     if numExprList.Count > 0 then
         numExprList.[numExprList.Count - 1]
     else
-        raise (SyntaxException("Cannot refer to previous expression because expression list is empty.", token))
+        SyntaxError token "Cannot refer to previous expression because expression list is empty."
 
 let DefineIntrinsicSymbol {SymbolTable=symtable;} symbol entry =
     if symtable.ContainsKey(symbol) then
@@ -361,17 +361,17 @@ let DefineIntrinsicSymbol {SymbolTable=symtable;} symbol entry =
 
 let DefineSymbol {SymbolTable=symtable;} ({Text=symbol; Kind=kind} as symtoken) symentry =
     if kind <> TokenKind.Identifier then
-        raise (SyntaxException("Expected identifier for symbol name", symtoken))
+        SyntaxError symtoken "Expected identifier for symbol name"
     elif (symtable.ContainsKey(symbol)) then
-        raise (SyntaxException("Symbol is already defined", symtoken))
+        SyntaxError symtoken "Symbol is already defined"
     else
-        (symtable.Add(symbol, symentry))
+        symtable.Add(symbol, symentry)
 
 let FindSymbolEntry {SymbolTable=symtable;} ({Text=symbol; Kind=kind} as symtoken) =
     if kind <> TokenKind.Identifier then
-        raise (SyntaxException("Expected symbol identifier", symtoken))
+        SyntaxError symtoken "Expected symbol identifier"
     elif not (symtable.ContainsKey(symbol)) then
-        raise (SyntaxException("Undefined symbol", symtoken))
+        SyntaxError symtoken "Undefined symbol"
     else
         symtable.[symbol]
 
@@ -544,7 +544,7 @@ let rec MergeConstants mergefunc terms =
         | _ -> first :: mrest
 
 let FailNonFunction token found =
-    raise (SyntaxException((sprintf "Expected function but found %s" found), token))
+    SyntaxError token (sprintf "Expected function but found %s" found)
 
 let rec SimplifyStep context expr =
     match expr with
@@ -601,7 +601,7 @@ let rec SimplifyStep context expr =
         let sy = SimplifyStep context y
         // FIXFIXFIX - could use more simplification and validation rules here
         if (IsZeroExpression sx) && (IsZeroExpression sy) then
-            raise (FreefallRuntimeException("Cannot evaluate 0^0."))
+            ExpressionError expr "Cannot evaluate 0^0."
         else
             Power(sx,sy)
 
@@ -668,23 +668,23 @@ and FindSolitaireConcept context token =
     | ConceptEntry(concept) -> concept
     | UnitEntry(PhysicalQuantity(_,concept)) -> concept
     | AssignmentEntry(expr) -> ExpressionConcept context expr
-    | MacroEntry(_) -> raise (SyntaxException("Attempt to use macro name without parenthesized argument list.", token))
-    | FunctionEntry(_) -> raise(SyntaxException("Attempt to use function name without parenthesized argument list.", token))
+    | MacroEntry(_) -> SyntaxError token "Attempt to use macro name without parenthesized argument list."
+    | FunctionEntry(_) -> SyntaxError token "Attempt to use function name without parenthesized argument list."
 
 and FindFunctorConcept context funcNameToken argExprList =
     match FindSymbolEntry context funcNameToken with
     | FunctionEntry({Concepter=concepter;}) -> concepter funcNameToken argExprList
     | MacroEntry(_) -> FailLingeringMacro funcNameToken
-    | VariableEntry(_) -> raise(SyntaxException("Attempt to use a variable as a function/macro.", funcNameToken))
-    | ConceptEntry(_) -> raise(SyntaxException("Attempt to use a concept as a function/macro.", funcNameToken))
-    | UnitEntry(_) -> raise(SyntaxException("Attempt to use a unit as a function/macro.", funcNameToken))
-    | AssignmentEntry(_) -> raise(SyntaxException("Attempt to use an assignment target as a function/macro.", funcNameToken))
+    | VariableEntry(_) -> SyntaxError funcNameToken "Attempt to use a variable as a function/macro."
+    | ConceptEntry(_) -> SyntaxError funcNameToken "Attempt to use a concept as a function/macro."
+    | UnitEntry(_) -> SyntaxError funcNameToken "Attempt to use a unit as a function/macro."
+    | AssignmentEntry(_) -> SyntaxError funcNameToken "Attempt to use an assignment target as a function/macro."
 
 and EquationConcept context a b =
     let aConcept = ExpressionConcept context a
     let bConcept = ExpressionConcept context b
     if aConcept <> bConcept then
-        raise (FreefallRuntimeException(sprintf "Incompatible units: cannot equate/compare %s and %s" (FormatConcept aConcept) (FormatConcept bConcept)))
+        ExpressionError b (sprintf "Incompatible units: cannot equate/compare %s and %s" (FormatConcept aConcept) (FormatConcept bConcept))
     else
         aConcept
 
@@ -700,7 +700,7 @@ and SumConcept context terms =
         | (Zero,Concept(_)) -> restConcept       // 0+y = y
         | (Concept(f),Concept(r)) ->
             if f <> r then
-                raise (FreefallRuntimeException(sprintf "Incompatible units: cannot add %s and %s" (FormatConcept firstConcept) (FormatConcept restConcept)))
+                ExpressionError first (sprintf "Incompatible units: cannot add %s and %s" (FormatConcept firstConcept) (FormatConcept restConcept))
             else
                 firstConcept
 
@@ -732,9 +732,9 @@ and PowerConcept context x y =
                     failwith "IMPOSSIBLE - y concept changed after simplification."
                 else
                     ExponentiateConcept xConcept ynum yden
-            | _ -> raise (FreefallRuntimeException("Cannot raise a dimensional expression to a non-rational power."))
+            | _ -> ExpressionError y "Cannot raise a dimensional expression to a non-rational power."
     else
-        raise (FreefallRuntimeException("Cannot raise an expression to a dimensional power."))
+        ExpressionError y "Cannot raise an expression to a dimensional power."
 
 and ReciprocalConcept context arg =
     match ExpressionConcept context arg with
@@ -770,7 +770,7 @@ let rec EvalConcept context expr =
     | Solitaire(token) -> 
         match FindSymbolEntry context token with
         | ConceptEntry(concept) -> concept
-        | _ -> raise (SyntaxException("Expected a concept name", token))
+        | _ -> SyntaxError token "Expected a concept name"
 
     | Reciprocal(arg) -> EvalConcept context arg |> InvertConcept
 
@@ -797,7 +797,7 @@ let rec EvalConcept context expr =
                         ExpressionError b "Not allowed to raise to a dimensional power."
                 | _ -> ExpressionError b "Concept must be raised to a dimensionless rational power."
                         
-    | Functor(funcName,argList) -> raise (SyntaxException("Function or macro not allowed in concept expression.", funcName))
+    | Functor(funcName,argList) -> SyntaxError funcName "Function or macro not allowed in concept expression."
     | Negative(arg) -> ExpressionError expr "Negation not allowed in concept expression."
     | Sum(terms) -> ExpressionError expr "Addition/subtraction not allowed in concept expression."
     | Equals(a,b) -> ExpressionError expr "Equality operator not allowed in concept expression."
