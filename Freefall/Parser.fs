@@ -137,7 +137,7 @@ and ParseArgList scan =
 and ParseAtom scan =
     match RequireToken scan with
 
-    | [] -> failwith "Impossible."    // RequireToken already checks this case, but I want to eliminate warning here.
+    | [] -> Impossible ()    // RequireToken already checks this case, but I want to eliminate warning here.
 
     | ({Kind=TokenKind.Identifier;} as funcName) :: {Text="(";} :: scan2 ->
         let argList, scan3 = ParseArgList scan2
@@ -213,7 +213,7 @@ and ParseAtom scan =
 let rec ParseIdentList scan =
     match RequireToken scan with
 
-    | [] -> failwith "Impossible."    // RequireToken already checks this case, but I want to eliminate warning here.
+    | [] -> Impossible ()   // RequireToken already checks this case, but I want to eliminate warning here.
 
     | ({Kind=TokenKind.Identifier} as vartoken) :: punc :: xscan ->
         match punc.Text with

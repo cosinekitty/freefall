@@ -195,6 +195,11 @@ type Expression =
 
 let FailLingeringMacro token =
     raise (SyntaxException("Internal error - lingering macro after macro expansion. Should not be possible.", token))
+
+exception ExpressionException of Expression * string
+
+let ExpressionError expr message =
+    raise (ExpressionException(expr,message))
  
 let ZeroAmount = Amount(ZeroQuantity)
 let UnityAmount = Amount(Unity)
@@ -708,7 +713,7 @@ and PowerConcept context x y =
     let yConcept = ExpressionConcept context y
     if yConcept = Zero then
         if yConcept = Zero then
-            failwith "Cannot raise 0 to 0 power."
+            ExpressionError y "Cannot raise 0 to 0 power."
         else
             Dimensionless
     elif yConcept = Dimensionless then
@@ -757,9 +762,9 @@ let rec EvalConcept context expr =
     match expr with
     | Amount(PhysicalQuantity(number,concept)) -> 
         if (IsNumberZero number) || (concept = Zero) then 
-            failwith "Concept evaluated to 0."
+            ExpressionError expr "Concept evaluated to 0."
         elif number <> Rational(1L,1L) then
-            failwith (sprintf "Concept evaluated with non-unity coefficient %s" (FormatNumber number))
+            ExpressionError expr (sprintf "Concept evaluated with non-unity coefficient %s" (FormatNumber number))
         else
             concept
     | Solitaire(token) -> 
@@ -776,7 +781,7 @@ let rec EvalConcept context expr =
     | Power(a,b) -> 
         let aConcept = EvalConcept context a
         if aConcept = Zero then
-            failwith "Concept 0 is not allowed in a concept expression."
+            ExpressionError a "Concept 0 is not allowed in a concept expression."
         else
             let bsimp = Simplify context b
             if IsZeroExpression bsimp then
@@ -787,14 +792,14 @@ let rec EvalConcept context expr =
                     if bConcept = Dimensionless then
                         match bNumber with
                         | Rational(bnum,bden) -> ExponentiateConcept aConcept bnum bden
-                        | _ -> failwith "Cannot raise concept to non-rational power."
+                        | _ -> ExpressionError b "Cannot raise concept to non-rational power."
                     else
-                        failwith "Not allowed to raise to a dimensional power."
-                | _ -> failwith "Concept must be raised to a dimensionless rational power."
+                        ExpressionError b "Not allowed to raise to a dimensional power."
+                | _ -> ExpressionError b "Concept must be raised to a dimensionless rational power."
                         
     | Functor(funcName,argList) -> raise (SyntaxException("Function or macro not allowed in concept expression.", funcName))
-    | Negative(arg) -> failwith "Negation not allowed in concept expression."
-    | Sum(terms) -> failwith "Addition/subtraction not allowed in concept expression."
-    | Equals(a,b) -> failwith "Equality operator not allowed in concept expression."
-    | NumExprRef(t,_) -> failwith "Numbered expression reference not allowed in concept expression."
-    | PrevExprRef(t) -> failwith "Previous-expression reference not allowed in concept expression."
+    | Negative(arg) -> ExpressionError expr "Negation not allowed in concept expression."
+    | Sum(terms) -> ExpressionError expr "Addition/subtraction not allowed in concept expression."
+    | Equals(a,b) -> ExpressionError expr "Equality operator not allowed in concept expression."
+    | NumExprRef(t,_) -> ExpressionError expr "Numbered expression reference not allowed in concept expression."
+    | PrevExprRef(t) -> ExpressionError expr "Previous-expression reference not allowed in concept expression."

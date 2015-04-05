@@ -91,7 +91,7 @@ let EvaluateConceptDefinition context definition =
     // Split the definition string into tokens
     let expr, emptyScan = TokenizeLine definition |> ParseExpression
     match emptyScan with
-    | badtoken :: _ -> failwith (sprintf "Syntax error in definition '%s'" definition)
+    | badtoken :: _ -> SyntaxError badtoken (sprintf "Syntax error in definition '%s'" definition)
     | [] -> EvalConcept context expr
 
 //-------------------------------------------------------------------------------------------------

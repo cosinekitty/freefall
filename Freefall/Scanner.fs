@@ -49,6 +49,9 @@ let EndOfFileToken origin = {
 
 exception SyntaxException of string * Token
 
+let SyntaxError token message =
+    raise (SyntaxException(message,token))
+
 let Precedence_Or   = 2
 let Precedence_And  = 3
 let Precedence_Rel  = 4

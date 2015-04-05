@@ -35,6 +35,10 @@ let main argv =
             | Some({Filename=fn; LineNumber=ln;}) -> printfn "File %s [line %d]" fn ln
             1
 
+        | ExpressionException(expr,message) ->
+            printfn "Error in subexpression '%s': %s" (FormatExpression expr) message
+            1
+
         | UnexpectedEndException(None) ->
             printfn "Syntax error: unexpected end of input"
             1
