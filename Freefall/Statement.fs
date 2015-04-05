@@ -104,6 +104,77 @@ let rec ExpandMacros context rawexpr =
     | PrevExprRef(token) -> FindPreviousExpression context token
 
 //--------------------------------------------------------------------------------------------------
+// Equation transformer: this is an important part of Freefall as an algebra helper.
+//
+// We allow equations to be added to other equations to produce equations:
+//     (a=b) + (c=d) + (e=f)   ==>  a+c+e = b+d+f
+//     sum(a=b, c=d, e=f)      ==> sum(a,c,e) = sum(b,d,f)
+//
+// Likewise, an equation can be added to a value:
+//     (a=b) + x   ==> a+x = b+x
+//     sum(a=b, x) ==> sum(a,x) = sum(b,x)
+//
+// Arbitrary mixtures of equations and values are allowed in sums:
+//     (a=b) + x + (u=v) + y  ==>  a+x+u+y = b+x+v+y
+//     sum(a=b, x, u=v, y)    ==>  sum(a,x,u,y) = sum(b,x,v,y)
+//
+// Subtracting a value from both sides of an equation:
+//     (a=b) - x        ==> a-x = b-x
+//     sum(a=b, neg(x)) ==> sum(a,neg(x)) = sum(b,neg(x))
+//
+// The same applies to multiplication, and with care, division as well.
+//
+// Unary operator support:
+//     neg(a=b)  ==>  neg(a) = neg(b)
+//
+// We need to be able to apply safe, single-valued functions like this:
+//     exp(a=b)  ==>   exp(a) = exp(b)
+//
+// FIXFIXFIX - handle the more complicated cases like taking square root of both sides, etc.
+
+let rec PartitionEquationsAndValues exprlist =
+    match exprlist with
+    | [] -> 0, [], []
+    | first :: rest ->
+        let restNumEquations, restLeft, restRight = PartitionEquationsAndValues rest
+        match first with
+        | Equals(a,b) -> (1+restNumEquations), (a :: restLeft), (b :: restRight)
+        | _ ->  restNumEquations, (first :: restLeft), (first :: restRight)
+
+let rec TransformEquations context expr =
+    match expr with
+    | Amount(_) -> expr
+    | Solitaire(_) -> expr
+    | Functor(name,argList) -> Functor(name, (List.map (TransformEquations context) argList))
+    | Negative(arg) -> 
+        match TransformEquations context arg with
+        | Equals(a,b) -> Equals(Negative(a), Negative(b))
+        | xarg -> Negative(xarg)
+    | Reciprocal(arg) -> 
+        match TransformEquations context arg with
+        | Equals(a,b) -> Equals(Reciprocal(a), Reciprocal(b))   // FIXFIXFIX - what about a<>0, b<>0 constraints?
+        | xarg -> Reciprocal(xarg)
+    | Sum(terms) -> 
+        let numEquations, leftList, rightList = List.map (TransformEquations context) terms |> PartitionEquationsAndValues
+        if numEquations = 0 then        // It is tempting to check for leftList=rightList, but that can happen even when there are equations!
+            // There were no equations to bubble up above the sum, and we know leftList = rightList.
+            Sum(leftList)
+        else
+            // Flip the sum(a=b, u, c=d, v) ==> sum(a+u+c+v) = Sum(b,u,d,v).
+            Equals(Sum(leftList), Sum(rightList))
+    | Product(factors) ->
+        let numEquations, leftList, rightList = List.map (TransformEquations context) factors |> PartitionEquationsAndValues
+        if numEquations = 0 then
+            Product(leftList)
+        else
+            // Flip the prod(a=b, u, c=d, v) ==> prod(a+u+c+v) = prod(b,u,d,v).
+            Equals(Product(leftList), Product(rightList))
+    | Power(a,b) -> Power((TransformEquations context a), (TransformEquations context b))
+    | Equals(a,b) -> Equals((TransformEquations context a), (TransformEquations context b))
+    | NumExprRef(token,index) -> FailLingeringMacro token
+    | PrevExprRef(token) -> FailLingeringMacro token
+
+//--------------------------------------------------------------------------------------------------
 
 let ExecuteStatement context statement =
     match statement with
@@ -122,7 +193,7 @@ let ExecuteStatement context statement =
         DefineSymbol context idtoken (UnitEntry(quantity))
     
     | Assignment {TargetName=target; Expr=rawexpr;} ->
-        let expr = ExpandMacros context rawexpr
+        let expr = rawexpr |> ExpandMacros context |> TransformEquations context
         ValidateExpressionConcept context expr
         let refIndex = context.NumberedExpressionList.Count
         match target with

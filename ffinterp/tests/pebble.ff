@@ -6,3 +6,10 @@ var T: energy;      // kinetic energy
 var V: energy;      // potential energy
 
 T = 1/2 * m * v^2;
+-#;
+
+Apple := T/V = 3.7;
+Orange := m/kilogram = 5.8;
+Apple + 99 + Orange;
+Apple * 88 * Orange;
+simp(#);

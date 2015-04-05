@@ -10,6 +10,8 @@ exception UnexpectedEndException of option<string>       // Some(filename) or No
 
 // FIXFIXFIX: Take a look at using BigRational, complex, etc, from https://github.com/fsprojects/powerpack
 
+// FIXFIXFIX: Do "open Checked" to use checked arithmetic, capture Rational overflows and replace with Real approximations.
+
 type Number = 
     | Rational of int64 * int64
     | Real of float
