@@ -13,13 +13,22 @@ open Freefall.Parser
 let FailExactArgCount symbolType requiredCount actualCount token =
     SyntaxError token (sprintf "%s requires exactly %d argument(s), but %d were found" symbolType requiredCount actualCount)
 
+let FailSingleArgMacro macroToken (argList:list<Expression>) =
+    FailExactArgCount "Macro" 1 argList.Length macroToken
+
 let SimplifyMacroExpander context macroToken argList =
     match argList with
     | [arg] -> Simplify context arg
-    | _ -> FailExactArgCount "Macro" 1 argList.Length macroToken
+    | _ -> FailSingleArgMacro macroToken argList
+
+let EvalMacroExpander context macroToken argList =
+    match argList with
+    | [arg] -> Amount(EvalQuantity context arg)
+    | _ -> FailSingleArgMacro macroToken argList
 
 let IntrinsicMacros =
     [
+        ("eval", EvalMacroExpander);
         ("simp", SimplifyMacroExpander);
     ]
 
