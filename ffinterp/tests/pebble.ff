@@ -13,3 +13,5 @@ Orange := m/kilogram = 5.8;
 Apple + 99 + Orange;
 Apple * 88 * Orange;
 simp(#);
+
+exp(Orange);

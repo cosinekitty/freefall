@@ -132,6 +132,10 @@ let rec ExpandMacros context rawexpr =
 //
 // FIXFIXFIX - handle the more complicated cases like taking square root of both sides, etc.
 
+let FunctionDistributor context functoken =
+    let {EquationDistributor=distrib} = FindFunctionEntry context functoken
+    distrib
+
 let rec PartitionEquationsAndValues exprlist =
     match exprlist with
     | [] -> 0, [], []
@@ -139,13 +143,23 @@ let rec PartitionEquationsAndValues exprlist =
         let restNumEquations, restLeft, restRight = PartitionEquationsAndValues rest
         match first with
         | Equals(a,b) -> (1+restNumEquations), (a :: restLeft), (b :: restRight)
-        | _ ->  restNumEquations, (first :: restLeft), (first :: restRight)
+        | _ -> restNumEquations, (first :: restLeft), (first :: restRight)
 
-let rec TransformEquations context expr =
+let rec TransformAndPartition context exprlist =
+    List.map (TransformEquations context) exprlist
+    |> PartitionEquationsAndValues
+
+and TransformEquations context expr =
     match expr with
     | Amount(_) -> expr
     | Solitaire(_) -> expr
-    | Functor(name,argList) -> Functor(name, (List.map (TransformEquations context) argList))
+    | Functor(name,argList) -> 
+        let numEquations, leftList, rightList = TransformAndPartition context argList
+        if numEquations = 0 then
+            Functor(name,leftList)
+        else
+            let distrib = FunctionDistributor context name
+            distrib name leftList rightList
     | Negative(arg) -> 
         match TransformEquations context arg with
         | Equals(a,b) -> Equals(Negative(a), Negative(b))
@@ -155,7 +169,7 @@ let rec TransformEquations context expr =
         | Equals(a,b) -> Equals(Reciprocal(a), Reciprocal(b))   // FIXFIXFIX - what about a<>0, b<>0 constraints?
         | xarg -> Reciprocal(xarg)
     | Sum(terms) -> 
-        let numEquations, leftList, rightList = List.map (TransformEquations context) terms |> PartitionEquationsAndValues
+        let numEquations, leftList, rightList = TransformAndPartition context terms
         if numEquations = 0 then        // It is tempting to check for leftList=rightList, but that can happen even when there are equations!
             // There were no equations to bubble up above the sum, and we know leftList = rightList.
             Sum(leftList)
@@ -163,7 +177,7 @@ let rec TransformEquations context expr =
             // Flip the sum(a=b, u, c=d, v) ==> sum(a+u+c+v) = Sum(b,u,d,v).
             Equals(Sum(leftList), Sum(rightList))
     | Product(factors) ->
-        let numEquations, leftList, rightList = List.map (TransformEquations context) factors |> PartitionEquationsAndValues
+        let numEquations, leftList, rightList = TransformAndPartition context factors
         if numEquations = 0 then
             Product(leftList)
         else

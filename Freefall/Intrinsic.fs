@@ -80,9 +80,12 @@ let Evaluate_Exp context funcToken qlist =
                 PhysicalQuantity(Complex(expx*cosy, expx*siny), Dimensionless)
     | _ -> FailExactArgCount "Function" 1 qlist.Length funcToken
 
+let SimpleEquationDistributor funcToken leftList rightList =
+    Equals(Functor(funcToken,leftList), Functor(funcToken,rightList))
+
 let IntrinsicFunctions = 
     [
-        ("exp", Concept_Exp, SimplifyStep_Exp, Evaluate_Exp);
+        ("exp", Concept_Exp, SimplifyStep_Exp, Evaluate_Exp, SimpleEquationDistributor);
     ]
 
 //-------------------------------------------------------------------------------------------------
@@ -130,12 +133,13 @@ let MakeContext assignmentHook =
     for macroName, macroFunc in IntrinsicMacros do
         DefineIntrinsicSymbol context macroName (MacroEntry({Expander=(macroFunc context);}))
 
-    for funcName, concepter, stepSimplifier, evaluator in IntrinsicFunctions do
+    for funcName, concepter, stepSimplifier, evaluator, eqdistrib in IntrinsicFunctions do
         DefineIntrinsicSymbol context funcName 
             (FunctionEntry {
-                Concepter=(concepter context); 
-                StepSimplifier=(stepSimplifier context);
-                Evaluator=(evaluator context);
+                Concepter = (concepter context); 
+                StepSimplifier = (stepSimplifier context);
+                Evaluator = (evaluator context);
+                EquationDistributor = eqdistrib;
             })
 
     context

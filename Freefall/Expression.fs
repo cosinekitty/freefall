@@ -391,6 +391,7 @@ type Function = {
     Concepter:  Token -> list<Expression> -> PhysicalConcept;
     StepSimplifier: Token -> list<Expression> -> Expression;
     Evaluator: Token -> list<PhysicalQuantity> -> PhysicalQuantity;
+    EquationDistributor: Token -> list<Expression> -> list<Expression> -> Expression;
 }
 
 type SymbolEntry =
