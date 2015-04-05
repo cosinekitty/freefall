@@ -47,10 +47,10 @@ let EndOfFileToken origin = {
     ColumnNumber = -1;
 }
 
-exception SyntaxException of string * Token
+exception SyntaxException of Token * string
 
 let SyntaxError token message =
-    raise (SyntaxException(message,token))
+    raise (SyntaxException(token,message))
 
 let Precedence_Or   = 2
 let Precedence_And  = 3

@@ -99,7 +99,7 @@ let main argv =
 
         0   // success exit code
 
-    with SyntaxException(message,token) ->
+    with SyntaxException(token,message) ->
         printfn "ERROR: %s" message
         PrintToken token
         1   // failure exit code

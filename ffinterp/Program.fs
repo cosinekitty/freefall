@@ -28,7 +28,7 @@ let main argv =
         Array.map (ExecuteFile context) argv |> ignore
         0
     with 
-        | SyntaxException(message,token) ->
+        | SyntaxException(token,message) ->
             printfn "Syntax error near '%s' @ col %d: %s" token.Text token.ColumnNumber message
             match token.Origin with
             | None -> ()
