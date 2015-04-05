@@ -4,6 +4,7 @@ open Freefall.Scanner
 open Freefall.Expr
 open Freefall.Stmt
 open Freefall.Parser
+open Freefall.Intrinsic
 
 let ExecuteFile context filename =
     let mutable scan = TokenizeFile filename

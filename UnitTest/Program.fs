@@ -4,6 +4,7 @@ open System.Collections.Generic
 open Freefall.Expr
 open Freefall.Scanner
 open Freefall.Parser
+open Freefall.Intrinsic
 
 let MakeIdentifierToken name : Token =
     {Text=name; Precedence=Precedence_Atom; Kind=TokenKind.Identifier; Origin=None; ColumnNumber=0;}
@@ -19,6 +20,10 @@ let MyContext = MakeContext MyAssignmentHook
 
 let VarTokenX = MakeIdentifierToken "x"
 DefineSymbol MyContext VarTokenX (VariableEntry(RealRange,Dimensionless))
+
+let SpeedConcept = DivideConcepts DistanceConcept TimeConcept
+let AccelerationConcept = DivideConcepts SpeedConcept TimeConcept
+let ForceConcept = MultiplyConcepts MassConcept AccelerationConcept
 
 let VarTokenF = MakeIdentifierToken "F"
 let ForceVar = Solitaire(VarTokenF)

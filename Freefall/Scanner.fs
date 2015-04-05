@@ -136,7 +136,11 @@ let MakeToken origin (m:Match): Token =
     let kind = ClassifyToken m.Value precedence
     { Text = m.Value; Precedence = precedence; Kind = kind; Origin = origin; ColumnNumber = 1 + m.Index }
 
-let TokenizeFile (inFileName:string) =
+let TokenizeLine lineText =
+    let mc = TokenRegex.Matches(lineText)
+    [for m in mc do if not (m.Value.StartsWith("//")) then yield MakeToken None m]
+
+let TokenizeFile inFileName =
     let linesInFile = System.IO.File.ReadAllLines(inFileName) |> List.ofArray
     let TokenizeFileLine zeroBasedLineNumber lineText =
         // Use regex to split up the line into lexical units.

@@ -154,19 +154,6 @@ let NumDimensions = BaseConcepts.Length
 let BaseUnitNames = List.map (fun {BaseUnitName=name} -> name) BaseConcepts
 let ConceptNames  = List.map (fun {ConceptName=name}  -> name) BaseConcepts
 
-// Derived concepts...
-
-let SpeedConcept = DivideConcepts DistanceConcept TimeConcept           // speed = distance/time
-let AccelerationConcept = DivideConcepts SpeedConcept TimeConcept       // accleration = speed/time
-let ForceConcept = MultiplyConcepts MassConcept AccelerationConcept     // force = mass * acceleration
-
-let DerivedConcepts = [
-//   concept name       concept
-    ("speed",           SpeedConcept);
-    ("acceleration",    AccelerationConcept);
-    ("force",           ForceConcept);
-]
-
 // A physical quantity is a numeric scalar attached to a physical concept.
 type PhysicalQuantity = PhysicalQuantity of Number * PhysicalConcept
 
@@ -755,90 +742,59 @@ let ValidateExpressionConcept context expr =
     // Call ExpressionConcept just for the side-effect of looking for errors
     ExpressionConcept context expr |> ignore
 
-//-------------------------------------------------------------------------------------------------
-// Intrinsic macros
+//---------------------------------------------------------------------------------------------
+// Concept evaluator.
+// Although concept expressions are parsed just like any other expression,
+// their contents are much more limited:
+// The special case "1" is allowed to represent a dimensionless concept.
+// Other than that, only concept names are allowed to appear (length, voltage, etc.)
+// Concepts may be multiplied or divided, but not added or subtracted.
+// Concepts may be raised to any rational power, but no other power.
+// No functions or macros may appear.
+// The special concept Zero may not appear, because it is not a specific concept.
 
-let FailExactArgCount symbolType requiredCount actualCount token =
-    raise (SyntaxException((sprintf "%s requires exactly %d argument(s), but %d were found" symbolType requiredCount actualCount), token))
-
-let SimplifyMacroExpander context macroToken argList =
-    match argList with
-    | [arg] -> Simplify context arg
-    | _ -> FailExactArgCount "Macro" 1 argList.Length macroToken
-
-let IntrinsicMacros =
-    [
-        ("simp", SimplifyMacroExpander);
-    ]
-
-//-------------------------------------------------------------------------------------------------
-// Intrinsic functions
-
-// Token -> list<Expression> -> PhysicalConcept;
-let Concept_Exp context funcToken argList =
-    match argList with
-    | [arg] -> 
-        let argConcept = ExpressionConcept context arg
-        if IsConceptDimensionless argConcept then
-            Dimensionless
+let rec EvalConcept context expr =
+    match expr with
+    | Amount(PhysicalQuantity(number,concept)) -> 
+        if (IsNumberZero number) || (concept = Zero) then 
+            failwith "Concept evaluated to 0."
+        elif number <> Rational(1L,1L) then
+            failwith (sprintf "Concept evaluated with non-unity coefficient %s" (FormatNumber number))
         else
-            raise (SyntaxException(("exp() requires a dimensionless argument, but found " + FormatConcept argConcept), funcToken))
-    | _ -> FailExactArgCount "Function" 1 argList.Length funcToken
+            concept
+    | Solitaire(token) -> 
+        match FindSymbolEntry context token with
+        | ConceptEntry(concept) -> concept
+        | _ -> raise (SyntaxException("Expected a concept name", token))
 
-let SimplifyStep_Exp context funcToken argList =        // caller will step-simplify argList for us.
-    match argList with
-    | [arg] -> 
-        if IsZeroExpression arg then
-            UnityAmount
-        else 
-            match arg with
-            | Amount(PhysicalQuantity(number,concept)) -> 
-                if concept <> Dimensionless then
-                    raise (SyntaxException(("exp() requires a dimensionless argument, but found " + FormatConcept concept), funcToken))
-                else
-                    match number with
+    | Reciprocal(arg) -> EvalConcept context arg |> InvertConcept
 
-                    | Rational(a,b) -> 
-                        let expx = (System.Math.Exp((float a)/(float b)))
-                        Amount(PhysicalQuantity(Real(expx), Dimensionless))
+    | Product(factors) -> 
+        List.map (EvalConcept context) factors 
+        |> List.fold (fun a b -> MultiplyConcepts a b) Dimensionless 
 
-                    | Real(x) -> 
-                        let expx = System.Math.Exp(x)
-                        Amount(PhysicalQuantity(Real(expx), Dimensionless))
-
-                    | Complex(x,y) ->
-                        // exp(x + iy) = exp(x)*exp(iy) = exp(x)*(cos(y) + i*sin(y))
-                        let expx = System.Math.Exp(x)
-                        let cosy = System.Math.Cos(y)
-                        let siny = System.Math.Sin(y)
-                        Amount(PhysicalQuantity(Complex(expx*cosy, expx*siny), Dimensionless))
-
-            | _ -> Functor(funcToken, [arg])
-    | _ -> FailExactArgCount "Function" 1 argList.Length funcToken
-
-let IntrinsicFunctions = 
-    [
-        ("exp", Concept_Exp, SimplifyStep_Exp);
-    ]
-
-//-------------------------------------------------------------------------------------------------
-// Create a context with intrinsic symbols built it.
-
-let MakeContext assignmentHook = 
-    let context = {
-        SymbolTable = new Dictionary<string, SymbolEntry>();
-        NumberedExpressionList = new ResizeArray<Expression>();
-        AssignmentHook = assignmentHook;
-    }
-
-    for {ConceptName=conceptName; BaseUnitName=baseUnitName; ConceptValue=concept} in BaseConcepts do
-        DefineIntrinsicSymbol context conceptName (ConceptEntry(concept))
-        DefineIntrinsicSymbol context baseUnitName (UnitEntry(PhysicalQuantity(Rational(1L,1L), concept)))
-
-    for macroName, macroFunc in IntrinsicMacros do
-        DefineIntrinsicSymbol context macroName (MacroEntry({Expander=(macroFunc context);}))
-
-    for funcName, concepter, stepSimplifier in IntrinsicFunctions do
-        DefineIntrinsicSymbol context funcName (FunctionEntry{Concepter=(concepter context); StepSimplifier=(stepSimplifier context);})
-
-    context
+    | Power(a,b) -> 
+        let aConcept = EvalConcept context a
+        if aConcept = Zero then
+            failwith "Concept 0 is not allowed in a concept expression."
+        else
+            let bsimp = Simplify context b
+            if IsZeroExpression bsimp then
+                Dimensionless        
+            else
+                match bsimp with
+                | Amount(PhysicalQuantity(bNumber,bConcept)) ->
+                    if bConcept = Dimensionless then
+                        match bNumber with
+                        | Rational(bnum,bden) -> ExponentiateConcept aConcept bnum bden
+                        | _ -> failwith "Cannot raise concept to non-rational power."
+                    else
+                        failwith "Not allowed to raise to a dimensional power."
+                | _ -> failwith "Concept must be raised to a dimensionless rational power."
+                        
+    | Functor(funcName,argList) -> raise (SyntaxException("Function or macro not allowed in concept expression.", funcName))
+    | Negative(arg) -> failwith "Negation not allowed in concept expression."
+    | Sum(terms) -> failwith "Addition/subtraction not allowed in concept expression."
+    | Equals(a,b) -> failwith "Equality operator not allowed in concept expression."
+    | NumExprRef(t,_) -> failwith "Numbered expression reference not allowed in concept expression."
+    | PrevExprRef(t) -> failwith "Previous-expression reference not allowed in concept expression."

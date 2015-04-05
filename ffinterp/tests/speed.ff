@@ -3,7 +3,7 @@
 var n: integer;
 var t: real time;
 var x: distance;
-var v: distance/time;
+var v: speed;
 var Ratio: real;
 
 v = x/t + 7*meter/second;
