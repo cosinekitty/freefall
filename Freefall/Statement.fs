@@ -30,6 +30,7 @@ type Statement =
     | ConceptDef of ConceptDefinition
     | UnitDef of UnitDefinition
     | Assignment of AssignmentStatement
+    | Probe of Expression
     | DoNothing
 
 //--------------------------------------------------------------------------------------------------
@@ -66,6 +67,9 @@ let FormatStatement statement =
 
     | Assignment {TargetName=Some(target); Expr=expr;} ->
         target.Text + " := " + (FormatExpression expr) + ";"
+
+    | Probe(expr) ->
+        sprintf "probe %s;" (FormatExpression expr)
 
     | DoNothing ->
         ";"
@@ -217,6 +221,11 @@ let ExecuteStatement context statement =
         | None ->
             context.AssignmentHook None refIndex expr
         AppendNumberedExpression context expr
+
+    | Probe(rawexpr) ->
+        let expr = rawexpr |> ExpandMacros context |> TransformEquations context
+        let range = ExpressionNumericRange context expr
+        context.ProbeHook expr range
 
     | DoNothing ->
         ()

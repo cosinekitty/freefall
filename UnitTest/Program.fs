@@ -16,7 +16,12 @@ let MyAssignmentHook (targetName:option<string>) (refIndex:int) (assignedExpr:Ex
     | Some(name) -> printf "%s := " name
     printfn "#%d := %s" refIndex (FormatExpression assignedExpr)
 
-let MyContext = MakeContext MyAssignmentHook
+let MyProbeHook (expr:Expression) (range:NumericRange) =
+    printfn "PROBE(expr ): %s" (FormatExpression expr)
+    printfn "PROBE(range): %s" (RangeName range)
+    printfn ""
+
+let MyContext = MakeContext MyAssignmentHook MyProbeHook
 
 let VarTokenX = MakeIdentifierToken "x"
 DefineSymbol MyContext VarTokenX (VariableEntry(RealRange,Dimensionless))

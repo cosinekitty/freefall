@@ -86,7 +86,7 @@ let IsNumericLiteral (text:string) =
         let c = text.[0]
         (c >= '0') && (c <= '9')
 
-let KeywordTable = Set.ofList(["concept"; "unit"; "forget"; "var"])
+let KeywordTable = Set.ofList(["concept"; "forget"; "probe"; "unit"; "var"])
 let IsKeyword text = Set.contains text KeywordTable 
 
 type NumericRange =         // the set of values a variable, function, etc, is allowed to range over

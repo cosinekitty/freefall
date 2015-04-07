@@ -80,12 +80,22 @@ let Evaluate_Exp context funcToken qlist =
                 PhysicalQuantity(Complex(expx*cosy, expx*siny), Dimensionless)
     | _ -> FailExactArgCount "Function" 1 qlist.Length funcToken
 
+let Range_Exp funcToken rangelist =
+    match rangelist with
+    | [range] ->
+        match range with
+        | IntegerRange -> RealRange
+        | RationalRange -> RealRange
+        | RealRange -> RealRange
+        | ComplexRange -> ComplexRange
+    | _ -> FailExactArgCount "Function" 1 rangelist.Length funcToken
+
 let SimpleEquationDistributor funcToken leftList rightList =
     Equals(Functor(funcToken,leftList), Functor(funcToken,rightList))
 
 let IntrinsicFunctions = 
     [
-        ("exp", Concept_Exp, SimplifyStep_Exp, Evaluate_Exp, SimpleEquationDistributor);
+        ("exp", Concept_Exp, SimplifyStep_Exp, Evaluate_Exp, SimpleEquationDistributor, Range_Exp);
     ]
 
 //-------------------------------------------------------------------------------------------------
@@ -116,11 +126,12 @@ let EvaluateConceptDefinition context definition =
 //-------------------------------------------------------------------------------------------------
 // Create a context with intrinsic symbols built it.
 
-let MakeContext assignmentHook = 
+let MakeContext assignmentHook probeHook = 
     let context = {
-        SymbolTable = new Dictionary<string, SymbolEntry>();
-        NumberedExpressionList = new ResizeArray<Expression>();
-        AssignmentHook = assignmentHook;
+        SymbolTable = new Dictionary<string, SymbolEntry>()
+        NumberedExpressionList = new ResizeArray<Expression>()
+        AssignmentHook = assignmentHook
+        ProbeHook = probeHook
     }
 
     for {ConceptName=conceptName; BaseUnitName=baseUnitName; ConceptValue=concept} in BaseConcepts do
@@ -133,13 +144,14 @@ let MakeContext assignmentHook =
     for macroName, macroFunc in IntrinsicMacros do
         DefineIntrinsicSymbol context macroName (MacroEntry({Expander=(macroFunc context);}))
 
-    for funcName, concepter, stepSimplifier, evaluator, eqdistrib in IntrinsicFunctions do
+    for funcName, concepter, stepSimplifier, evaluator, eqdistrib, ranger in IntrinsicFunctions do
         DefineIntrinsicSymbol context funcName 
             (FunctionEntry {
                 Concepter = (concepter context); 
                 StepSimplifier = (stepSimplifier context);
                 Evaluator = (evaluator context);
                 EquationDistributor = eqdistrib;
+                Ranger = ranger;
             })
 
     context

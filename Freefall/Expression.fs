@@ -96,7 +96,7 @@ let PowerNumbers anum bnum =
         failwith "Raising number to complex power not yet implemented."  // FIXFIXFIX
     | (Complex(_,_), _) ->
         failwith "Raising complex number to a power not yet implemented."  // FIXFIXFIX
-        
+
 type PhysicalConcept = 
     | Zero                              // a special case because 0 is considered compatible with any concept: 0*meter = 0*second. Weird but necessary.
     | Concept of list<int64 * int64>    // list must have NumDimensions elements, each representing a rational number for the exponent of that dimension
@@ -392,6 +392,7 @@ type Function = {
     StepSimplifier: Token -> list<Expression> -> Expression;
     Evaluator: Token -> list<PhysicalQuantity> -> PhysicalQuantity;
     EquationDistributor: Token -> list<Expression> -> list<Expression> -> Expression;
+    Ranger: Token -> list<NumericRange> -> NumericRange;
 }
 
 type SymbolEntry =
@@ -406,6 +407,7 @@ type Context = {
     SymbolTable: Dictionary<string,SymbolEntry>;
     NumberedExpressionList: ResizeArray<Expression>;
     AssignmentHook: option<string> -> int -> Expression -> unit;            // AssignmentHook targetName refIndex assignedExpr
+    ProbeHook: Expression -> NumericRange -> unit;
 }
 
 let AppendNumberedExpression {NumberedExpressionList=numExprList;} expr =
@@ -926,4 +928,55 @@ let rec EvalQuantity context expr =
     | Equals(a,b) -> ExpressionError expr "Equality operator not allowed in numeric expression."
     | NumExprRef(t,_) -> FailLingeringMacro t
     | PrevExprRef(t) -> FailLingeringMacro t
+
+//-----------------------------------------------------------------------------------------------------
+// Numeric range analysis - determines whether an expression will always be integer, rational, real, complex.
+
+let QuantityNumericRange (PhysicalQuantity(number,_)) =
+    match number with
+    | Rational(a,b) -> if b = 1L then IntegerRange else RationalRange
+    | Real(_) -> RealRange
+    | Complex(_,_) -> ComplexRange   // FIXFIXFIX - consider "demoting" complex to real if imaginary part is 0? Would require great care throughout the code.
+
+let PromoteNumericRangePair a b =
+    match (a, b) with
+    | (ComplexRange, _) | (_, ComplexRange) -> ComplexRange
+    | (RealRange, _) | (_, RealRange) -> RealRange
+    | (RationalRange, _) | (_, RationalRange) -> RationalRange
+    | (IntegerRange, IntegerRange) -> IntegerRange
+
+let rec PromoteNumericRangeList rangeList =
+    match rangeList with
+    | [] -> IntegerRange      // works for sums and products: sum() = 0, product() = 1, both of which are integers.
+    | firstRange :: rest -> PromoteNumericRangePair firstRange (PromoteNumericRangeList rest)
+
+let rec ExpressionNumericRange context expr =
+    match expr with
+    | Amount(quantity) -> QuantityNumericRange quantity
+    | Solitaire(vartoken) -> 
+        match FindSymbolEntry context vartoken with
+        | UnitEntry(_) -> RealRange             // all physical units are inherently real-valued
+        | VariableEntry(range,_) -> range
+        | _ -> ExpressionError expr "Cannot determine numeric range for this kind of expression."
+    | Functor(funcName,argList) -> 
+        let {Ranger=ranger} = FindFunctionEntry context funcName 
+        let rlist = List.map (ExpressionNumericRange context) argList
+        ranger funcName rlist
+    | Negative(arg) -> ExpressionNumericRange context arg
+    | Reciprocal(arg) -> PromoteNumericRangePair RationalRange (ExpressionNumericRange context arg)
+    | Sum(terms) -> 
+        List.map (ExpressionNumericRange context) terms
+        |> PromoteNumericRangeList
+    | Product(factors) -> 
+        List.map (ExpressionNumericRange context) factors
+        |> PromoteNumericRangeList
+    | Power(a,b) -> 
+        ExpressionError expr "Numeric range determination not yet implemented for power expressions."   // FIXFIXFIX
+    | Equals(a,b) -> 
+        let aRange = ExpressionNumericRange context a
+        let bRange = ExpressionNumericRange context b
+        PromoteNumericRangePair aRange bRange
+    | NumExprRef(t,_) -> FailLingeringMacro t
+    | PrevExprRef(t) -> FailLingeringMacro t
+
 

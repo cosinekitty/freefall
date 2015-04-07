@@ -1,11 +1,12 @@
     module ::= { statement }    
-    statement ::=   concept | unit | assignment | vardecl | forget | ";"                    
+    statement ::=   concept | unit | assignment | vardecl | forget | probe | ";"
     concept ::= "concept" ident "=" expr ";"
     unit ::= "unit" ident "=" expr ";"
     assignment ::= [ ident ":=" ] expr ";"    
     vardecl ::= "var" ident { "," ident } ":" type ";"
     type ::= typename [expr] | expr     // the 'expr' are for concept expressions, e.g. distance/time
-    forget ::= "forget" idspec ";"
+    forget ::= "forget" idspec ";"      // deletes named expression(s) or all numbered expressions
+    probe ::= "probe" expr ";"          // reports ancillary information about an expression
     idspec ::= "*" | ident { "," ident }
     typename ::= "complex" | "real" | "rational" | "integer" [intrange]
     intrange ::= "(" numexpr "," numexpr ")"       // both numexpr must evaluate to integers

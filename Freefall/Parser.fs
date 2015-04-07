@@ -281,6 +281,11 @@ let ParseStatement scan =
             UnitDef{UnitName=idtoken; Expr=expr}, scan5
         | _ -> SyntaxError unitKeywordToken "Expected 'ident = expr;' after 'unit'."
 
+    | {Text="probe"} :: scan2 ->
+        let expr, scan3 = ParseExpression scan2
+        let scan4 = ExpectSemicolon scan3
+        Probe(expr), scan4
+
     | {Text=";";} :: rscan -> 
         DoNothing, rscan
 

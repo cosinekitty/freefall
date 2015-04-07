@@ -27,10 +27,15 @@ let PrintTokenDiagnostic token =
     | None -> ()
     | Some({Filename=fn; LineNumber=ln;}) -> printfn "File %s [line %d]" fn ln
 
+let MyProbeHook (expr:Expression) (range:NumericRange) =
+    printfn "PROBE(expr ): %s" (FormatExpression expr)
+    printfn "PROBE(range): %s" (RangeName range)
+    printfn ""
+
 [<EntryPoint>]
 let main argv = 
     try
-        let context = MakeContext MyAssignmentHook
+        let context = MakeContext MyAssignmentHook MyProbeHook
         Array.map (ExecuteFile context) argv |> ignore
         0
     with 
