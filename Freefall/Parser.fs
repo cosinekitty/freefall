@@ -257,11 +257,8 @@ let ParseTypeAndSemicolon scan =
 let ParseStatement scan =
     match RequireToken scan with 
 
-    | {Text="var";} :: scan2 ->
-        // vardecl ::= "var" ident { "," ident } ":" type ";"
-        let identList, scan3 = ParseIdentList scan2
-        let range, conceptExpr, scan4 = ParseTypeAndSemicolon scan3
-        VarDecl{VarNameList=identList; Range=range; ConceptExpr=conceptExpr;}, scan4
+    | {Text=";";} :: rscan -> 
+        DoNothing, rscan
 
     | ({Text="concept"} as conceptKeywordToken) :: scan2 ->
         // concept ::= "concept" ident "=" expr ";"
@@ -272,6 +269,11 @@ let ParseStatement scan =
             ConceptDef{ConceptName=idtoken; Expr=expr}, scan5
         | _ -> SyntaxError conceptKeywordToken "Expected 'ident = expr;' after 'concept'."
 
+    | {Text="probe"} :: scan2 ->
+        let expr, scan3 = ParseExpression scan2
+        let scan4 = ExpectSemicolon scan3
+        Probe(expr), scan4
+
     | ({Text="unit"} as unitKeywordToken) :: scan2 ->
         // unit ::= "unit" ident "=" expr ";"
         match scan2 with
@@ -281,13 +283,11 @@ let ParseStatement scan =
             UnitDef{UnitName=idtoken; Expr=expr}, scan5
         | _ -> SyntaxError unitKeywordToken "Expected 'ident = expr;' after 'unit'."
 
-    | {Text="probe"} :: scan2 ->
-        let expr, scan3 = ParseExpression scan2
-        let scan4 = ExpectSemicolon scan3
-        Probe(expr), scan4
-
-    | {Text=";";} :: rscan -> 
-        DoNothing, rscan
+    | {Text="var";} :: scan2 ->
+        // vardecl ::= "var" ident { "," ident } ":" type ";"
+        let identList, scan3 = ParseIdentList scan2
+        let range, conceptExpr, scan4 = ParseTypeAndSemicolon scan3
+        VarDecl{VarNameList=identList; Range=range; ConceptExpr=conceptExpr;}, scan4
 
     | ({Kind=TokenKind.Identifier} as target) :: {Text=":=";} :: rscan ->
         let expr, xscan = ParseExpression rscan
