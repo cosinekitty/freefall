@@ -12,6 +12,14 @@ let PrintTokenDiagnostic token =
     | None -> ()
     | Some({Filename=fn; LineNumber=ln;}) -> printfn "File %s [line %d]" fn ln
 
+let PrintLineDiagnostic line token =
+    let prefix = "===>  "
+    printfn "%s%s" prefix line
+    if token.ColumnNumber > 0 then
+        let indent = String.replicate (prefix.Length + token.ColumnNumber - 1) " "
+        printfn "%s^" indent
+    PrintTokenDiagnostic token
+
 let ExecuteStatements context tokenlist =
     let mutable scan = tokenlist
     while MoreTokensIn scan do
@@ -20,35 +28,41 @@ let ExecuteStatements context tokenlist =
         ExecuteStatement context statement
         scan <- scan2
 
+let PromptLine (lineNumber:int) =
+    if not System.Console.IsInputRedirected then
+        System.Console.Write("Freefall:{0}> ", lineNumber)
+        System.Console.Out.Flush()
+    System.Console.ReadLine()
+
+let ExecuteLine context line lineNumber =
+    try
+        TokenizeLine line |> ExecuteStatements context
+    with 
+        | SyntaxException(token,message) ->
+            printfn "SYNTAX ERROR : %s" message
+            PrintLineDiagnostic line token
+
+        | ExpressionException(expr,message) ->
+            printfn "Error in subexpression '%s': %s" (FormatExpression expr) message
+            match PrimaryToken expr with
+            | None -> ()
+            | Some(token) -> PrintLineDiagnostic line token
+
+        | UnexpectedEndException(None) ->
+            printfn "Syntax error: unexpected end of input"
+
+        | UnexpectedEndException(Some(filename)) ->
+            printfn "Syntax error: unexpected end of file '%s'" filename
+
 let ExecuteFile context filename =
     if filename = "-" then
         // Placeholder for a console session instead of an input file.
-        printf "Freefall> "
-        let mutable line = System.Console.ReadLine()
-        let mutable lineNumber = 0
+        let mutable lineNumber = 1
+        let mutable line = PromptLine lineNumber
         while line <> null do
+            ExecuteLine context line lineNumber
             lineNumber <- 1 + lineNumber
-            try
-                TokenizeLine line |> ExecuteStatements context
-            with 
-                | SyntaxException(token,message) ->
-                    printfn "SYNTAX ERROR : %s" message
-                    PrintTokenDiagnostic token
-
-                | ExpressionException(expr,message) ->
-                    printfn "Error in subexpression '%s': %s" (FormatExpression expr) message
-                    match PrimaryToken expr with
-                    | None -> ()
-                    | Some(token) -> PrintTokenDiagnostic token
-
-                | UnexpectedEndException(None) ->
-                    printfn "Syntax error: unexpected end of input"
-
-                | UnexpectedEndException(Some(filename)) ->
-                    printfn "Syntax error: unexpected end of file '%s'" filename
-
-            printf "Freefall> "
-            line <- System.Console.ReadLine()
+            line <- PromptLine lineNumber
     else
         TokenizeFile filename |> ExecuteStatements context
 
