@@ -26,12 +26,14 @@ type UnitDefinition = {
 }
 
 type Statement =
-    | VarDecl of MultiVariableDeclaration
-    | ConceptDef of ConceptDefinition
-    | UnitDef of UnitDefinition
     | Assignment of AssignmentStatement
-    | Probe of Expression
+    | ConceptDef of ConceptDefinition
     | DoNothing
+    | ForgetAllNumberedExpressions
+    | ForgetNamedExpressions of list<Token>
+    | Probe of Expression
+    | UnitDef of UnitDefinition
+    | VarDecl of MultiVariableDeclaration
 
 //--------------------------------------------------------------------------------------------------
 
@@ -41,12 +43,37 @@ let VarNameFolder accum vartoken =
     else
         accum + ", " + vartoken.Text
 
+let JoinTokenList = List.fold VarNameFolder ""
 
 let FormatStatement statement =
     match statement with
 
+    | Assignment {TargetName=None; Expr=expr;} ->
+        (FormatExpression expr) + ";"
+
+    | Assignment {TargetName=Some(target); Expr=expr;} ->
+        target.Text + " := " + (FormatExpression expr) + ";"
+
+    | ConceptDef {ConceptName=idtoken; Expr=expr;} ->
+        sprintf "concept %s = %s;" idtoken.Text (FormatExpression expr)
+
+    | DoNothing ->
+        ";"
+
+    | ForgetAllNumberedExpressions ->
+        "forget *;"
+
+    | ForgetNamedExpressions(idlist) ->
+        sprintf "forget %s;" (JoinTokenList idlist)
+
+    | Probe(expr) ->
+        sprintf "probe %s;" (FormatExpression expr)
+
+    | UnitDef {UnitName=idtoken; Expr=expr;} ->
+        sprintf "unit %s = %s;" idtoken.Text (FormatExpression expr)
+
     | VarDecl {VarNameList=vlist; Range=range; ConceptExpr=conceptExpr;} ->
-        let varNamesText = List.fold VarNameFolder "" vlist
+        let varNamesText = JoinTokenList vlist
         let rangeText = RangeName range
         let conceptText = FormatExpression conceptExpr
         let typeText =
@@ -55,24 +82,6 @@ let FormatStatement statement =
             else
                 rangeText + " " + conceptText
         "var " + varNamesText + ": " + typeText + ";"
-
-    | ConceptDef {ConceptName=idtoken; Expr=expr;} ->
-        sprintf "concept %s = %s;" idtoken.Text (FormatExpression expr)
-
-    | UnitDef {UnitName=idtoken; Expr=expr;} ->
-        sprintf "unit %s = %s;" idtoken.Text (FormatExpression expr)
-
-    | Assignment {TargetName=None; Expr=expr;} ->
-        (FormatExpression expr) + ";"
-
-    | Assignment {TargetName=Some(target); Expr=expr;} ->
-        target.Text + " := " + (FormatExpression expr) + ";"
-
-    | Probe(expr) ->
-        sprintf "probe %s;" (FormatExpression expr)
-
-    | DoNothing ->
-        ";"
 
 //--------------------------------------------------------------------------------------------------
 
@@ -197,19 +206,6 @@ and TransformEquations context expr =
 let ExecuteStatement context statement =
     match statement with
 
-    | VarDecl {VarNameList=vlist; Range=range; ConceptExpr=conceptExpr;} ->
-        let concept = EvalConcept context conceptExpr
-        for vname in vlist do
-            DefineSymbol context vname (VariableEntry(range,concept))
-
-    | ConceptDef {ConceptName=idtoken; Expr=expr;} ->
-        let concept = EvalConcept context expr
-        DefineSymbol context idtoken (ConceptEntry(concept))
-
-    | UnitDef {UnitName=idtoken; Expr=expr;} ->
-        let quantity = EvalQuantity context expr
-        DefineSymbol context idtoken (UnitEntry(quantity))
-    
     | Assignment {TargetName=target; Expr=rawexpr;} ->
         let expr = rawexpr |> ExpandMacros context |> TransformEquations context
         ValidateExpressionConcept context expr
@@ -222,10 +218,29 @@ let ExecuteStatement context statement =
             context.AssignmentHook None refIndex expr
         AppendNumberedExpression context expr
 
+    | ConceptDef {ConceptName=idtoken; Expr=expr;} ->
+        let concept = EvalConcept context expr
+        DefineSymbol context idtoken (ConceptEntry(concept))
+
+    | DoNothing ->
+        ()
+
+    | ForgetAllNumberedExpressions ->
+        DeletedNumberedExpressions context
+
+    | ForgetNamedExpressions(idlist) ->
+        List.iter (DeleteNamedExpression context) idlist
+
     | Probe(rawexpr) ->
         let expr = rawexpr |> ExpandMacros context |> TransformEquations context
         let range = ExpressionNumericRange context expr
         context.ProbeHook expr range
 
-    | DoNothing ->
-        ()
+    | UnitDef {UnitName=idtoken; Expr=expr;} ->
+        let quantity = EvalQuantity context expr
+        DefineSymbol context idtoken (UnitEntry(quantity))
+    
+    | VarDecl {VarNameList=vlist; Range=range; ConceptExpr=conceptExpr;} ->
+        let concept = EvalConcept context conceptExpr
+        for vname in vlist do
+            DefineSymbol context vname (VariableEntry(range,concept))

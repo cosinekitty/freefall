@@ -439,6 +439,19 @@ let DefineSymbol {SymbolTable=symtable;} ({Text=symbol; Kind=kind} as symtoken) 
     else
         symtable.Add(symbol, symentry)
 
+let DeletedNumberedExpressions {NumberedExpressionList=numlist} =
+    (numlist.Clear())
+
+let DeleteNamedExpression {SymbolTable=symtable;} ({Text=symbol; Kind=kind} as symtoken) =
+    if kind <> TokenKind.Identifier then
+        SyntaxError symtoken "Expected identifier for expression name"
+    elif not (symtable.ContainsKey(symbol)) then
+        SyntaxError symtoken "Undefined symbol"
+    else
+        match symtable.[symbol] with
+        | AssignmentEntry(_) -> (symtable.Remove(symbol)) |> ignore
+        | _ -> SyntaxError symtoken "Symbol is not an expression name"
+
 let FindSymbolEntry {SymbolTable=symtable;} ({Text=symbol; Kind=kind} as symtoken) =
     if kind <> TokenKind.Identifier then
         SyntaxError symtoken "Expected symbol identifier"

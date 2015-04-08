@@ -210,26 +210,22 @@ and ParseAtom scan =
 //---------------------------------------------------------------------------------------
 // Statement parser
 
-let rec ParseIdentList scan =
+let rec ParseIdentList scan terminator =
     match RequireToken scan with
 
     | [] -> Impossible ()   // RequireToken already checks this case, but I want to eliminate warning here.
 
     | ({Kind=TokenKind.Identifier} as vartoken) :: punc :: xscan ->
-        match punc.Text with
-
-        | "," ->
-            let restlist, yscan = ParseIdentList xscan
+        if punc.Text = "," then
+            let restlist, yscan = ParseIdentList xscan terminator
             (vartoken::restlist), yscan
-
-        | ":" ->
+        elif punc.Text = terminator then
             [vartoken], xscan
-
-        | _ ->
-            SyntaxError punc "Expected ',' or ':' after variable name"
+        else
+            SyntaxError punc (sprintf "Expected ',' or '%s' after variable name" terminator)
 
     | token :: _ ->
-        SyntaxError token "Expected variable name identifier"
+        SyntaxError token "Expected identifier"
 
 let ParseTypeAndSemicolon scan =
     // type ::= typename [expr] | expr 
@@ -269,7 +265,18 @@ let ParseStatement scan =
             ConceptDef{ConceptName=idtoken; Expr=expr}, scan5
         | _ -> SyntaxError conceptKeywordToken "Expected 'ident = expr;' after 'concept'."
 
+    | ({Text="forget"} as forgetToken) :: scan2 ->
+        // forget ::= "forget" idspec ";"
+        // idspec ::= "*" | ident { "," ident }
+        match RequireToken scan2 with
+        | {Text="*"} :: {Text=";"} :: scan3 -> 
+            ForgetAllNumberedExpressions, scan3
+        | _ -> 
+            let idlist, scan3 = ParseIdentList scan2 ";"
+            ForgetNamedExpressions(idlist), scan3
+
     | {Text="probe"} :: scan2 ->
+        // "probe" expr ";"
         let expr, scan3 = ParseExpression scan2
         let scan4 = ExpectSemicolon scan3
         Probe(expr), scan4
@@ -285,7 +292,7 @@ let ParseStatement scan =
 
     | {Text="var";} :: scan2 ->
         // vardecl ::= "var" ident { "," ident } ":" type ";"
-        let identList, scan3 = ParseIdentList scan2
+        let identList, scan3 = ParseIdentList scan2 ":"
         let range, conceptExpr, scan4 = ParseTypeAndSemicolon scan3
         VarDecl{VarNameList=identList; Range=range; ConceptExpr=conceptExpr;}, scan4
 
