@@ -407,7 +407,7 @@ type Context = {
     SymbolTable: Dictionary<string,SymbolEntry>;
     NumberedExpressionList: ResizeArray<Expression>;
     AssignmentHook: option<string> -> int -> Expression -> unit;            // AssignmentHook targetName refIndex assignedExpr
-    ProbeHook: Expression -> NumericRange -> unit;
+    ProbeHook: Expression -> NumericRange -> PhysicalConcept -> unit;
 }
 
 let AppendNumberedExpression {NumberedExpressionList=numExprList;} expr =

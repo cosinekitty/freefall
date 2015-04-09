@@ -234,7 +234,8 @@ let ExecuteStatement context statement =
     | Probe(rawexpr) ->
         let expr = rawexpr |> ExpandMacros context |> TransformEquations context
         let range = ExpressionNumericRange context expr
-        context.ProbeHook expr range
+        let concept = ExpressionConcept context expr
+        context.ProbeHook expr range concept
 
     | UnitDef {UnitName=idtoken; Expr=expr;} ->
         let quantity = EvalQuantity context expr
