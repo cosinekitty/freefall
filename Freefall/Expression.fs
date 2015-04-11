@@ -146,8 +146,8 @@ let ExponentiateConcept xconcept ynum yden =
         else
             Zero    // 0^x = 0 for all positive rational x
 
-let R0 = (BigInteger.Zero, BigInteger.One)
-let R1 = (BigInteger.One, BigInteger.One)
+let R0 = (BigInteger.Zero, BigInteger.One)      // Represents the integer 0 = 0/1
+let R1 = (BigInteger.One,  BigInteger.One)      // Represents the integer 1 = 1/1
 
 // A concept to represent any dimensionless quantity...
 let Dimensionless = Concept[R0; R0; R0; R0; R0; R0; R0]
@@ -1005,7 +1005,25 @@ let rec ExpressionNumericRange context expr =
         List.map (ExpressionNumericRange context) factors
         |> PromoteNumericRangeList
     | Power(a,b) -> 
-        ExpressionError expr "Numeric range determination not yet implemented for power expressions."   // FIXFIXFIX
+        let aRange = ExpressionNumericRange context a
+        let bRange = ExpressionNumericRange context b
+        match (aRange, bRange) with
+        | (IntegerRange, IntegerRange) -> RationalRange     // 3 ^ (-2) = 1/9
+        | (IntegerRange, RationalRange) -> RealRange        // 3 ^ (1/2) = sqrt(3)
+        | (IntegerRange, RealRange) -> RealRange
+        | (IntegerRange, ComplexRange) -> ComplexRange
+        | (RationalRange, IntegerRange) -> RationalRange
+        | (RationalRange, RationalRange) -> RealRange
+        | (RationalRange, RealRange) -> RealRange
+        | (RationalRange, ComplexRange) -> ComplexRange
+        | (RealRange, IntegerRange) -> RealRange
+        | (RealRange, RationalRange) -> RealRange
+        | (RealRange, RealRange) -> RealRange
+        | (RealRange, ComplexRange) -> ComplexRange
+        | (ComplexRange, IntegerRange) -> ComplexRange
+        | (ComplexRange, RationalRange) -> ComplexRange
+        | (ComplexRange, RealRange) -> ComplexRange
+        | (ComplexRange, ComplexRange) -> ComplexRange
     | Equals(a,b) -> 
         let aRange = ExpressionNumericRange context a
         let bRange = ExpressionNumericRange context b
