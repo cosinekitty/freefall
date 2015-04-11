@@ -359,9 +359,12 @@ let FormatDimensions namelist concept =
     | Zero -> "0"
     | Concept(powlist) -> List.fold2 AccumDimension "" namelist powlist
 
-let FormatConcept = FormatDimensions ConceptNames
-
-let FormatUnits = FormatDimensions BaseUnitNames
+let FormatConcept concept = 
+    let text = FormatDimensions ConceptNames concept
+    if text = "" then
+        "1"     // special case: avoid ""
+    else
+        text
 
 let FormatQuantity (PhysicalQuantity(scalar,concept)) =
     if IsNumberZero scalar then
