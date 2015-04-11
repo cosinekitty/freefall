@@ -251,6 +251,7 @@ type Expression =
     | Equals of Expression * Expression
     | NumExprRef of Token * int                     // a reference to a prior expression indexed by automatic integer counter
     | PrevExprRef of Token                          // a reference to the previous expression
+    | Del of Token * int      // calculus 'd' or 'del' operator applied to a variable, n times, where n = 1, 2, ...
 
 let PrimaryToken expr =     // FIXFIXFIX - rework Expression so that this function can always return a primary token
     match expr with
@@ -265,6 +266,7 @@ let PrimaryToken expr =     // FIXFIXFIX - rework Expression so that this functi
     | Equals(_) -> None
     | NumExprRef(t,_) -> Some(t)
     | PrevExprRef(t) -> Some(t)
+    | Del(t,_) -> Some(t)
 
 let FailLingeringMacro token =
     SyntaxError token "Internal error - lingering macro after macro expansion. Should not be possible."
@@ -394,6 +396,7 @@ let rec FormatExpression expr =
     | Equals(a,b) -> FormatExpression a + " = " + FormatExpression b
     | NumExprRef(_,i) -> "#" + i.ToString()
     | PrevExprRef(_) -> "#"
+    | Del(token,order) -> (String.replicate order "@") + token.Text
 
 and FormatExprList exprlist =
     match exprlist with
@@ -539,6 +542,9 @@ let rec AreIdentical context a b =
     | (_, NumExprRef(t,_)) -> FailLingeringMacro t
     | (PrevExprRef(t), _)  -> FailLingeringMacro t
     | (_, PrevExprRef(t))  -> FailLingeringMacro t
+    | (Del(var1,order1),Del(var2,order2)) -> (var1.Text = var2.Text) && (order1 = order2)
+    | (Del(_,_),_) -> false
+    | (_,Del(_,_)) -> false
     | (Equals(aleft,aright),Equals(bleft,bright)) -> 
         ((AreIdentical context aleft bleft)  && (AreIdentical context aright bright)) ||
         ((AreIdentical context aleft bright) && (AreIdentical context aright bleft))
@@ -655,19 +661,32 @@ let rec MergeConstants mergefunc terms =
 let FailNonFunction token found =
     SyntaxError token (sprintf "Expected function but found %s" found)
 
+let FailNonVariable token found =
+    SyntaxError token (sprintf "Expected variable but found %s" found)
+
 let FindFunctionEntry context funcNameToken =
     match FindSymbolEntry context funcNameToken with
     | VariableEntry(_,_) -> FailNonFunction funcNameToken "variable"
     | ConceptEntry(_) -> FailNonFunction funcNameToken "concept"
     | UnitEntry(_) -> FailNonFunction funcNameToken "unit"
-    | AssignmentEntry(expr) -> FailNonFunction funcNameToken "assignment target"
+    | AssignmentEntry(_) -> FailNonFunction funcNameToken "assignment target"
     | MacroEntry(_) -> FailLingeringMacro funcNameToken
     | FunctionEntry(fe) -> fe
+
+let FindVariableEntry context vartoken =
+    match FindSymbolEntry context vartoken with
+    | VariableEntry(range,concept) -> (range,concept)
+    | ConceptEntry(_) -> FailNonVariable vartoken "concept"
+    | UnitEntry(_) -> FailNonVariable vartoken "unit"
+    | AssignmentEntry(_) -> FailNonVariable vartoken "assignment target"
+    | MacroEntry(_) -> FailLingeringMacro vartoken
+    | FunctionEntry(_) -> FailNonVariable vartoken "function name"
 
 let rec SimplifyStep context expr =
     match expr with
     | Amount(_) -> expr     // already as simple as possible
     | Solitaire(_) -> expr  // already as simple as possible
+    | Del(_) -> expr        // already as simple as possible
 
     | Functor(funcName, argList) ->
         let simpArgList = List.map (SimplifyStep context) argList
@@ -765,6 +784,7 @@ let rec ExpressionConcept context expr =
     match expr with
     | Amount(PhysicalQuantity(number,concept)) -> if IsNumberZero number then Zero else concept
     | Solitaire(vartoken) -> FindSolitaireConcept context vartoken
+    | Del(vartoken,_) -> FindSolitaireConcept context vartoken
     | Functor(funcName,argList) -> FindFunctorConcept context funcName argList
     | Negative(arg) -> ExpressionConcept context arg
     | Reciprocal(arg) -> ReciprocalConcept context arg
@@ -881,10 +901,14 @@ let rec EvalConcept context expr =
             ExpressionError expr (sprintf "Concept evaluated with non-unity coefficient %s" (FormatNumber number))
         else
             concept
+
     | Solitaire(token) -> 
         match FindSymbolEntry context token with
         | ConceptEntry(concept) -> concept
         | _ -> SyntaxError token "Expected a concept name"
+
+    | Del(vartoken,order) ->
+        SyntaxError vartoken "The @ operator is not allowed to appear in a concept expression."
 
     | Reciprocal(arg) -> EvalConcept context arg |> InvertConcept
 
@@ -942,6 +966,8 @@ let rec EvalQuantity context expr =
         match FindSymbolEntry context vartoken with
         | UnitEntry(quantity) -> quantity
         | _ -> SyntaxError vartoken "Expected unit name."
+    | Del(vartoken,order) ->
+        SyntaxError vartoken "Cannot numerically evaluate infinitesimal."
     | Functor(funcName,argList) -> 
         let {Evaluator=evaluator} = FindFunctionEntry context funcName 
         List.map (EvalQuantity context) argList
@@ -995,6 +1021,13 @@ let rec ExpressionNumericRange context expr =
         | UnitEntry(_) -> RealRange             // all physical units are inherently real-valued
         | VariableEntry(range,_) -> range
         | _ -> ExpressionError expr "Cannot determine numeric range for this kind of expression."
+    | Del(vartoken,order) ->
+        let range, concept = FindVariableEntry context vartoken
+        match range with
+        | IntegerRange -> SyntaxError vartoken "Cannot apply @ operator to an integer variable."
+        | RationalRange -> SyntaxError vartoken "Cannot apply @ operator to a rational variable."
+        | RealRange -> RealRange
+        | ComplexRange -> ComplexRange
     | Functor(funcName,argList) -> 
         let {Ranger=ranger} = FindFunctionEntry context funcName 
         let rlist = List.map (ExpressionNumericRange context) argList

@@ -202,8 +202,20 @@ and ParseAtom scan =
         else
             SyntaxError reftoken "Internal error - parsed invalid expression reference"
 
-    // FIXFIXFIX - support the following constructs
-    // "@" ident    ==>  derivative operator
+    | ({Text="@"} as deltoken) :: scan2 ->
+        // "@" can appear 1 or more times, indicating the order of differentiation.
+        let mutable scan3 = scan2
+        let mutable order = 1
+        while (not (List.isEmpty scan3) && (List.head scan3).Text = "@") do
+            scan3 <- List.tail scan3
+            order <- 1 + order
+        match RequireToken scan3 with
+        | [] -> Impossible ()
+        | vartoken :: scan4 ->
+            if vartoken.Kind = TokenKind.Identifier then
+                Del(vartoken,order), scan4
+            else
+                SyntaxError vartoken "Expected variable after differential operator(s)."
 
     | badtoken :: _ -> 
         SyntaxError badtoken "Syntax error."

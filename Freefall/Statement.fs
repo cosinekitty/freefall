@@ -91,6 +91,7 @@ let FailNonFuncMacro token expected =
 let rec ExpandMacros context rawexpr =
     match rawexpr with
     | Amount(_) -> rawexpr
+    | Del(_,_) -> rawexpr
     | Solitaire(nameToken) -> 
         match FindSymbolEntry context nameToken with
         | VariableEntry(_) -> rawexpr
@@ -166,6 +167,7 @@ and TransformEquations context expr =
     match expr with
     | Amount(_) -> expr
     | Solitaire(_) -> expr
+    | Del(_,_) -> expr
     | Functor(name,argList) -> 
         let numEquations, leftList, rightList = TransformAndPartition context argList
         if numEquations = 0 then
