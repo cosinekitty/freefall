@@ -2,6 +2,7 @@
 // Symbolic algebra/physics helper.
 
 module Freefall.Parser
+open System.Numerics
 open Freefall.Scanner
 open Freefall.Expr
 open Freefall.Stmt
@@ -174,9 +175,9 @@ and ParseAtom scan =
             SyntaxError realtoken "Real literal is not valid."
 
     | ({Kind=TokenKind.IntegerLiteral; Text=text;} as inttoken) :: rscan ->
-        let isValid, intvalue = System.Int64.TryParse(text)
+        let isValid, intvalue = BigInteger.TryParse(text)
         if isValid then
-            (Amount(PhysicalQuantity(Rational(intvalue,1L), Dimensionless))), rscan
+            (Amount(PhysicalQuantity(Rational(intvalue,BigInteger.One), Dimensionless))), rscan
         else
             SyntaxError inttoken "Integer literal is not valid."
 

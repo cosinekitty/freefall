@@ -3,17 +3,14 @@
 
 module Freefall.Expr
 open System.Collections.Generic
+open System.Numerics
 open Scanner
 
 exception FreefallRuntimeException of string
 exception UnexpectedEndException of option<string>       // Some(filename) or None
 
-// FIXFIXFIX: Take a look at using BigRational, complex, etc, from https://github.com/fsprojects/powerpack
-
-// FIXFIXFIX: Do "open Checked" to use checked arithmetic, capture Rational overflows and replace with Real approximations.
-
 type Number = 
-    | Rational of int64 * int64
+    | Rational of BigInteger * BigInteger
     | Real of float
     | Complex of float * float
 
@@ -23,33 +20,33 @@ let NegateNumber number =
     | Real(x) -> Real(-x)
     | Complex(x,y) -> Complex(-x,-y)
 
-let rec GreatestCommonDivisor (a:int64) (b:int64) =         // caller must ensure that a and b are both non-negative
-    if b = 0L then
-        if a = 0L then 1L else a
+let rec GreatestCommonDivisor (a:BigInteger) (b:BigInteger) =         // caller must ensure that a and b are both non-negative
+    if b.IsZero then
+        if a.IsZero then BigInteger.One else a
     else
         GreatestCommonDivisor b (a%b)
 
-let rec MakeRationalPair (numer:int64) (denom:int64) =
-    if denom = 0L then 
+let rec MakeRationalPair (numer:BigInteger) (denom:BigInteger) =
+    if denom.IsZero then 
         raise (FreefallRuntimeException("Rational number cannot have zero denominator."))
-    elif numer = 0L then
-        (0L,1L)
-    elif denom < 0L then
+    elif numer.IsZero then
+        (BigInteger.Zero, BigInteger.One)
+    elif denom < BigInteger.Zero then
         MakeRationalPair (-numer) (-denom)
     else
-        let gcd = GreatestCommonDivisor (System.Math.Abs(numer)) denom
+        let gcd = GreatestCommonDivisor (BigInteger.Abs(numer)) denom
         (numer/gcd, denom/gcd)
 
-let MakeRational (numer:int64) (denom:int64) =
+let MakeRational (numer:BigInteger) (denom:BigInteger) =
     Rational(MakeRationalPair numer denom)
 
-let AddExponentLists (alist:list<int64 * int64>) (blist:list<int64 * int64>) =
+let AddExponentLists (alist:list<BigInteger * BigInteger>) (blist:list<BigInteger * BigInteger>) =
     List.map2 (fun (a,b) (c,d) -> MakeRationalPair (a*d + c*b) (b*d)) alist blist
 
-let SubtractExponentLists (alist:list<int64 * int64>) (blist:list<int64 * int64>) =
+let SubtractExponentLists (alist:list<BigInteger * BigInteger>) (blist:list<BigInteger * BigInteger>) =
     List.map2 (fun (a,b) (c,d) -> MakeRationalPair (a*d - c*b) (b*d)) alist blist        
 
-let NegateExponentList (clist:list<int64 * int64>) =
+let NegateExponentList (clist:list<BigInteger * BigInteger>) =
     List.map (fun (a,b) -> MakeRationalPair (-a) b) clist
 
 let rec AddNumbers anum bnum =
@@ -99,7 +96,7 @@ let PowerNumbers anum bnum =
 
 type PhysicalConcept = 
     | Zero                              // a special case because 0 is considered compatible with any concept: 0*meter = 0*second. Weird but necessary.
-    | Concept of list<int64 * int64>    // list must have NumDimensions elements, each representing a rational number for the exponent of that dimension
+    | Concept of list<BigInteger * BigInteger>    // list must have NumDimensions elements, each representing a rational number for the exponent of that dimension
 
 // Functions to help build concepts from other concepts...
 
@@ -134,15 +131,18 @@ let ExponentiateConcept xconcept ynum yden =
     match xconcept with
     | Concept(xlist) -> Concept(List.map (fun (xnum,xden) -> MakeRationalPair (xnum*ynum) (xden*yden)) xlist)
     | Zero ->
-        if ynum = 0L then
+        if ynum.IsZero then
             raise (FreefallRuntimeException("Cannot raise 0 to the 0 power."))
-        elif ynum < 0L then
+        elif ynum < BigInteger.Zero then
             raise (FreefallRuntimeException("Cannot raise 0 to a negative power."))
         else
             Zero    // 0^x = 0 for all positive rational x
 
+let R0 = (BigInteger.Zero, BigInteger.One)
+let R1 = (BigInteger.One, BigInteger.One)
+
 // A concept to represent any dimensionless quantity...
-let Dimensionless = Concept[(0L,1L); (0L,1L); (0L,1L); (0L,1L); (0L,1L); (0L,1L); (0L,1L)]
+let Dimensionless = Concept[R0; R0; R0; R0; R0; R0; R0]
 
 let RaiseConceptToNumberPower concept number =
     match number with
@@ -175,13 +175,13 @@ type BaseConceptEntry = {
 }
 
 let BaseConcepts = [
-    {ConceptName="mass";            BaseUnitName="kilogram";    ConceptValue=Concept[(1L,1L); (0L,1L); (0L,1L); (0L,1L); (0L,1L); (0L,1L); (0L,1L)]};
-    {ConceptName="distance";        BaseUnitName="meter";       ConceptValue=Concept[(0L,1L); (1L,1L); (0L,1L); (0L,1L); (0L,1L); (0L,1L); (0L,1L)]};
-    {ConceptName="time";            BaseUnitName="second";      ConceptValue=Concept[(0L,1L); (0L,1L); (1L,1L); (0L,1L); (0L,1L); (0L,1L); (0L,1L)]};
-    {ConceptName="temperature";     BaseUnitName="kelvin";      ConceptValue=Concept[(0L,1L); (0L,1L); (0L,1L); (1L,1L); (0L,1L); (0L,1L); (0L,1L)]};
-    {ConceptName="substance";       BaseUnitName="mole";        ConceptValue=Concept[(0L,1L); (0L,1L); (0L,1L); (0L,1L); (1L,1L); (0L,1L); (0L,1L)]};
-    {ConceptName="current";         BaseUnitName="ampere";      ConceptValue=Concept[(0L,1L); (0L,1L); (0L,1L); (0L,1L); (0L,1L); (1L,1L); (0L,1L)]};
-    {ConceptName="luminosity";      BaseUnitName="candela";     ConceptValue=Concept[(0L,1L); (0L,1L); (0L,1L); (0L,1L); (0L,1L); (0L,1L); (1L,1L)]};
+    {ConceptName="mass";            BaseUnitName="kilogram";    ConceptValue=Concept[R1; R0; R0; R0; R0; R0; R0]};
+    {ConceptName="distance";        BaseUnitName="meter";       ConceptValue=Concept[R0; R1; R0; R0; R0; R0; R0]};
+    {ConceptName="time";            BaseUnitName="second";      ConceptValue=Concept[R0; R0; R1; R0; R0; R0; R0]};
+    {ConceptName="temperature";     BaseUnitName="kelvin";      ConceptValue=Concept[R0; R0; R0; R1; R0; R0; R0]};
+    {ConceptName="substance";       BaseUnitName="mole";        ConceptValue=Concept[R0; R0; R0; R0; R1; R0; R0]};
+    {ConceptName="current";         BaseUnitName="ampere";      ConceptValue=Concept[R0; R0; R0; R0; R0; R1; R0]};
+    {ConceptName="luminosity";      BaseUnitName="candela";     ConceptValue=Concept[R0; R0; R0; R0; R0; R0; R1]};
 ]
 
 let NumDimensions = BaseConcepts.Length
@@ -191,16 +191,16 @@ let ConceptNames  = List.map (fun {ConceptName=name}  -> name) BaseConcepts
 // A physical quantity is a numeric scalar attached to a physical concept.
 type PhysicalQuantity = PhysicalQuantity of Number * PhysicalConcept
 
-let ZeroQuantity = PhysicalQuantity(Rational(0L,1L), Zero)
-let Unity = PhysicalQuantity(Rational(1L,1L), Dimensionless)
+let ZeroQuantity = PhysicalQuantity(Rational(R0), Zero)
+let Unity = PhysicalQuantity(Rational(R1), Dimensionless)
 
 let IsNumberEqualToInteger n x =
     match x with
-    | Rational(numer,denom) -> (numer = n) && (denom = 1L)      // assumes rational was created using MakeRational to normalize
+    | Rational(numer,denom) -> (numer = n) && (denom.IsOne)      // assumes rational was created using MakeRational to normalize
     | Real re -> re = (float n)
     | Complex(re,im) -> (im = 0.0) && (re = (float n))
 
-let IsNumberZero = IsNumberEqualToInteger 0L
+let IsNumberZero = IsNumberEqualToInteger BigInteger.Zero
 
 let InvertNumber number =        // calculate the numeric reciprocal
     if IsNumberZero number then
@@ -279,7 +279,7 @@ let IsZeroExpression expr =
 
 let IsUnityExpression expr =
     match expr with
-    | Amount(PhysicalQuantity(number,concept)) -> (concept = Dimensionless) && (IsNumberEqualToInteger 1L number)
+    | Amount(PhysicalQuantity(number,concept)) -> (concept = Dimensionless) && (IsNumberEqualToInteger BigInteger.One number)
     | _ -> false
 
 let IsConceptDimensionless concept =
@@ -303,22 +303,22 @@ let SkipZero first rest =
 let FormatNumber x =
     match x with
     | Rational(numer,denom) ->
-        if denom = 0L then
+        if denom.IsZero then
             raise (FreefallRuntimeException("Rational number had zero denominator."))
-        elif denom = 1L then
+        elif denom.IsOne then
             numer.ToString()
         else
             numer.ToString() + "/" + denom.ToString()
     | Real re -> re.ToString()
     | Complex(re,im) -> "(" + re.ToString() + "," + im.ToString() + ")"     // FIXFIXFIX - make re-parsable "(a+bi)" format
 
-let FormatDimension name (numer,denom) =
-    if numer = 0L then
+let FormatDimension name (numer:BigInteger,denom:BigInteger) =
+    if numer.IsZero then
         ""      // this dimension does not contribute to formatting, e.g. meter^0
-    elif numer = 1L && denom = 1L then
+    elif numer.IsOne && denom.IsOne then
         name    // meter^(1/1) is written as "meter"
-    elif denom = 1L then
-        if numer < 0L then
+    elif denom.IsOne then
+        if numer < BigInteger.Zero then
             name + "^(" + numer.ToString() + ")"        // meter^(-1)
         else
             name + "^" + numer.ToString()               // meter^3
@@ -853,7 +853,7 @@ let rec EvalConcept context expr =
     | Amount(PhysicalQuantity(number,concept)) -> 
         if (IsNumberZero number) || (concept = Zero) then 
             ExpressionError expr "Concept evaluated to 0."
-        elif number <> Rational(1L,1L) then
+        elif number <> Rational(R1) then
             ExpressionError expr (sprintf "Concept evaluated with non-unity coefficient %s" (FormatNumber number))
         else
             concept
@@ -947,7 +947,7 @@ let rec EvalQuantity context expr =
 
 let QuantityNumericRange (PhysicalQuantity(number,_)) =
     match number with
-    | Rational(a,b) -> if b = 1L then IntegerRange else RationalRange
+    | Rational(a,b) -> if b.IsOne then IntegerRange else RationalRange
     | Real(_) -> RealRange
     | Complex(_,_) -> ComplexRange   // FIXFIXFIX - consider "demoting" complex to real if imaginary part is 0? Would require great care throughout the code.
 

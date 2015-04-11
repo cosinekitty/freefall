@@ -1,6 +1,7 @@
 ﻿module UnitTest
 
 open System.Collections.Generic
+open System.Numerics
 open Freefall.Expr
 open Freefall.Scanner
 open Freefall.Parser
@@ -33,9 +34,9 @@ let VarTokenF = MakeIdentifierToken "F"
 let ForceVar = Solitaire(VarTokenF)
 DefineSymbol MyContext VarTokenF (VariableEntry(RealRange,ForceConcept))
 
-let AlmostPi = Amount(PhysicalQuantity(Rational(22L,7L), Dimensionless))
+let AlmostPi = Amount(PhysicalQuantity(Rational(new BigInteger(22),new BigInteger(7)), Dimensionless))
 
-let Weight = Amount(PhysicalQuantity(Rational(3L,4L), ForceConcept))
+let Weight = Amount(PhysicalQuantity(Rational(new BigInteger(3),new BigInteger(4)), ForceConcept))
 
 let WeightSquared = Product[Weight;Weight]
 

@@ -136,7 +136,7 @@ let MakeContext assignmentHook probeHook =
 
     for {ConceptName=conceptName; BaseUnitName=baseUnitName; ConceptValue=concept} in BaseConcepts do
         DefineIntrinsicSymbol context conceptName (ConceptEntry(concept))
-        DefineIntrinsicSymbol context baseUnitName (UnitEntry(PhysicalQuantity(Rational(1L,1L), concept)))
+        DefineIntrinsicSymbol context baseUnitName (UnitEntry(PhysicalQuantity(Rational(R1), concept)))
 
     for {ConceptName=conceptName; Definition=definition} in DerivedConcepts do
         DefineIntrinsicSymbol context conceptName (ConceptEntry(EvaluateConceptDefinition context definition))
