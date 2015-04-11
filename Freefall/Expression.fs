@@ -12,13 +12,13 @@ exception UnexpectedEndException of option<string>       // Some(filename) or No
 type Number = 
     | Rational of BigInteger * BigInteger
     | Real of float
-    | Complex of float * float
+    | Complex of Complex
 
 let NegateNumber number =
     match number with
     | Rational(numer,denom) -> Rational(-numer,denom)
     | Real(x) -> Real(-x)
-    | Complex(x,y) -> Complex(-x,-y)
+    | Complex(c) -> Complex(-c)
 
 let rec GreatestCommonDivisor (a:BigInteger) (b:BigInteger) =         // caller must ensure that a and b are both non-negative
     if b.IsZero then
@@ -53,27 +53,27 @@ let rec AddNumbers anum bnum =
     match (anum, bnum) with
     | (Rational(a,b), Rational(c,d)) -> MakeRational (a*d + b*c) (b*d)
     | (Rational(a,b), Real(r)) -> Real(r + (float a)/(float b))
-    | (Rational(a,b), Complex(x,y)) -> Complex(x + (float a)/(float b), y)
+    | (Rational(a,b), Complex(c)) -> Complex(new Complex(c.Real + (float a)/(float b), c.Imaginary))
     | (Real(_), Rational(_,_)) -> AddNumbers bnum anum
     | (Real(x), Real(y)) -> Real(x + y)
-    | (Real(r), Complex(x,y)) -> Complex(r+x, y)
-    | (Complex(_,_), Rational(_,_)) -> AddNumbers bnum anum
-    | (Complex(_,_), Real(_)) -> AddNumbers bnum anum
-    | (Complex(x,y), Complex(u,v)) -> Complex(x+u, y+v)
+    | (Real(r), Complex(c)) -> Complex(new Complex(r + c.Real, c.Imaginary))
+    | (Complex(_), Rational(_,_)) -> AddNumbers bnum anum
+    | (Complex(_), Real(_)) -> AddNumbers bnum anum
+    | (Complex(c), Complex(d)) -> Complex(c+d)
 
 let rec MultiplyNumbers anum bnum =
     match (anum, bnum) with
     | (Rational(a,b), Rational(c,d)) -> MakeRational (a*c) (b*d)
     | (Rational(a,b), Real(r)) -> Real(r * (float a)/(float b))
-    | (Rational(a,b), Complex(x,y)) -> 
+    | (Rational(a,b), Complex(c)) -> 
         let ratio = (float a) / (float b)
-        Complex(ratio*x, ratio*y)
+        Complex(new Complex(ratio*c.Real, ratio*c.Imaginary))
     | (Real(_), Rational(_,_)) -> MultiplyNumbers bnum anum
     | (Real(x), Real(y)) -> Real(x * y)
-    | (Real(r), Complex(x,y)) -> Complex(r*x, r*y)
-    | (Complex(_,_), Rational(_,_)) -> MultiplyNumbers bnum anum
-    | (Complex(_,_), Real(_)) -> MultiplyNumbers bnum anum
-    | (Complex(x,y), Complex(u,v)) -> Complex(x*u - y*v, x*v + y*u)
+    | (Real(r), Complex(c)) -> Complex(new Complex(r*c.Real, r*c.Imaginary))
+    | (Complex(_), Rational(_,_)) -> MultiplyNumbers bnum anum
+    | (Complex(_), Real(_)) -> MultiplyNumbers bnum anum
+    | (Complex(c), Complex(d)) -> Complex(c*d)
 
 let PowerNumbers anum bnum =
     match (anum, bnum) with
@@ -84,15 +84,23 @@ let PowerNumbers anum bnum =
     | (Rational(an,ad), Real(b)) ->
         let a = (float an) / (float ad)
         Real(System.Math.Pow(a,b))
+    | (Rational(an,ad), Complex(b)) ->
+        let a = new Complex((float an) / (float ad), 0.0)
+        Complex(Complex.Pow(a,b))
     | (Real(a), Rational(bn,bd)) ->
         let b = (float bn) / (float bd)
         Real(System.Math.Pow(a,b))
     | (Real(a), Real(b)) ->
         Real(System.Math.Pow(a,b))
-    | (_, Complex(_,_)) ->
-        failwith "Raising number to complex power not yet implemented."  // FIXFIXFIX
-    | (Complex(_,_), _) ->
-        failwith "Raising complex number to a power not yet implemented."  // FIXFIXFIX
+    | (Real(a), Complex(b)) ->
+        Complex(Complex.Pow(new Complex(a,0.0), b))
+    | (Complex(a), Rational(bn,bd)) ->
+        let b = new Complex((float bn) / (float bd), 0.0)
+        Complex(Complex.Pow(a,b))
+    | (Complex(a), Real(b)) ->
+        Complex(Complex.Pow(a, new Complex(b, 0.0)))
+    | (Complex(a), Complex(b)) ->
+        Complex(Complex.Pow(a,b))
 
 type PhysicalConcept = 
     | Zero                              // a special case because 0 is considered compatible with any concept: 0*meter = 0*second. Weird but necessary.
@@ -158,7 +166,7 @@ let RaiseConceptToNumberPower concept number =
             Dimensionless
         else
             failwith "Cannot raise dimensional concept to non-rational power."
-    | Complex(x,y) ->
+    | Complex(_) ->
         if concept = Zero then
             failwith "Cannot raise 0 concept to a complex power."
         elif concept = Dimensionless then
@@ -198,7 +206,7 @@ let IsNumberEqualToInteger n x =
     match x with
     | Rational(numer,denom) -> (numer = n) && (denom.IsOne)      // assumes rational was created using MakeRational to normalize
     | Real re -> re = (float n)
-    | Complex(re,im) -> (im = 0.0) && (re = (float n))
+    | Complex(c) -> (c.Imaginary = 0.0) && (c.Real = (float n))
 
 let IsNumberZero = IsNumberEqualToInteger BigInteger.Zero
 
@@ -209,10 +217,7 @@ let InvertNumber number =        // calculate the numeric reciprocal
         match number with
         | Rational(a,b) -> Rational(b,a)
         | Real x -> Real(1.0 / x)
-        | Complex(x,y) -> 
-            // 1/(x+iy) = (x-iy)/(x^2+y^2)
-            let denom = x*x + y*y
-            Complex(x/denom, -y/denom)
+        | Complex(c) -> Complex(Complex.Reciprocal(c))
 
 let InvertQuantity (PhysicalQuantity(number,concept)) =
     PhysicalQuantity((InvertNumber number),(InvertConcept concept))
@@ -300,6 +305,13 @@ let SkipZero first rest =
 //-----------------------------------------------------------------------------------------------------
 // Formatting - conversion of expressions to human-readable strings.
 
+let RealString (r:float) =
+    let t = r.ToString().Replace("E", "e")
+    if not (t.Contains("e")) && not (t.Contains(".")) then
+        t + ".0"        // force re-parsing as float
+    else
+        t
+
 let FormatNumber x =
     match x with
     | Rational(numer,denom) ->
@@ -310,7 +322,16 @@ let FormatNumber x =
         else
             numer.ToString() + "/" + denom.ToString()
     | Real re -> re.ToString()
-    | Complex(re,im) -> "(" + re.ToString() + "," + im.ToString() + ")"     // FIXFIXFIX - make re-parsable "(a+bi)" format
+    | Complex(c) -> 
+        // (-3.4-5.6i)
+        // (-3.4+5.6i)
+        let rtext = RealString c.Real
+        let itext = 
+            if c.Imaginary >= 0.0 then
+                "+" + (RealString c.Imaginary)
+            else
+                RealString c.Imaginary
+        "(" + rtext + itext + "i)"            
 
 let FormatDimension name (numer:BigInteger,denom:BigInteger) =
     if numer.IsZero then
@@ -474,13 +495,13 @@ let rec AreIdenticalNumbers a b =
     match (a,b) with
     | (Rational(anum,aden),Rational(bnum,bden)) -> anum*bden = bnum*aden
     | (Rational(anum,aden),Real(br)) -> (float anum) = br*(float aden)
-    | (Rational(anum,aden),Complex(br,bi)) -> (bi = 0.0) && (AreIdenticalNumbers a (Real(br)))
+    | (Rational(anum,aden),Complex(b)) -> (b.Imaginary = 0.0) && (AreIdenticalNumbers a (Real(b.Real)))
     | (Real(ar),Rational(_,_)) -> AreIdenticalNumbers b a
     | (Real(ar),Real(br)) -> ar = br
-    | (Real(ar),Complex(br,bi)) -> (bi = 0.0) && (ar = br)
-    | (Complex(_,_),Rational(_,_)) -> AreIdenticalNumbers b a
-    | (Complex(_,_),Real(_)) -> AreIdenticalNumbers b a
-    | (Complex(ar,ai),Complex(br,bi)) -> (ar = br) && (ai = bi)
+    | (Real(ar),Complex(b)) -> (b.Imaginary = 0.0) && (ar = b.Real)
+    | (Complex(_),Rational(_,_)) -> AreIdenticalNumbers b a
+    | (Complex(_),Real(_)) -> AreIdenticalNumbers b a
+    | (Complex(a),Complex(b)) -> a = b
 
 let rec AreIdentical context a b =
     match (a,b) with
@@ -949,7 +970,7 @@ let QuantityNumericRange (PhysicalQuantity(number,_)) =
     match number with
     | Rational(a,b) -> if b.IsOne then IntegerRange else RationalRange
     | Real(_) -> RealRange
-    | Complex(_,_) -> ComplexRange   // FIXFIXFIX - consider "demoting" complex to real if imaginary part is 0? Would require great care throughout the code.
+    | Complex(_) -> ComplexRange   // FIXFIXFIX - consider "demoting" complex to real if imaginary part is 0? Would require great care throughout the code.
 
 let PromoteNumericRangePair a b =
     match (a, b) with

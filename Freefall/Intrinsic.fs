@@ -1,6 +1,7 @@
 ﻿module Freefall.Intrinsic
 
 open System.Collections.Generic
+open System.Numerics
 
 open Freefall.Scanner
 open Freefall.Expr
@@ -72,12 +73,8 @@ let Evaluate_Exp context funcToken qlist =
                 let expx = System.Math.Exp(x)
                 PhysicalQuantity(Real(expx), Dimensionless)
 
-            | Complex(x,y) ->
-                // exp(x + iy) = exp(x)*exp(iy) = exp(x)*(cos(y) + i*sin(y))
-                let expx = System.Math.Exp(x)
-                let cosy = System.Math.Cos(y)
-                let siny = System.Math.Sin(y)
-                PhysicalQuantity(Complex(expx*cosy, expx*siny), Dimensionless)
+            | Complex(z) ->
+                PhysicalQuantity(Complex(Complex.Exp(z)), Dimensionless)
     | _ -> FailExactArgCount "Function" 1 qlist.Length funcToken
 
 let Range_Exp funcToken rangelist =
