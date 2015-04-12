@@ -55,9 +55,19 @@ let DerivMacroExpander context macroToken argList =
         Simplify context deriv
     | _ -> SyntaxError macroToken "Expected 'deriv(expr, var {, ...})'"
 
+let DifferentialMacroExpander context macroToken argList =
+    // diff(expr, vars...)
+    match argList with
+    | [] -> SyntaxError macroToken "Expected diff(expr, vars...)"
+    | [expr] -> SyntaxError macroToken "Must have at least one variable after 'diff(expr,'"
+    | expr :: varlist ->
+        let varnames = List.map (DiffVariableName context) varlist
+        TakeDifferential context varnames expr |> Simplify context
+
 let IntrinsicMacros =
     [
         ("deriv", DerivMacroExpander);
+        ("diff", DifferentialMacroExpander);
         ("eval", EvalMacroExpander);
         ("simp", SimplifyMacroExpander);
     ]
