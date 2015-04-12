@@ -31,6 +31,8 @@
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="Scanner.fs" />
     <Compile Include="Expression.fs" />
+    <Compile Include="Calculus.fs">
+    </Compile>
     <Compile Include="Statement.fs" />
     <Compile Include="Parser.fs" />
     <Compile Include="Intrinsic.fs" />

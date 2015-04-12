@@ -5,6 +5,7 @@ open System.Numerics
 
 open Freefall.Scanner
 open Freefall.Expr
+open Freefall.Calculus
 open Freefall.Stmt
 open Freefall.Parser
 
@@ -27,14 +28,44 @@ let EvalMacroExpander context macroToken argList =
     | [arg] -> Amount(EvalQuantity context arg)
     | _ -> FailSingleArgMacro macroToken argList
 
+let DiffVariableToken context expr =
+    match expr with
+    | Solitaire(token) ->
+        match FindSymbolEntry context token with
+        | VariableEntry(range,_) -> 
+            match range with
+            | RealRange -> token
+            | ComplexRange -> token
+            | _ -> SyntaxError token "Differentiated variable must be real or complex."
+        | _ -> SyntaxError token "Expected variable name."
+    | _ -> ExpressionError expr "Expected identifier."
+
+let DiffVariableName context expr = (DiffVariableToken context expr).Text
+
+let DerivMacroExpander context macroToken argList =
+    // deriv(expr, var1, ...)
+    // First variable is required, as it is the "primary" variable.
+    // Any others are treated as functions of the first variable.
+    match argList with
+    | expr :: var1expr :: rest ->
+        let var1token = DiffVariableToken context var1expr
+        let restnames = List.map (DiffVariableName context) rest
+        let diff = TakeDifferential context (var1token.Text :: restnames) expr
+        let deriv = Product([diff; Reciprocal(Del(var1token,1))])
+        Simplify context deriv
+    | _ -> SyntaxError macroToken "Expected 'deriv(expr, var {, ...})'"
+
 let IntrinsicMacros =
     [
+        ("deriv", DerivMacroExpander);
         ("eval", EvalMacroExpander);
         ("simp", SimplifyMacroExpander);
     ]
 
 //-------------------------------------------------------------------------------------------------
 // Intrinsic functions
+
+// FIXFIXFIX - This intrinsic function stuff is getting complicated enough that it should be reworked as interface/class.
 
 // Token -> list<Expression> -> PhysicalConcept;
 let Concept_Exp context funcToken argList =

@@ -278,6 +278,7 @@ let ExpressionError expr message =
  
 let ZeroAmount = Amount(ZeroQuantity)
 let UnityAmount = Amount(Unity)
+let IntegerAmount (n:int) = Amount(PhysicalQuantity(Rational(new BigInteger(n), BigInteger.One), Dimensionless))
 
 let IsZeroExpression expr =
     match expr with
