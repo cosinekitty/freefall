@@ -62,7 +62,7 @@ and ProductDifferentialTerms context varNameList factorList =
     // d(u*v*w*...) = du*v*w*... + u*dv*w*... + u*v*dw*... + ...
     let termIndex = ref 0
     let diffTermList = new ResizeArray<Expression>()
-    for _ in factorList do
+    for _ in factorList do  // quirky way of iterating factorList.Length times, without redundant traversal implied by .Length 
         diffTermList.Add(Product(List.mapi (fun factorIndex factor -> if factorIndex = !termIndex then (TakeDifferential context varNameList factor) else factor) factorList))
-        termIndex := 1 + !termIndex
+        incr termIndex
     List.ofSeq diffTermList
