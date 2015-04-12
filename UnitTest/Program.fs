@@ -1,6 +1,5 @@
 ﻿module UnitTest
 
-open System.Collections.Generic
 open System.Numerics
 open Freefall.Expr
 open Freefall.Scanner
