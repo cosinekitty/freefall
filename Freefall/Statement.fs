@@ -146,10 +146,6 @@ let rec ExpandMacros context rawexpr =
 //
 // FIXFIXFIX - handle the more complicated cases like taking square root of both sides, etc.
 
-let FunctionDistributor context functoken =
-    let {EquationDistributor=distrib} = FindFunctionEntry context functoken
-    distrib
-
 let rec PartitionEquationsAndValues exprlist =
     match exprlist with
     | [] -> 0, [], []
@@ -173,8 +169,8 @@ and TransformEquations context expr =
         if numEquations = 0 then
             Functor(name,leftList)
         else
-            let distrib = FunctionDistributor context name
-            distrib name leftList rightList
+            let handler = FindFunctionEntry context name
+            handler.DistributeAcrossEquation context name leftList rightList
     | Negative(arg) -> 
         match TransformEquations context arg with
         | Equals(a,b) -> Equals(Negative(a), Negative(b))

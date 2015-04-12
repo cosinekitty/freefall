@@ -75,65 +75,67 @@ let IntrinsicMacros =
 //-------------------------------------------------------------------------------------------------
 // Intrinsic functions
 
-// FIXFIXFIX - This intrinsic function stuff is getting complicated enough that it should be reworked as interface/class.
-
-// Token -> list<Expression> -> PhysicalConcept;
-let Concept_Exp context funcToken argList =
-    match argList with
-    | [arg] -> 
-        let argConcept = ExpressionConcept context arg
-        if IsConceptDimensionless argConcept then
-            Dimensionless
-        else
-            SyntaxError funcToken ("exp() requires a dimensionless argument, but found " + FormatConcept argConcept)
-    | _ -> FailExactArgCount "Function" 1 argList.Length funcToken
-
-let SimplifyStep_Exp context funcToken argList =        // caller will step-simplify argList for us.
-    match argList with
-    | [arg] -> 
-        if IsZeroExpression arg then
-            UnityAmount
-        else 
-            Functor(funcToken, [arg])
-    | _ -> FailExactArgCount "Function" 1 argList.Length funcToken
-
-let Evaluate_Exp context funcToken qlist =
-    match qlist with
-    | [PhysicalQuantity(number,concept)] -> 
-        if (IsNumberZero number) || (concept = Zero) then
-            Unity
-        elif concept <> Dimensionless then
-            SyntaxError funcToken ("exp() requires a dimensionless argument, but found " + FormatConcept concept)
-        else
-            match number with
-            | Rational(a,b) -> 
-                let expx = (System.Math.Exp((float a)/(float b)))
-                PhysicalQuantity(Real(expx), Dimensionless)
-
-            | Real(x) -> 
-                let expx = System.Math.Exp(x)
-                PhysicalQuantity(Real(expx), Dimensionless)
-
-            | Complex(z) ->
-                PhysicalQuantity(Complex(Complex.Exp(z)), Dimensionless)
-    | _ -> FailExactArgCount "Function" 1 qlist.Length funcToken
-
-let Range_Exp funcToken rangelist =
-    match rangelist with
-    | [range] ->
-        match range with
-        | IntegerRange -> RealRange
-        | RationalRange -> RealRange
-        | RealRange -> RealRange
-        | ComplexRange -> ComplexRange
-    | _ -> FailExactArgCount "Function" 1 rangelist.Length funcToken
-
 let SimpleEquationDistributor funcToken leftList rightList =
     Equals(Functor(funcToken,leftList), Functor(funcToken,rightList))
 
+let Function_Exp = { new IFunctionHandler with
+    member this.EvalRange funcToken rangelist =
+        match rangelist with
+        | [range] ->
+            match range with
+            | IntegerRange -> RealRange
+            | RationalRange -> RealRange
+            | RealRange -> RealRange
+            | ComplexRange -> ComplexRange
+        | _ -> FailExactArgCount "Function" 1 rangelist.Length funcToken
+
+    member this.EvalConcept context funcToken argList =
+        match argList with
+        | [arg] -> 
+            let argConcept = ExpressionConcept context arg
+            if IsConceptDimensionless argConcept then
+                Dimensionless
+            else
+                SyntaxError funcToken ("exp() requires a dimensionless argument, but found " + FormatConcept argConcept)
+        | _ -> FailExactArgCount "Function" 1 argList.Length funcToken
+
+    member this.EvalNumeric context funcToken qlist =
+        match qlist with
+            | [PhysicalQuantity(number,concept)] -> 
+                if (IsNumberZero number) || (concept = Zero) then
+                    Unity
+                elif concept <> Dimensionless then
+                    SyntaxError funcToken ("exp() requires a dimensionless argument, but found " + FormatConcept concept)
+                else
+                    match number with
+                    | Rational(a,b) -> 
+                        let expx = (System.Math.Exp((float a)/(float b)))
+                        PhysicalQuantity(Real(expx), Dimensionless)
+
+                    | Real(x) -> 
+                        let expx = System.Math.Exp(x)
+                        PhysicalQuantity(Real(expx), Dimensionless)
+
+                    | Complex(z) ->
+                        PhysicalQuantity(Complex(Complex.Exp(z)), Dimensionless)
+            | _ -> FailExactArgCount "Function" 1 qlist.Length funcToken
+
+    member this.SimplifyStep context funcToken argList =
+        match argList with
+        | [arg] -> 
+            if IsZeroExpression arg then
+                UnityAmount
+            else 
+                Functor(funcToken, [arg])
+        | _ -> FailExactArgCount "Function" 1 argList.Length funcToken
+
+    member this.DistributeAcrossEquation context funcToken leftList rightList =
+        SimpleEquationDistributor funcToken leftList rightList
+}
+
 let IntrinsicFunctions = 
     [
-        ("exp", Concept_Exp, SimplifyStep_Exp, Evaluate_Exp, SimpleEquationDistributor, Range_Exp);
+        ("exp", Function_Exp);
     ]
 
 //-------------------------------------------------------------------------------------------------
@@ -182,15 +184,8 @@ let MakeContext assignmentHook probeHook =
     for macroName, macroFunc in IntrinsicMacros do
         DefineIntrinsicSymbol context macroName (MacroEntry({Expander=(macroFunc context);}))
 
-    for funcName, concepter, stepSimplifier, evaluator, eqdistrib, ranger in IntrinsicFunctions do
-        DefineIntrinsicSymbol context funcName 
-            (FunctionEntry {
-                Concepter = (concepter context); 
-                StepSimplifier = (stepSimplifier context);
-                Evaluator = (evaluator context);
-                EquationDistributor = eqdistrib;
-                Ranger = ranger;
-            })
+    for funcName, handler in IntrinsicFunctions do
+        DefineIntrinsicSymbol context funcName (FunctionEntry(handler))
 
     context
 

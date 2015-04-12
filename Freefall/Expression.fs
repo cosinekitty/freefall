@@ -415,23 +415,22 @@ type Macro = {
     Expander: Token -> list<Expression> -> Expression;
 }
 
-type Function = {
-    Concepter:  Token -> list<Expression> -> PhysicalConcept;
-    StepSimplifier: Token -> list<Expression> -> Expression;
-    Evaluator: Token -> list<PhysicalQuantity> -> PhysicalQuantity;
-    EquationDistributor: Token -> list<Expression> -> list<Expression> -> Expression;
-    Ranger: Token -> list<NumericRange> -> NumericRange;
-}
+type IFunctionHandler =
+    abstract member EvalRange : Token -> list<NumericRange> -> NumericRange
+    abstract member EvalConcept : Context -> Token -> list<Expression> -> PhysicalConcept
+    abstract member EvalNumeric : Context -> Token -> list<PhysicalQuantity> -> PhysicalQuantity
+    abstract member SimplifyStep : Context -> Token -> list<Expression> -> Expression
+    abstract member DistributeAcrossEquation : Context -> Token -> list<Expression> -> list<Expression> -> Expression
 
-type SymbolEntry =
+and SymbolEntry =
     | VariableEntry of NumericRange * PhysicalConcept
     | ConceptEntry of PhysicalConcept
     | UnitEntry of PhysicalQuantity
     | AssignmentEntry of Expression         // the value of a named expression is the expression itself
     | MacroEntry of Macro
-    | FunctionEntry of Function
+    | FunctionEntry of IFunctionHandler
 
-type Context = {
+and Context = {
     SymbolTable: Dictionary<string,SymbolEntry>;
     NumberedExpressionList: ResizeArray<Expression>;
     AssignmentHook: option<string> -> int -> Expression -> unit;            // AssignmentHook targetName refIndex assignedExpr
@@ -691,8 +690,8 @@ let rec SimplifyStep context expr =
 
     | Functor(funcName, argList) ->
         let simpArgList = List.map (SimplifyStep context) argList
-        let {StepSimplifier=stepSimplifier} = FindFunctionEntry context funcName
-        stepSimplifier funcName simpArgList
+        let funcHandler = FindFunctionEntry context funcName
+        funcHandler.SimplifyStep context funcName simpArgList
 
     | Negative(Negative(x)) -> SimplifyStep context x
     | Negative(arg) -> 
@@ -807,7 +806,7 @@ and FindSolitaireConcept context token =
 
 and FindFunctorConcept context funcNameToken argExprList =
     match FindSymbolEntry context funcNameToken with
-    | FunctionEntry({Concepter=concepter;}) -> concepter funcNameToken argExprList
+    | FunctionEntry(handler) -> handler.EvalConcept context funcNameToken argExprList
     | MacroEntry(_) -> FailLingeringMacro funcNameToken
     | VariableEntry(_) -> SyntaxError funcNameToken "Attempt to use a variable as a function/macro."
     | ConceptEntry(_) -> SyntaxError funcNameToken "Attempt to use a concept as a function/macro."
@@ -970,9 +969,9 @@ let rec EvalQuantity context expr =
     | Del(vartoken,order) ->
         SyntaxError vartoken "Cannot numerically evaluate infinitesimal."
     | Functor(funcName,argList) -> 
-        let {Evaluator=evaluator} = FindFunctionEntry context funcName 
+        let handler = FindFunctionEntry context funcName 
         List.map (EvalQuantity context) argList
-        |> evaluator funcName
+        |> handler.EvalNumeric context funcName
     | Negative(arg) -> 
         EvalQuantity context arg
         |> NegateQuantity
@@ -1030,9 +1029,9 @@ let rec ExpressionNumericRange context expr =
         | RealRange -> RealRange
         | ComplexRange -> ComplexRange
     | Functor(funcName,argList) -> 
-        let {Ranger=ranger} = FindFunctionEntry context funcName 
+        let handler = FindFunctionEntry context funcName 
         let rlist = List.map (ExpressionNumericRange context) argList
-        ranger funcName rlist
+        handler.EvalRange funcName rlist
     | Negative(arg) -> ExpressionNumericRange context arg
     | Reciprocal(arg) -> PromoteNumericRangePair RationalRange (ExpressionNumericRange context arg)
     | Sum(terms) -> 
