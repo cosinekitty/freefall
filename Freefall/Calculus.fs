@@ -25,7 +25,8 @@ let rec TakeDifferential context varNameList expr =
         | MacroEntry(_) -> SyntaxError token "Lingering macro in differential."
         | FunctionEntry(_) -> SyntaxError token "Function name cannot be used as a variable."
     | Functor(funcNameToken,argList) ->
-        SyntaxError funcNameToken "Derivative of function not yet implemented."     // FIXFIXFIX
+        let handler = FindFunctionEntry context funcNameToken
+        handler.Differential context varNameList funcNameToken argList
     | Negative(arg) -> 
         // d(-x) = -(dx)
         Negative(TakeDifferential context varNameList arg)

@@ -420,6 +420,7 @@ type IFunctionHandler =
     abstract member EvalConcept : Context -> Token -> list<Expression> -> PhysicalConcept
     abstract member EvalNumeric : Context -> Token -> list<PhysicalQuantity> -> PhysicalQuantity
     abstract member SimplifyStep : Context -> Token -> list<Expression> -> Expression
+    abstract member Differential : Context -> list<string> -> Token -> list<Expression> -> Expression
     abstract member DistributeAcrossEquation : Context -> Token -> list<Expression> -> list<Expression> -> Expression
 
 and SymbolEntry =
