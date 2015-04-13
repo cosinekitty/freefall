@@ -199,8 +199,21 @@ let ConceptNames  = List.map (fun {ConceptName=name}  -> name) BaseConcepts
 // A physical quantity is a numeric scalar attached to a physical concept.
 type PhysicalQuantity = PhysicalQuantity of Number * PhysicalConcept
 
-let ZeroQuantity = PhysicalQuantity(Rational(R0), Zero)
-let Unity = PhysicalQuantity(Rational(R1), Dimensionless)
+let Number0 = Rational(R0)
+let Number1 = Rational(R1)
+
+let IntegerNumber (n:int) = Rational(new BigInteger(n), BigInteger.One)
+
+let ZeroQuantity = PhysicalQuantity(Number0, Zero)
+let Unity = PhysicalQuantity(Number1, Dimensionless)
+
+let IntegerQuantity n = 
+    if n = 0 then
+        ZeroQuantity    // We want concept to be Zero, not Dimensionless, in this special case
+    else
+        PhysicalQuantity((IntegerNumber n), Dimensionless)
+
+let NegativeOneQuantity = IntegerQuantity -1
 
 let IsNumberEqualToInteger n x =
     match x with
@@ -278,16 +291,26 @@ let ExpressionError expr message =
  
 let ZeroAmount = Amount(ZeroQuantity)
 let UnityAmount = Amount(Unity)
-let IntegerAmount (n:int) = Amount(PhysicalQuantity(Rational(new BigInteger(n), BigInteger.One), Dimensionless))
+let IntegerAmount (n:int) = Amount(IntegerQuantity n)
+let NegativeOneAmount = IntegerAmount(-1)
+
+let IsZeroQuantity (PhysicalQuantity(number,concept)) =
+    (concept = Zero) || (IsNumberZero number)
+
+let IsUnityQuantity (PhysicalQuantity(number,concept)) =
+    (concept = Dimensionless) && (IsNumberEqualToInteger BigInteger.One number)
+
+let IsNegativeUnityQuantity (PhysicalQuantity(number,concept)) =
+    (concept = Dimensionless) && (IsNumberEqualToInteger BigInteger.MinusOne number)
 
 let IsZeroExpression expr =
     match expr with
-    | Amount(PhysicalQuantity(number,concept)) -> (concept = Zero) || (IsNumberZero number)
+    | Amount(quantity) -> IsZeroQuantity quantity
     | _ -> false
 
 let IsUnityExpression expr =
     match expr with
-    | Amount(PhysicalQuantity(number,concept)) -> (concept = Dimensionless) && (IsNumberEqualToInteger BigInteger.One number)
+    | Amount(quantity) -> IsUnityQuantity quantity
     | _ -> false
 
 let IsConceptDimensionless concept =
@@ -609,8 +632,11 @@ and FindIdenticalInList context expr elist =
 //-----------------------------------------------------------------------------------------------------
 // Expression simplifier.
 
-let AddQuantities (PhysicalQuantity(aNumber,aConcept)) (PhysicalQuantity(bNumber,bConcept)) =
-    Amount(PhysicalQuantity(AddNumbers aNumber bNumber, AddConcepts aConcept bConcept))
+let QuantityPairSum (PhysicalQuantity(aNumber,aConcept)) (PhysicalQuantity(bNumber,bConcept)) =
+    PhysicalQuantity(AddNumbers aNumber bNumber, AddConcepts aConcept bConcept)
+
+let AddQuantities a b =
+    Amount(QuantityPairSum a b)
 
 let MultiplyQuantities (PhysicalQuantity(aNumber,aConcept)) (PhysicalQuantity(bNumber,bConcept)) =
     Amount(PhysicalQuantity(MultiplyNumbers aNumber bNumber, MultiplyConcepts aConcept bConcept))
@@ -658,6 +684,98 @@ let rec MergeConstants mergefunc terms =
         | (Amount(a), Amount(b) :: residue) -> mergefunc a b :: residue
         | (_, Amount(b) :: residue) -> Amount(b) :: first :: residue
         | _ -> first :: mrest
+       
+//-----------------------------------------------------------------------------------------------
+// Advanced pattern-matching simplifier rules.
+
+type TermPattern = TermPattern of PhysicalQuantity * Expression        // represents c*x where c is numeric and x may or may not be constant
+
+let rec MakeTermPattern context term =
+    // Transform a term expression into the form const*(expr^number).
+    match term with
+    | Amount(x) -> TermPattern(x, UnityAmount)     // coeff ==> ceoff*1
+    | Solitaire(token) -> 
+        match FindSymbolEntry context token with
+        | VariableEntry(_,_) -> TermPattern(Unity, term)      // var ==> 1*var
+        | ConceptEntry(_) -> SyntaxError token "Cannot use concept in sum()"
+        | UnitEntry(amount) -> TermPattern(amount, UnityAmount)            // unit ==> unit*1
+        | AssignmentEntry(_) -> FailLingeringMacro token
+        | MacroEntry(_) -> FailLingeringMacro token
+        | FunctionEntry(fe) -> SyntaxError token "Cannot use function name as a variable."
+    | Functor(funcName, argList) -> 
+        TermPattern(Unity, term)     // func(_) => 1*func(_)
+    | Negative arg ->
+        TermPattern(NegativeOneQuantity, arg)        // neg(x) ==> (-1)*x
+    | Reciprocal arg ->
+        TermPattern(Unity, arg)        // recip(x) ==> 1*recip(x)
+    | Sum terms ->
+        // This shouldn't happen because flattener should have already folded this into the higher sum.
+        failwith "Flattener failure: found sum() term inside a sum()."
+    | Product factors ->
+        match factors with
+        | [] -> TermPattern(Unity, UnityAmount)       // prod() ==> 1*1
+        | [arg] -> MakeTermPattern context arg
+        | first :: rest ->
+            match first with
+            | Amount(quantity) -> TermPattern(quantity, (Product rest))
+            | _ -> TermPattern(Unity, term)
+    | Power(x,y) -> TermPattern(Unity, term)
+    | Equals(_,_) -> ExpressionError term "Equality should not appear in a term."
+    | NumExprRef(t,i) -> FailLingeringMacro t
+    | PrevExprRef(t) -> FailLingeringMacro t
+    | Del(token,order) -> TermPattern(Unity, term)
+
+let UnmakeTermPattern (TermPattern(coeff,var)) =
+    if (IsZeroQuantity coeff) || (IsZeroExpression var) then
+        ZeroAmount
+    elif IsUnityQuantity coeff then
+        var
+    elif IsNegativeUnityQuantity coeff then
+        Negative(var)   // undo "damage" from MakeTermPattern converting neg(x) into (-1)*x
+    elif IsUnityExpression var then
+        Amount(coeff)
+    else
+        Product[Amount(coeff); var]
+
+let rec FindMatchingTermPattern context (TermPattern(c1,x1) as pattern) mergedlist : option<TermPattern * list<TermPattern>> =
+    match mergedlist with
+    | [] -> None
+    | (TermPattern(c2,x2) as first) :: rest ->
+        // See if pattern matches first, meaning they are compatible to be added.
+        if AreIdentical context x1 x2 then
+            // Merge pattern with first and report remaining tail of list as the residue.
+            Some((TermPattern((QuantityPairSum c1 c2),x1)), rest)
+        else
+            // If we can do a merge by skipping over first, then do so, with first becoming part of the residue.
+            match FindMatchingTermPattern context pattern rest with
+            | None -> None
+            | Some(mpattern, residue) -> Some(mpattern, first::residue)
+
+let rec MergeLikeTermPatterns context plist =
+    match plist with
+    | [] -> []
+    | [single] -> [single]
+    | first :: rest -> 
+        let mrest = MergeLikeTermPatterns context rest
+        // Search mrest for a pattern that can be combined to advantage with first.
+        // TermPattern(C,x) + TermPattern(D,x) ==> TermPattern(C+D,x)
+        match FindMatchingTermPattern context first mrest with
+        | None -> first :: mrest
+        | Some(merged, residue) -> merged :: residue
+
+let MergeLikeTerms context termlist =
+    // Compare each term from a sum() with every later term.
+    // For all that turn out to have common numeric coefficients (explicit or implicit 1),
+    // total up said coefficients:
+    // x + a + 3*x + b - (1/2)*x  ==>  (9/2)*x + a + b
+    // The iterative nature of the simplifier will ensure that 
+    // eventually constants will be merged together at the front of a product,
+    // so we only need to handle that case when we see a product.
+    let plist = List.map (MakeTermPattern context) termlist
+    let mlist = MergeLikeTermPatterns context plist
+    List.map UnmakeTermPattern mlist
+
+//-----------------------------------------------------------------------------------------------
 
 let FailNonFunction token found =
     SyntaxError token (sprintf "Expected function but found %s" found)
@@ -711,6 +829,7 @@ let rec SimplifyStep context expr =
             SimplifySumArgs (List.map (SimplifyStep context) termlist) 
             |> CancelOppositeTerms context 
             |> MergeConstants AddQuantities
+            |> MergeLikeTerms context
         match simpargs with
         | [] -> ZeroAmount
         | [term] -> term
