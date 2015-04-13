@@ -159,21 +159,6 @@ let IntrinsicFunctions =
     ]
 
 //-------------------------------------------------------------------------------------------------
-
-type DerivedConceptEntry = {
-    ConceptName: string;
-    Definition: string;         // for convenience, a parsed string defined in terms of any previous concepts, whether base or derived.
-}
-
-let DerivedConcepts = [
-    {ConceptName="speed";           Definition="distance/time"};
-    {ConceptName="acceleration";    Definition="speed/time"};
-    {ConceptName="force";           Definition="mass*acceleration"};
-    {ConceptName="energy";          Definition="force*distance"};
-    {ConceptName="frequency";       Definition="1/time"};
-]
-
-//-------------------------------------------------------------------------------------------------
 // Parse a string and evaluate it as a concept.
 
 let EvaluateConceptDefinition context definition =
@@ -184,7 +169,23 @@ let EvaluateConceptDefinition context definition =
     | [] -> EvalConcept context expr
 
 //-------------------------------------------------------------------------------------------------
+
+let RunStandardScript context filename =
+    let envvar = "FREEFALL_STANDARD_PATH"
+    match System.Environment.GetEnvironmentVariable(envvar) with
+    | null -> 
+        failwith (sprintf "Must set environment variable %s to path of Freefall standard files like %s" envvar filename)
+    | path ->
+        let filepath = System.IO.Path.Combine(path, filename)
+        let mutable scan = TokenizeFile filepath
+        while MoreTokensIn scan do
+            let statement, scan2 = ParseStatement scan
+            ExecuteStatement context statement
+            scan <- scan2
+
+//-------------------------------------------------------------------------------------------------
 // Create a context with intrinsic symbols built it.
+// Execute initialization script to define certain units, concepts, etc.
 
 let MakeContext assignmentHook probeHook = 
     let context = {
@@ -198,14 +199,15 @@ let MakeContext assignmentHook probeHook =
         DefineIntrinsicSymbol context conceptName (ConceptEntry(concept))
         DefineIntrinsicSymbol context baseUnitName (UnitEntry(PhysicalQuantity(Rational(R1), concept)))
 
-    for {ConceptName=conceptName; Definition=definition} in DerivedConcepts do
-        DefineIntrinsicSymbol context conceptName (ConceptEntry(EvaluateConceptDefinition context definition))
-
     for macroName, macroFunc in IntrinsicMacros do
         DefineIntrinsicSymbol context macroName (MacroEntry({Expander=(macroFunc context);}))
 
     for funcName, handler in IntrinsicFunctions do
         DefineIntrinsicSymbol context funcName (FunctionEntry(handler))
+
+    // Execute standard library's initialization script init.ff.
+    // Use environment variable to figure out where the standard scripts are.
+    RunStandardScript context "init.ff"
 
     context
 

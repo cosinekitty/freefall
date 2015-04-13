@@ -1,0 +1,15 @@
+//
+//  init.ff  -  by Don Cross
+//
+//  Standard initialization script for Freefall algebra helper.
+//  For more information, see:
+//  https://github.com/cosinekitty/freefall
+//
+
+// Provide handy names for some concepts that are derived from fundamental concepts.
+concept speed = distance/time;
+concept acceleration = speed/time;
+concept force = mass*acceleration;
+concept energy = force*distance;
+concept frequency = 1/time;
+
