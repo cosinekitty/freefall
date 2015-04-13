@@ -966,9 +966,7 @@ let Simplify context expr =
 // Unit determination - verify that units are coherent and determine what they are.
 // For example, sum(3*meter,4*second) should raise an exception because adding distance to time is illegal.
 // However, sum(3*meter,4*meter) should be seen as distance units (expressible in meters).
-// Returns an Option(Concept) because None is needed for 0*anything, which has no specific units.
-// No other reason for returning None should be allowed;
-// must throw an exception for any unit compatibility violation.
+// Returns Zero for 0*anything, which has no specific units.
 
 let rec ExpressionConcept context expr =
     match expr with
@@ -1256,5 +1254,3 @@ let rec ExpressionNumericRange context expr =
         PromoteNumericRangePair aRange bRange
     | NumExprRef(t,_) -> FailLingeringMacro t
     | PrevExprRef(t) -> FailLingeringMacro t
-
-

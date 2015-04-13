@@ -87,12 +87,12 @@ let main argv =
         0
     with 
         | SyntaxException(token,message) ->
-            printfn "SYNTAX ERROR : %s" message
+            printfn "EXCEPTION : %s" message
             PrintTokenDiagnostic token
             1
 
         | ExpressionException(expr,message) ->
-            printfn "Error in subexpression '%s': %s" (FormatExpression expr) message
+            printfn "EXCEPTION in subexpression '%s': %s" (FormatExpression expr) message
             match PrimaryToken expr with
             | None -> ()
             | Some(token) -> PrintTokenDiagnostic token

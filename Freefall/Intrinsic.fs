@@ -53,23 +53,34 @@ let DerivMacroExpander context macroToken argList =
         let diff = TakeDifferential context (var1token.Text :: restnames) expr
         let deriv = Product([diff; Reciprocal(Del(var1token,1))])
         Simplify context deriv
-    | _ -> SyntaxError macroToken "Expected 'deriv(expr, var {, ...})'"
+    | _ -> SyntaxError macroToken (sprintf "Expected '%s(expr, var {, ...})'" macroToken.Text)
 
 let DifferentialMacroExpander context macroToken argList =
     // diff(expr, vars...)
     match argList with
-    | [] -> SyntaxError macroToken "Expected diff(expr, vars...)"
+    | [] -> SyntaxError macroToken (sprintf "Expected %s(expr, vars...)" macroToken.Text)
     | [expr] -> SyntaxError macroToken "Must have at least one variable after 'diff(expr,'"
     | expr :: varlist ->
         let varnames = List.map (DiffVariableName context) varlist
         TakeDifferential context varnames expr |> Simplify context
 
+let AssertIdenticalMacroExpander context macroToken argList =
+    // asserti(expr1,expr2)
+    match argList with
+    | [expr1; expr2] ->
+        if AreIdentical context expr1 expr2 then
+            expr1       // All macros have to return some expression, so we choose the left expression.
+        else
+            SyntaxError macroToken (sprintf "Expressions are not identical:\n%s\n%s" (FormatExpression expr1) (FormatExpression expr2))
+    | _ -> SyntaxError macroToken (sprintf "%s requires exactly 2 expression arguments." macroToken.Text)
+
 let IntrinsicMacros =
     [
-        ("deriv", DerivMacroExpander);
-        ("diff", DifferentialMacroExpander);
-        ("eval", EvalMacroExpander);
-        ("simp", SimplifyMacroExpander);
+        ("asserti", AssertIdenticalMacroExpander);
+        ("deriv",   DerivMacroExpander);
+        ("diff",    DifferentialMacroExpander);
+        ("eval",    EvalMacroExpander);
+        ("simp",    SimplifyMacroExpander);
     ]
 
 //-------------------------------------------------------------------------------------------------
