@@ -75,7 +75,7 @@ unit hbar = 1.0545716e-34 * kilogram * meter^2 / second;    // Dirac or "reduced
 //--------------------------------------------------------------------------------------
 // Time/frequency units.
 
-unit Hz = 1/second;
+unit hertz = 1/second;
 
 unit minute = 60 * second;
 unit hour   = 60 * minute;
@@ -84,9 +84,7 @@ unit day    = 24 * hour;
 //--------------------------------------------------------------------------------------
 // Length units.
 
-unit mm = milli * meter;
-unit cm = centi * meter;
-unit km = kilo * meter;
+unit centimeter = centi * meter;
 unit inch = (254/10000) * meter;
 unit foot = 12 * inch;
 unit yard = 3 * foot;
@@ -101,8 +99,7 @@ unit ly = lightspeed * (365.25 * day);  // light-year
 //--------------------------------------------------------------------------------------
 // Area, volume units.
 
-unit mL = cm^3;             // a milliliter is the same as a cubic centimeter
-unit liter = kilo * mL;
+unit liter = 1000 * (centimeter^3);
 
 unit hectare = 10000 * meter^2;
 unit acre = 43560 * foot^2;
@@ -125,14 +122,14 @@ unit bar = 100000 * pascal;
 unit joule  = newton * meter;
 unit watt   = joule / second;
 
-unit dyne = gram * cm / second^2;
-unit erg = dyne * cm;
+unit dyne = gram * centimeter / second^2;
+unit erg = dyne * centimeter;
 
 unit lbm = 0.45359237 * kilogram;       // pound mass
 unit lbf = 4.4482216 * newton;          // pound force
 unit slug = lbf * second^2 / foot;      // slug (mass)
 unit btu = 1055.0559 * joule;           // British thermal unit
-unit hp = 550 * foot * lbf / second;    // horsepower
+unit horsepower = 550 * foot * lbf / second;
 
 //--------------------------------------------------------------------------------------
 // Electrical units.
