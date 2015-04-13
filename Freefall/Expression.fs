@@ -313,6 +313,15 @@ let IsUnityExpression expr =
     | Amount(quantity) -> IsUnityQuantity quantity
     | _ -> false
 
+let IsExpressionEqualToInteger expr n =
+    if n = 0 then
+        IsZeroExpression expr       // must be handled as a special case
+    else
+        match expr with
+        | Amount(PhysicalQuantity(number,concept)) -> 
+            (concept = Dimensionless) && (IsNumberEqualToInteger (new BigInteger(n)) number)
+        | _ -> false
+
 let IsConceptDimensionless concept =
     (concept = Zero) || (concept = Dimensionless)
 
@@ -691,7 +700,7 @@ let rec MergeConstants mergefunc terms =
 type TermPattern = TermPattern of PhysicalQuantity * Expression        // represents c*x where c is numeric and x may or may not be constant
 
 let rec MakeTermPattern context term =
-    // Transform a term expression into the form const*(expr^number).
+    // Transform a term expression into the form c*x
     match term with
     | Amount(x) -> TermPattern(x, UnityAmount)     // coeff ==> ceoff*1
     | Solitaire(token) -> 
@@ -751,15 +760,15 @@ let rec FindMatchingTermPattern context (TermPattern(c1,x1) as pattern) mergedli
             | None -> None
             | Some(mpattern, residue) -> Some(mpattern, first::residue)
 
-let rec MergeLikeTermPatterns context plist =
+let rec MergeLikePatterns finder context plist =
     match plist with
     | [] -> []
     | [single] -> [single]
     | first :: rest -> 
-        let mrest = MergeLikeTermPatterns context rest
+        let mrest = MergeLikePatterns finder context rest
         // Search mrest for a pattern that can be combined to advantage with first.
         // TermPattern(C,x) + TermPattern(D,x) ==> TermPattern(C+D,x)
-        match FindMatchingTermPattern context first mrest with
+        match finder context first mrest with
         | None -> first :: mrest
         | Some(merged, residue) -> merged :: residue
 
@@ -772,8 +781,68 @@ let MergeLikeTerms context termlist =
     // eventually constants will be merged together at the front of a product,
     // so we only need to handle that case when we see a product.
     let plist = List.map (MakeTermPattern context) termlist
-    let mlist = MergeLikeTermPatterns context plist
+    let mlist = MergeLikePatterns FindMatchingTermPattern context plist
     List.map UnmakeTermPattern mlist
+
+//-----------------------------------------------------------------------------------------------
+
+type FactorPattern = FactorPattern of Expression * Expression    // represents x^y
+
+let rec MakeFactorPattern context factor =
+    // Transform a factor expression into the form x^y.
+    match factor with
+    | Amount(_) -> FactorPattern(factor, UnityAmount)     // coeff ==> ceoff^1
+    | Solitaire(token) -> 
+        match FindSymbolEntry context token with
+        | VariableEntry(_,_) -> FactorPattern(factor, UnityAmount)      // var ==> var^1
+        | ConceptEntry(_) -> SyntaxError token "Cannot use concept in prod()"
+        | UnitEntry(amount) -> FactorPattern(factor, UnityAmount)            // unit ==> unit*1
+        | AssignmentEntry(_) -> FailLingeringMacro token
+        | MacroEntry(_) -> FailLingeringMacro token
+        | FunctionEntry(fe) -> SyntaxError token "Cannot use function name as a variable."
+    | Functor(funcName, argList) -> FactorPattern(factor, UnityAmount)
+    | Negative arg -> FactorPattern(factor, UnityAmount)
+    | Reciprocal arg -> FactorPattern(arg, NegativeOneAmount)       // recip(x) ==> x^(-1)
+    | Sum terms -> FactorPattern(factor, UnityAmount)
+    | Product factors -> failwith "Flattener failure: prod() should have been marged into parent."
+    | Power(x,y) -> FactorPattern(x,y)
+    | Equals(_,_) -> ExpressionError factor "Equality should not appear in a factor."
+    | NumExprRef(t,i) -> FailLingeringMacro t
+    | PrevExprRef(t) -> FailLingeringMacro t
+    | Del(token,order) -> FactorPattern(factor, UnityAmount)
+
+let UnmakeFactorPattern (FactorPattern(x,y)) =
+    if IsUnityExpression y then
+        x
+    elif IsZeroExpression y then
+        if IsZeroExpression x then
+            ExpressionError x "Cannot raise 0 to the 0 power."
+        else
+            UnityAmount
+    elif IsExpressionEqualToInteger y -1 then
+        Reciprocal(x)
+    else
+        Power(x,y)
+
+let rec FindMatchingFactorPattern context (FactorPattern(x1,y1) as pattern) mergedlist : option<FactorPattern * list<FactorPattern>> =
+    match mergedlist with
+    | [] -> None
+    | (FactorPattern(x2,y2) as first) :: rest ->
+        // See if pattern matches first, meaning they are compatible to be multiplied.
+        if AreIdentical context x1 x2 then
+            // Merge pattern with first and report remaining tail of list as the residue.
+            Some(FactorPattern(x1, (Sum [y1;y2])), rest)
+        else
+            // If we can do a merge by skipping over first, then do so, with first becoming part of the residue.
+            match FindMatchingFactorPattern context pattern rest with
+            | None -> None
+            | Some(mpattern, residue) -> Some(mpattern, first::residue)
+
+
+let MergeLikeFactors context termlist =
+    let plist = List.map (MakeFactorPattern context) termlist
+    let mlist = MergeLikePatterns FindMatchingFactorPattern context plist
+    List.map UnmakeFactorPattern mlist
 
 //-----------------------------------------------------------------------------------------------
 
@@ -840,6 +909,7 @@ let rec SimplifyStep context expr =
             SimplifyProductArgs (List.map (SimplifyStep context) factorlist) 
             |> CancelOppositeFactors context
             |> MergeConstants MultiplyQuantities
+            |> MergeLikeFactors context
         if List.exists IsZeroExpression simpfactors then
             ZeroAmount
         else
@@ -871,13 +941,13 @@ let rec SimplifyStep context expr =
 and SimplifySumArgs simpargs =           
     match simpargs with
     | [] -> []
-    | (Sum terms)::rest -> (RemoveZeroes terms) @ (SimplifySumArgs rest)
+    | (Sum terms)::rest -> (SimplifySumArgs (RemoveZeroes terms)) @ (SimplifySumArgs rest)
     | first::rest -> SkipZero first (SimplifySumArgs rest)
 
 and SimplifyProductArgs simpargs =           
     match simpargs with
     | [] -> []
-    | (Product factors)::rest -> (RemoveUnities factors) @ (SimplifyProductArgs rest)
+    | (Product factors)::rest -> (SimplifyProductArgs (RemoveUnities factors)) @ (SimplifyProductArgs rest)
     | first::rest -> SkipUnity first (SimplifyProductArgs rest)
 
 //---------------------------------------------------------------------------
