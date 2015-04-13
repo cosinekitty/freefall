@@ -1,3 +1,4 @@
+//--------------------------------------------------------------------------------------
 //
 //  init.ff  -  by Don Cross
 //
@@ -6,10 +7,149 @@
 //  https://github.com/cosinekitty/freefall
 //
 
+//--------------------------------------------------------------------------------------
 // Provide handy names for some concepts that are derived from fundamental concepts.
-concept speed = distance/time;
-concept acceleration = speed/time;
-concept force = mass*acceleration;
-concept energy = force*distance;
+concept angle = 1;
+concept area = distance^2;
+concept volume = distance^3;
 concept frequency = 1/time;
+concept speed = distance/time;
+concept momentum = mass * speed;
+concept acceleration = speed/time;
+concept force = mass * acceleration;
+concept energy = force*distance;
+concept power = energy/time;
+concept pressure = force/area;
+concept charge = current * time;
+concept voltage = power / current;
+concept capacitance = charge / voltage;
+concept resistance = voltage / current;
+concept conductance = 1 / resistance;
+concept magflux = voltage * time;
+concept magfield = magflux / area;
+concept inductance = magflux / current;
+
+//--------------------------------------------------------------------------------------
+// Define standard prefixes as dimensionless units.
+// This allows combined forms like kilo*meter
+
+unit deca  = 10;
+unit hecto = 100;
+unit kilo  = 1000;
+unit mega  = kilo * kilo;
+unit giga  = kilo * mega;
+unit tera  = kilo * giga;
+unit peta  = kilo * tera;
+unit exa   = kilo * peta;
+unit zetta = kilo * exa;
+unit yotta = kilo * zetta;
+
+unit deci  = 1/10;
+unit centi = 1/100;
+unit milli = 1/1000;
+unit micro = milli * milli;
+unit nano  = milli * micro;
+unit pico  = milli * nano;
+unit femto = milli * pico;
+unit atto  = milli * femto;
+unit zepto = milli * atto;
+unit yocto = milli * zepto;
+
+//--------------------------------------------------------------------------------------
+// Useful mathematical constants/units.
+
+unit pi = 3.14159265358979323846;
+unit e  = exp(1);
+unit radian = 1;
+unit degree = (pi/180) * radian;
+unit arcmin = degree / 60;
+unit arcsec = arcmin / 60;
+
+//--------------------------------------------------------------------------------------
+// Fundamental physical constants.
+
+unit lightspeed = 299792458 * meter / second;   // the exact speed of light, by definition
+unit grav = 6.67428e-11 * meter^3 * kilogram^(-1) * second^(-2);    // universal gravitational constant
+unit hbar = 1.0545716e-34 * kilogram * meter^2 / second;    // Dirac or "reduced Planck" constant
+
+//--------------------------------------------------------------------------------------
+// Time/frequency units.
+
+unit Hz = 1/second;
+
+unit minute = 60 * second;
+unit hour   = 60 * minute;
+unit day    = 24 * hour;
+
+//--------------------------------------------------------------------------------------
+// Length units.
+
+unit mm = milli * meter;
+unit cm = centi * meter;
+unit km = kilo * meter;
+unit inch = (254/10000) * meter;
+unit foot = 12 * inch;
+unit yard = 3 * foot;
+unit mile = 1760 * yard;
+
+unit angstrom = nano * meter / 10;
+unit fermi = femto * meter;
+unit au = 149597870700 * meter;         // astronomical unit : http://www.iau.org/static/resolutions/IAU2012_English.pdf
+unit parsec = 3.0856776e+16 * meter;
+unit ly = lightspeed * (365.25 * day);  // light-year
+
+//--------------------------------------------------------------------------------------
+// Area, volume units.
+
+unit mL = cm^3;             // a milliliter is the same as a cubic centimeter
+unit liter = kilo * mL;
+
+unit hectare = 10000 * meter^2;
+unit acre = 43560 * foot^2;
+
+unit tsp  = 4.9289216 * milli * liter;  // teaspoon
+unit tbsp = 3 * tsp;                    // tablespoon
+unit floz = 2 * tbsp;                   // fluid ounce
+unit cup = 8 * floz;
+unit pint = 2 * cup;
+unit quart = 2 * pint;
+unit gallon = 4 * quart;
+
+//--------------------------------------------------------------------------------------
+// Mass, force, pressure, energy units.
+
+unit gram = kilogram / kilo;
+unit newton = kilogram * meter * second^(-2);
+unit pascal = newton * meter^(-2);
+unit bar = 100000 * pascal;
+unit joule  = newton * meter;
+unit watt   = joule / second;
+
+unit dyne = gram * cm / second^2;
+unit erg = dyne * cm;
+
+unit lbm = 0.45359237 * kilogram;       // pound mass
+unit lbf = 4.4482216 * newton;          // pound force
+unit slug = lbf * second^2 / foot;      // slug (mass)
+unit btu = 1055.0559 * joule;           // British thermal unit
+unit hp = 550 * foot * lbf / second;    // horsepower
+
+//--------------------------------------------------------------------------------------
+// Electrical units.
+
+unit coulomb = ampere * second;
+unit volt = watt / ampere;
+unit farad = coulomb / volt;
+unit ohm = volt / ampere;
+unit siemens = 1/ohm;
+unit weber = volt * second;
+unit tesla = weber / meter^2;
+unit henry = weber / ampere;
+
+unit echarge = 1.602176565e-19 * coulomb;       // elementary charge of electron/proton
+unit electronmass = 9.1093826e-31 * kilogram;   // electron rest mass
+unit protonmass   = 1.6726217e-27 * kilogram;   // proton rest mass
+
+
+
 
