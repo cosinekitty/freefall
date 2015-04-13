@@ -986,7 +986,7 @@ let rec ExpressionConcept context expr =
 and FindSolitaireConcept context token =
     match FindSymbolEntry context token with
     | VariableEntry(_,concept) -> concept
-    | ConceptEntry(concept) -> concept
+    | ConceptEntry(concept) -> SyntaxError token "Not allowed to use concept name in an expression."
     | UnitEntry(PhysicalQuantity(_,concept)) -> concept
     | AssignmentEntry(expr) -> ExpressionConcept context expr
     | MacroEntry(_) -> SyntaxError token "Attempt to use macro name without parenthesized argument list."
