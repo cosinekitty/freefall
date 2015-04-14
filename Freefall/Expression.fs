@@ -9,10 +9,26 @@ open Scanner
 exception FreefallRuntimeException of string
 exception UnexpectedEndException of option<string>       // Some(filename) or None
 
+let MinConvertibleBigInteger = new BigInteger(System.Int32.MinValue + 1)        // tricky: avoid two's complement bug: -(-2147483648) = -2147483648!  Freaky!
+let MaxConvertibleBigInteger = new BigInteger(System.Int32.MaxValue)
+let CanConvertBigInteger big = (big >= MinConvertibleBigInteger) && (big <= MaxConvertibleBigInteger) 
+
 type Number = 
     | Rational of BigInteger * BigInteger
     | Real of float
     | Complex of Complex
+
+let IsNumberEqualToInteger n x =
+    match x with
+    | Rational(numer,denom) -> (numer = n) && (denom.IsOne)      // assumes rational was created using MakeRational to normalize
+    | Real re -> re = (float n)
+    | Complex(c) -> (c.Imaginary = 0.0) && (c.Real = (float n))
+
+let IsNumberZero x =        // could use (IsNumberEqualToInteger 0 x), but this is a little more efficient
+    match x with
+    | Rational(numer,denom) -> numer.IsZero
+    | Real re -> re = 0.0
+    | Complex(c) -> (c.Imaginary = 0.0) && (c.Real = 0.0)
 
 let NegateNumber number =
     match number with
@@ -76,11 +92,28 @@ let rec MultiplyNumbers anum bnum =
     | (Complex(c), Complex(d)) -> Complex(c*d)
 
 let PowerNumbers anum bnum =
+    // Get this nasty special case out of the way first.
+    if (IsNumberZero anum) && (IsNumberZero bnum) then
+        raise (FreefallRuntimeException "Cannot evaluate 0^0.")
+
     match (anum, bnum) with
     | (Rational(an,ad), Rational(bn,bd)) ->
-        let a = (float an) / (float ad)
-        let b = (float bn) / (float bd)
-        Real(System.Math.Pow(a,b))
+        if bd.IsOne && (CanConvertBigInteger bn) then
+            // We can raise any rational to any 32-bit integer power with an exact rational result.
+            // BigInteger supports non-negative 32-bit signed exponents only.
+            // Raising to any negative power just means we need to take a reciprocal when we are done.
+            // (an/ad)^b = (an)^b / (ad)^b          if   b = 0, 1, 2, ...
+            // (an/ad)^b = (ad)^(-b) / (an)^(-b)    if b = -1, -2, ...
+            let intpow = int bn
+            if intpow < 0 then
+                Rational(BigInteger.Pow(ad, -intpow), BigInteger.Pow(an, -intpow))
+            else
+                Rational(BigInteger.Pow(an, intpow), BigInteger.Pow(ad, intpow))                
+        else
+            // Any nonrational (or very large) power requires numerical approximation.
+            let a = (float an) / (float ad)
+            let b = (float bn) / (float bd)
+            Real(System.Math.Pow(a,b))
     | (Rational(an,ad), Real(b)) ->
         let a = (float an) / (float ad)
         Real(System.Math.Pow(a,b))
@@ -214,14 +247,6 @@ let IntegerQuantity n =
         PhysicalQuantity((IntegerNumber n), Dimensionless)
 
 let NegativeOneQuantity = IntegerQuantity -1
-
-let IsNumberEqualToInteger n x =
-    match x with
-    | Rational(numer,denom) -> (numer = n) && (denom.IsOne)      // assumes rational was created using MakeRational to normalize
-    | Real re -> re = (float n)
-    | Complex(c) -> (c.Imaginary = 0.0) && (c.Real = (float n))
-
-let IsNumberZero = IsNumberEqualToInteger BigInteger.Zero
 
 let InvertNumber number =        // calculate the numeric reciprocal
     if IsNumberZero number then
