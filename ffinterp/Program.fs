@@ -105,3 +105,7 @@ let main argv =
         | UnexpectedEndException(Some(filename)) ->
             printfn "Syntax error: unexpected end of file '%s'" filename
             1
+
+        | :? System.IO.FileNotFoundException as ex ->
+            printfn "ERROR: %s" ex.Message
+            1
