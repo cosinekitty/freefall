@@ -180,7 +180,7 @@ let RunStandardScript context filename =
         let mutable scan = TokenizeFile filepath
         while MoreTokensIn scan do
             let statement, scan2 = ParseStatement scan
-            ExecuteStatement context statement
+            ExecuteStatement context statement false
             scan <- scan2
 
 //-------------------------------------------------------------------------------------------------

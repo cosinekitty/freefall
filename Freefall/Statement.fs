@@ -201,7 +201,7 @@ and TransformEquations context expr =
 
 //--------------------------------------------------------------------------------------------------
 
-let ExecuteStatement context statement =
+let ExecuteStatement context statement shouldReportAssignments =
     match statement with
 
     | Assignment {TargetName=target; Expr=rawexpr;} ->
@@ -211,9 +211,9 @@ let ExecuteStatement context statement =
         match target with
         | Some(assignToken) -> 
             DefineSymbol context assignToken (AssignmentEntry(expr))
-            context.AssignmentHook (Some(assignToken.Text)) refIndex expr
+            if shouldReportAssignments then context.AssignmentHook (Some(assignToken.Text)) refIndex expr
         | None ->
-            context.AssignmentHook None refIndex expr
+            if shouldReportAssignments then context.AssignmentHook None refIndex expr
         AppendNumberedExpression context expr
 
     | ConceptDef {ConceptName=idtoken; Expr=expr;} ->

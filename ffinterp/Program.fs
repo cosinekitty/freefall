@@ -25,7 +25,7 @@ let ExecuteStatements context tokenlist =
     while MoreTokensIn scan do
         let statement, scan2 = ParseStatement scan
         printfn "Statement: %s" (FormatStatement statement)
-        ExecuteStatement context statement
+        ExecuteStatement context statement true
         scan <- scan2
 
 let PromptLine (lineNumber:int) =
