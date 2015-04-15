@@ -442,20 +442,87 @@ let FormatQuantity (PhysicalQuantity(scalar,concept)) =
         else
             scalarText + "*" + conceptText
 
-let rec FormatExpression expr =
+//-----------------------------------------------------------------------------------------------------
+// The "raw" expression formatter displays an expression showing its actual representation.
+
+let rec FormatExpressionRaw expr =
     match expr with
     | Amount quantity -> FormatQuantity quantity
     | Solitaire(token) -> token.Text
-    | Functor(funcName, argList) -> funcName.Text + "(" + FormatExprList argList + ")"
-    | Negative arg -> "neg(" + FormatExpression arg + ")"
-    | Reciprocal arg -> "recip(" + FormatExpression arg + ")"
-    | Sum terms -> "sum(" + FormatExprList terms + ")"
-    | Product factors -> "prod(" + FormatExprList factors + ")"
-    | Power(a,b) -> "pow(" + FormatExpression a + "," + FormatExpression b + ")"
-    | Equals(a,b) -> FormatExpression a + " = " + FormatExpression b
+    | Functor(funcName, argList) -> funcName.Text + "(" + FormatExprListRaw argList + ")"
+    | Negative arg -> "neg(" + FormatExpressionRaw arg + ")"
+    | Reciprocal arg -> "recip(" + FormatExpressionRaw arg + ")"
+    | Sum terms -> "sum(" + FormatExprListRaw terms + ")"
+    | Product factors -> "prod(" + FormatExprListRaw factors + ")"
+    | Power(a,b) -> "pow(" + FormatExpressionRaw a + "," + FormatExpressionRaw b + ")"
+    | Equals(a,b) -> FormatExpressionRaw a + " = " + FormatExpressionRaw b
     | NumExprRef(_,i) -> "#" + i.ToString()
     | PrevExprRef(_) -> "#"
     | Del(token,order) -> (String.replicate order "@") + token.Text
+
+and FormatExprListRaw exprlist =
+    match exprlist with
+    | [] -> ""
+    | [single] -> FormatExpressionRaw single
+    | first :: rest -> FormatExpressionRaw first + "," + FormatExprListRaw rest
+
+//-----------------------------------------------------------------------------------------------------
+// The normal expression formatter displays a more conventional notation.
+
+let rec FormatExpression expr =
+    FormatExpressionPrec expr Precedence_Or
+
+and ExpressionPrecedence expr =
+    match expr with
+    | Amount(_) -> Precedence_Atom
+    | Solitaire(_) -> Precedence_Atom
+    | Functor(_,_) -> Precedence_Atom
+    | Negative(_) -> Precedence_Neg
+    | Reciprocal(_) -> Precedence_Mul
+    | Sum(terms) -> 
+        match terms with
+        | [] -> Precedence_Atom                        // formatted as "0"
+        | [single] -> ExpressionPrecedence single      // single is rendered by itself
+        | _ -> Precedence_Add                          // a+b+c+...
+    | Product(factors) -> 
+        match factors with
+        | [] -> Precedence_Atom                         // formatted as "1"
+        | [single] -> ExpressionPrecedence single       // single is rendered by itself
+        | _ -> Precedence_Mul                           // a*b*c*...
+    | Power(_,_) -> Precedence_Pow
+    | Equals(_,_) -> Precedence_Rel
+    | NumExprRef(_,_) -> Precedence_Atom
+    | PrevExprRef(_) -> Precedence_Atom
+    | Del(_,_) -> Precedence_Atom
+
+and FormatExpressionPrec expr parentPrecedence =
+    let innerText =
+        match expr with
+        | Amount quantity -> FormatQuantity quantity
+        | Solitaire(token) -> token.Text
+        | Functor(funcName, argList) -> funcName.Text + "(" + FormatExprList argList + ")"
+        | Negative arg -> "-" + FormatExpressionPrec arg Precedence_Neg
+        | Reciprocal arg -> "1/" + FormatExpressionPrec arg Precedence_Mul
+        | Sum terms ->
+            match terms with
+            | [] -> "0"
+            | [single] -> FormatExpression single
+            | first :: rest -> FormatExpressionPrec first Precedence_Add + JoinRemainingTerms rest
+        | Product factors ->
+            match factors with
+            | [] -> "1"
+            | [single] -> FormatExpression single
+            | first :: rest -> FormatExpressionPrec first Precedence_Mul + JoinRemainingFactors rest
+        | Power(a,b) -> FormatExpressionPrec a Precedence_Pow + "^" + FormatExpressionPrec b Precedence_Pow
+        | Equals(a,b) -> FormatExpressionPrec a Precedence_Rel + " = " + FormatExpressionPrec b Precedence_Rel
+        | NumExprRef(_,i) -> "#" + i.ToString()
+        | PrevExprRef(_) -> "#"
+        | Del(token,order) -> (String.replicate order "@") + token.Text
+
+    if parentPrecedence < ExpressionPrecedence expr then
+        innerText
+    else
+        "(" + innerText + ")"
 
 and FormatExprList exprlist =
     match exprlist with
@@ -463,11 +530,37 @@ and FormatExprList exprlist =
     | [single] -> FormatExpression single
     | first :: rest -> FormatExpression first + "," + FormatExprList rest
 
+and JoinRemainingTerms exprlist =
+    // sum(a, b, c) -->  JoinRemainingTerms[b;c]
+    // If b is Negative(x), then we want to format it is as subtraction, not adding a neg.
+    // If b is Product(a,x) where a is negative, we want to show "- abs(a)*x", etc.
+    match exprlist with
+    | [] -> ""
+    | first :: rest -> RemainingTermText first + JoinRemainingTerms rest
+
+and RemainingTermText expr =
+    let rtext = FormatExpressionPrec expr Precedence_Add
+    if rtext.StartsWith("-") then
+        rtext
+    else
+        "+" + rtext
+
+and JoinRemainingFactors exprlist =
+    match exprlist with 
+    | [] -> ""
+    | first :: rest -> RemainingFactorText first + JoinRemainingFactors rest
+
+and RemainingFactorText expr =
+    match expr with
+    | Reciprocal(arg) -> "/" + FormatExpressionPrec arg Precedence_Mul
+    | Negative(arg) -> "*(-" + FormatExpressionPrec arg Precedence_Neg + ")"
+    | _ -> "*" + FormatExpressionPrec expr Precedence_Mul
+    
 //-----------------------------------------------------------------------------------------------------
 //  Context provides mutable state needed to execute a series of Freefall statements.
 //  Some statements will define units and types of variables that are subsequently referenced.
 //  Executed statements will accumulate references that can be used by later statements.
-//  Some statements "forget" things statement references on purpose. 
+//  Some statements "forget" statement references on purpose. 
 
 type Macro = {
     Expander: Token -> list<Expression> -> Expression;
