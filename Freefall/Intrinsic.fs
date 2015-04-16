@@ -42,36 +42,13 @@ let DiffVariableToken context expr =
 
 let DiffVariableName context expr = (DiffVariableToken context expr).Text
 
-let DerivMacroExpander context macroToken argList =
-    // deriv(expr, var1, ...)
-    // First variable is required, as it is the "primary" variable.
-    // Any others are treated as functions of the first variable.
+let DiffDerivMacroExpander derivKind context macroToken argList =
+    // deriv(expr, var1, ...)  or diff(expr, var1, ...)
     match argList with
-    | expr :: var1expr :: rest ->
-        let var1token = DiffVariableToken context var1expr
-        let restnames = List.map (DiffVariableName context) rest
-        let diff = TakeDifferential context (var1token.Text :: restnames) expr
-        match diff with
-        | Equals(ldiff,rdiff) ->
-            // Taking the derivative of an equation requires both sides to be handled separately.
-            let lderiv = Product([ldiff; Reciprocal(Del(var1token,1))])
-            let rderiv = Product([rdiff; Reciprocal(Del(var1token,1))])
-            let lsimp = Simplify context lderiv
-            let rsimp = Simplify context rderiv
-            Equals(lsimp,rsimp)
-        | _ ->
-            let deriv = Product([diff; Reciprocal(Del(var1token,1))])
-            Simplify context deriv
-    | _ -> SyntaxError macroToken (sprintf "Expected '%s(expr, var {, ...})'" macroToken.Text)
-
-let DifferentialMacroExpander context macroToken argList =
-    // diff(expr, vars...)
-    match argList with
-    | [] -> SyntaxError macroToken (sprintf "Expected %s(expr, vars...)" macroToken.Text)
-    | [expr] -> SyntaxError macroToken "Must have at least one variable after 'diff(expr,'"
+    | [] | [_] -> SyntaxError macroToken (sprintf "Expected %s(expr, vars...)" macroToken.Text)
     | expr :: varlist ->
         let varnames = List.map (DiffVariableName context) varlist
-        TakeDifferential context varnames expr |> Simplify context
+        TakeDifferential derivKind context varnames expr |> Simplify context
 
 let AssertIdenticalMacroExpander context macroToken argList =
     // asserti(expr1,expr2)
@@ -86,8 +63,8 @@ let AssertIdenticalMacroExpander context macroToken argList =
 let IntrinsicMacros =
     [
         ("asserti", AssertIdenticalMacroExpander);
-        ("deriv",   DerivMacroExpander);
-        ("diff",    DifferentialMacroExpander);
+        ("deriv",   DiffDerivMacroExpander Derivative);
+        ("diff",    DiffDerivMacroExpander Differential);
         ("eval",    EvalMacroExpander);
         ("simp",    SimplifyMacroExpander);
     ]
@@ -149,11 +126,11 @@ let Function_Exp = { new IFunctionHandler with
                 Functor(funcToken, [arg])
         | _ -> FailExactArgCount "Function" 1 argList.Length funcToken
 
-    member this.Differential context varNameList funcToken argList =
+    member this.Differential derivKind context varNameList funcToken argList =
         // d(exp(z)) = exp(z) dz
         match argList with
         | [arg] ->
-            let dz = TakeDifferential context varNameList arg
+            let dz = TakeDifferential derivKind context varNameList arg
             let exp_z = Functor(funcToken, argList)
             Product[exp_z; dz]
         | _ -> FailExactArgCount "Function" 1 argList.Length funcToken
@@ -210,11 +187,11 @@ let Function_Ln = { new IFunctionHandler with
                 | _ -> Functor(funcToken, [arg])
         | _ -> FailExactArgCount "Function" 1 argList.Length funcToken
 
-    member this.Differential context varNameList funcToken argList =
+    member this.Differential derivKind context varNameList funcToken argList =
         // d(ln(z)) = dz/z
         match argList with
         | [z] ->
-            let dz = TakeDifferential context varNameList z
+            let dz = TakeDifferential derivKind context varNameList z
             Product[dz; Reciprocal(z)]
         | _ -> FailExactArgCount "Function" 1 argList.Length funcToken
             
@@ -271,12 +248,12 @@ let Function_Cos = { new IFunctionHandler with
                 Functor(funcToken, [arg])
         | _ -> FailExactArgCount "Function" 1 argList.Length funcToken
 
-    member this.Differential context varNameList funcToken argList =
+    member this.Differential derivKind context varNameList funcToken argList =
         // d(cos(z)) = -sin(z)dz
         match argList with
         | [z] ->
             let sin_z = MakeFunction "sin" [z]
-            let dz = TakeDifferential context varNameList z
+            let dz = TakeDifferential derivKind context varNameList z
             Product[Negative(sin_z); dz]
         | _ -> FailExactArgCount "Function" 1 argList.Length funcToken
             
@@ -333,12 +310,12 @@ let Function_Sin = { new IFunctionHandler with
                 Functor(funcToken, [arg])
         | _ -> FailExactArgCount "Function" 1 argList.Length funcToken
 
-    member this.Differential context varNameList funcToken argList =
+    member this.Differential derivKind context varNameList funcToken argList =
         // d(sin(z)) = cos(z)dz
         match argList with
         | [z] ->
             let cos_z = MakeFunction "cos" [z]
-            let dz = TakeDifferential context varNameList z
+            let dz = TakeDifferential derivKind context varNameList z
             Product[cos_z; dz]
         | _ -> FailExactArgCount "Function" 1 argList.Length funcToken
             
