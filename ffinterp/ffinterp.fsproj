@@ -14,7 +14,12 @@
     <OutputPath>bin\Debug</OutputPath>
     <ErrorReport>prompt</ErrorReport>
     <Externalconsole>true</Externalconsole>
-    <Commandlineparameters>/home/don/freefall/ffinterp/tests/speed.ff</Commandlineparameters>
+    <Commandlineparameters>-</Commandlineparameters>
+    <EnvironmentVariables>
+      <EnvironmentVariables>
+        <Variable name="FREEFALL_STANDARD_PATH" value="/home/don/freefall/standard" />
+      </EnvironmentVariables>
+    </EnvironmentVariables>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <OutputPath>bin\Release</OutputPath>
