@@ -14,6 +14,7 @@ asserti(deriv(exp(a^2),a), 2*a*exp(a^2));
 asserti(diff(ln(a),a), @a/a);
 asserti(deriv(ln(exp(z)),z), 1);
 asserti(simp(ln(exp(a))), a);
+asserti(simp(-a*-a*-b*-a),a^3*b);
 
 // Expression formatter tests.
 assertf("123", simp(122+1));

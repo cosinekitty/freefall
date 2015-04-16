@@ -967,6 +967,18 @@ let MergeLikeFactors context termlist =
 
 //-----------------------------------------------------------------------------------------------
 
+let rec FoldNegatives factorlist =
+    match factorlist with
+    | [] -> 1, []
+    | Negative(x) :: rest ->
+        let polarity, rfold = FoldNegatives rest
+        -polarity, x :: rfold
+    | first :: rest ->
+        let polarity, rfold = FoldNegatives rest
+        polarity, first :: rfold
+
+//-----------------------------------------------------------------------------------------------
+
 let FailNonFunction token found =
     SyntaxError token (sprintf "Expected function but found %s" found)
 
@@ -1030,14 +1042,22 @@ let rec SimplifyStep context expr =
             SimplifyProductArgs (List.map (SimplifyStep context) factorlist) 
             |> CancelOppositeFactors context
             |> MergeConstants MultiplyQuantities
-            |> MergeLikeFactors context
-        if List.exists IsZeroExpression simpfactors then
+
+        let polarity, noNegFactors = FoldNegatives simpfactors
+        let mergedAbsFactors = MergeLikeFactors context noNegFactors
+
+        if List.exists IsZeroExpression mergedAbsFactors then
             ZeroAmount
         else
-            match simpfactors with
-            | [] -> UnityAmount
-            | [factor] -> factor
-            | _ -> Product simpfactors
+            let absProduct =
+                match mergedAbsFactors with
+                | [] -> UnityAmount
+                | [factor] -> factor
+                | _ -> Product mergedAbsFactors
+            if polarity < 0 then
+                Negative(absProduct)
+            else
+                absProduct
 
     | Power(x,y) ->
         let sx = SimplifyStep context x
