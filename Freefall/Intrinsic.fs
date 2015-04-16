@@ -196,7 +196,9 @@ let Function_Ln = { new IFunctionHandler with
             if IsUnityExpression arg then
                 ZeroAmount      // ln(1) = 0
             else 
-                Functor(funcToken, [arg])
+                match arg with
+                | Functor({Text="exp"}, [z]) -> z     // ln(exp(z)) ==> z
+                | _ -> Functor(funcToken, [arg])
         | _ -> FailExactArgCount "Function" 1 argList.Length funcToken
 
     member this.Differential context varNameList funcToken argList =

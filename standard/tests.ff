@@ -12,6 +12,8 @@ asserti(eval(12*inch), eval(foot));
 asserti(deriv(exp(a*a),a), 2*a*exp(a^2));
 asserti(deriv(exp(a^2),a), 2*a*exp(a^2));
 asserti(diff(ln(a),a), @a/a);
+asserti(deriv(ln(exp(z)),z), 1);
+asserti(simp(ln(exp(a))), a);
 
 // Expression formatter tests.
 assertf("123", simp(122+1));
