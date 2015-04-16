@@ -51,8 +51,17 @@ let DerivMacroExpander context macroToken argList =
         let var1token = DiffVariableToken context var1expr
         let restnames = List.map (DiffVariableName context) rest
         let diff = TakeDifferential context (var1token.Text :: restnames) expr
-        let deriv = Product([diff; Reciprocal(Del(var1token,1))])
-        Simplify context deriv
+        match diff with
+        | Equals(ldiff,rdiff) ->
+            // Taking the derivative of an equation requires both sides to be handled separately.
+            let lderiv = Product([ldiff; Reciprocal(Del(var1token,1))])
+            let rderiv = Product([rdiff; Reciprocal(Del(var1token,1))])
+            let lsimp = Simplify context lderiv
+            let rsimp = Simplify context rderiv
+            Equals(lsimp,rsimp)
+        | _ ->
+            let deriv = Product([diff; Reciprocal(Del(var1token,1))])
+            Simplify context deriv
     | _ -> SyntaxError macroToken (sprintf "Expected '%s(expr, var {, ...})'" macroToken.Text)
 
 let DifferentialMacroExpander context macroToken argList =
