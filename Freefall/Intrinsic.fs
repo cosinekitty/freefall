@@ -153,9 +153,68 @@ let Function_Exp = { new IFunctionHandler with
         SimpleEquationDistributor funcToken leftList rightList
 }
 
+let LnReal x =
+    if x < 0.0 then
+        PhysicalQuantity(Complex(Complex.Log(new Complex(x, 0.0))), Dimensionless)
+    else
+        PhysicalQuantity(Real(System.Math.Log(x)), Dimensionless)
+
+let Function_Ln = { new IFunctionHandler with
+
+    member this.EvalRange funcToken rangelist =
+        match rangelist with
+        | [range] -> ComplexRange       // ln(-1) is complex
+        | _ -> FailExactArgCount "Function" 1 rangelist.Length funcToken
+
+    member this.EvalConcept context funcToken argList =
+        match argList with
+        | [arg] -> 
+            let argConcept = ExpressionConcept context arg
+            if IsConceptDimensionless argConcept then
+                Dimensionless
+            else
+                SyntaxError funcToken ("ln() requires a dimensionless argument, but found " + FormatConcept argConcept)
+        | _ -> FailExactArgCount "Function" 1 argList.Length funcToken
+
+    member this.EvalNumeric context funcToken qlist =
+        match qlist with
+            | [PhysicalQuantity(number,concept)] -> 
+                if (IsNumberZero number) || (concept = Zero) then
+                    SyntaxError funcToken "Cannot evaluate ln(0)."
+                elif concept <> Dimensionless then
+                    SyntaxError funcToken ("ln() requires a dimensionless argument, but found " + FormatConcept concept)
+                else
+                    match number with
+                    | Rational(a,b) -> LnReal ((float a) / (float b))
+                    | Real(x) -> LnReal x
+                    | Complex(z) -> PhysicalQuantity(Complex(Complex.Log(z)), Dimensionless)
+            | _ -> FailExactArgCount "Function" 1 qlist.Length funcToken
+
+    member this.SimplifyStep context funcToken argList =
+        match argList with
+        | [arg] -> 
+            if IsUnityExpression arg then
+                ZeroAmount      // ln(1) = 0
+            else 
+                Functor(funcToken, [arg])
+        | _ -> FailExactArgCount "Function" 1 argList.Length funcToken
+
+    member this.Differential context varNameList funcToken argList =
+        // d(ln(z)) = dz/z
+        match argList with
+        | [z] ->
+            let dz = TakeDifferential context varNameList z
+            Product[dz; Reciprocal(z)]
+        | _ -> FailExactArgCount "Function" 1 argList.Length funcToken
+            
+    member this.DistributeAcrossEquation context funcToken leftList rightList =
+        SimpleEquationDistributor funcToken leftList rightList
+}
+
 let IntrinsicFunctions = 
     [
         ("exp", Function_Exp);
+        ("ln",  Function_Ln);
     ]
 
 //-------------------------------------------------------------------------------------------------

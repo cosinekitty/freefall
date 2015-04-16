@@ -1,10 +1,22 @@
 // tests.ff - Unit tests for Freefall interpreter.
 
-var c: complex;
+var a, b, c, d: complex;
 var x, y, z: real distance;
 
+// Simplifier and identity tests.
 asserti(0, simp(c-c));
 asserti(x+y, y+x);
 asserti(x*y, y*x);
 asserti(x*(x+y) + z*mile*c, c*z*mile + (y+x)*x);
+asserti(eval(12*inch), eval(foot));
+asserti(deriv(exp(a*a),a), 2*a*exp(a^2));
+asserti(deriv(exp(a^2),a), 2*a*exp(a^2));
+asserti(diff(ln(a),a), @a/a);
+
+// Expression formatter tests.
 assertf("123", simp(122+1));
+assertf("3+4", sum(3,4));
+assertf("3+4", 3+4);
+assertf("3-4", sum(3,-4));
+assertf("3-4", 3-4);
+assertf("(a+b)*(c-d)/(x+y)", (a+b)*(c-d)/(x+y));

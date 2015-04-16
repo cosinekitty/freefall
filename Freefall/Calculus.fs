@@ -6,6 +6,9 @@ open System.Numerics
 open Freefall.Expr
 open Freefall.Scanner
 
+let MakeFunction name arglist =
+    Functor({Text=name; Precedence=Precedence_Atom; Kind=TokenKind.Identifier; Origin=None; ColumnNumber = -1}, arglist)
+
 let IsInVariableList token varNameList =
     List.exists (fun v -> v = token.Text) varNameList
 
@@ -40,8 +43,12 @@ let rec TakeDifferential context varNameList expr =
         Sum(List.map (TakeDifferential context varNameList) termlist)
     | Product(factorlist) ->
         Sum(ProductDifferentialTerms context varNameList factorlist)
-    | Power(a,b) ->
-        ExpressionError expr "Differential of power expressions not yet implemented."   // FIXFIXFIX
+    | Power(v,w) ->
+        // d(v^w) = (v^w) * ((w/v)*dv + ln(v)*dw)
+        let dv = TakeDifferential context varNameList v
+        let dw = TakeDifferential context varNameList w
+        let ln_v = MakeFunction "ln" [v]
+        Product[expr; Sum[Product[w;Reciprocal(v);dv]; Product[ln_v;dw]]]
     | Equals(a,b) ->
         // d(a=b) ==> da = db
         let da = TakeDifferential context varNameList a
