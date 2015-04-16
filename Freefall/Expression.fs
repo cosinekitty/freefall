@@ -1062,11 +1062,15 @@ let rec SimplifyStep context expr =
     | Power(x,y) ->
         let sx = SimplifyStep context x
         let sy = SimplifyStep context y
-        // FIXFIXFIX - could use more simplification and validation rules here
-        if (IsZeroExpression sx) && (IsZeroExpression sy) then
-            ExpressionError expr "Cannot evaluate 0^0."
+        if IsZeroExpression sy then
+            if IsZeroExpression sx then
+                ExpressionError expr "Cannot evaluate 0^0."
+            else
+                UnityAmount
+        elif IsUnityExpression sy then
+            sx
         else
-            Power(sx,sy)
+            Power(sx,sy)            
 
     | Equals(a,b) ->
         Equals((SimplifyStep context a), (SimplifyStep context b))
@@ -1172,14 +1176,14 @@ and ProductConcept context factors =
     | first::rest -> MultiplyConcepts (ExpressionConcept context first) (ProductConcept context rest)
 
 and PowerConcept context x y =
+    let xConcept = ExpressionConcept context x
     let yConcept = ExpressionConcept context y
     if yConcept = Zero then
-        if yConcept = Zero then
+        if xConcept = Zero then
             ExpressionError y "Cannot raise 0 to 0 power."
         else
             Dimensionless
     elif yConcept = Dimensionless then
-        let xConcept = ExpressionConcept context x
         if IsConceptDimensionless xConcept then     // 0^(-3) is an error, but is dimensionless nontheless
             // If x is dimensionless, then y may be any dimensionless expression, e.g. 2.7182818^y.
             // A dimensionless value to a dimensionless power is dimensionless.        
