@@ -7,3 +7,4 @@ asserti(0, simp(c-c));
 asserti(x+y, y+x);
 asserti(x*y, y*x);
 asserti(x*(x+y) + z*mile*c, c*z*mile + (y+x)*x);
+assertf("123", simp(122+1));

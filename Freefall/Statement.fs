@@ -25,7 +25,14 @@ type UnitDefinition = {
     Expr : Expression;
 }
 
+type FormatAssertion = {
+    AssertToken : Token;
+    ExpectedFormat : string;
+    Expr : Expression;
+}
+
 type Statement =
+    | AssertFormat of FormatAssertion
     | Assignment of AssignmentStatement
     | ConceptDef of ConceptDefinition
     | DoNothing
@@ -47,6 +54,9 @@ let JoinTokenList = List.fold VarNameFolder ""
 
 let FormatStatement statement =
     match statement with
+
+    | AssertFormat {AssertToken=token; ExpectedFormat=expected; Expr=expr} ->
+        token.Text + "(\"" + expected + "\"," + (FormatExpression expr) + ");"
 
     | Assignment {TargetName=None; Expr=expr;} ->
         (FormatExpression expr) + ";"
@@ -201,11 +211,19 @@ and TransformEquations context expr =
 
 //--------------------------------------------------------------------------------------------------
 
+let PrepareExpression context rawexpr = rawexpr |> ExpandMacros context |> TransformEquations context
+
 let ExecuteStatement context statement shouldReportAssignments =
     match statement with
 
+    | AssertFormat {AssertToken=token; ExpectedFormat=expected; Expr=rawexpr} ->
+        let expr = PrepareExpression context rawexpr
+        let actual = FormatExpression expr
+        if expected <> actual then
+            SyntaxError token ("Format assertion failure:\nexpected = '" + expected + "'\nactual   = '" + actual + "'")
+
     | Assignment {TargetName=target; Expr=rawexpr;} ->
-        let expr = rawexpr |> ExpandMacros context |> TransformEquations context
+        let expr = PrepareExpression context rawexpr
         ValidateExpressionConcept context expr
         let refIndex = context.NumberedExpressionList.Count
         match target with
@@ -230,7 +248,7 @@ let ExecuteStatement context statement shouldReportAssignments =
         List.iter (DeleteNamedExpression context) idlist
 
     | Probe(rawexpr) ->
-        let expr = rawexpr |> ExpandMacros context |> TransformEquations context
+        let expr = PrepareExpression context rawexpr
         let range = ExpressionNumericRange context expr
         let concept = ExpressionConcept context expr
         context.ProbeHook expr range concept

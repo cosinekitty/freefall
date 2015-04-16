@@ -31,6 +31,20 @@ let ExpectToken text scan =
 
 let ExpectSemicolon = ExpectToken ";"
 
+let ExtractStringLiteralValue token =
+    if token.Kind = TokenKind.StringLiteral then
+        if IsStringLiteralText token.Text then
+            token.Text.Substring(1, token.Text.Length-2)    // remove surrounding quotes
+        else
+            SyntaxError token "Internal error - invalid string literal was scanned."
+    else
+        SyntaxError token "Expected a string literal."
+
+let ExpectStringLiteral scan =
+    match RequireToken scan with
+    | ltoken :: scan2 -> (ExtractStringLiteralValue ltoken), scan2
+    | _ -> Impossible ()
+
 let RequireExactlyOneArg funcName argList =
     match argList with
     | [arg] -> arg
@@ -268,6 +282,16 @@ let ParseStatement scan =
 
     | {Text=";";} :: rscan -> 
         DoNothing, rscan
+
+    | ({Text="assertf";} as atoken) :: scan2 ->
+        // assertf ::= "assertf" "(" str "," expr ")" ";"
+        let scan3 = ExpectToken "(" scan2
+        let literal, scan4 = ExpectStringLiteral scan3
+        let scan5 = ExpectToken "," scan4
+        let expr, scan6 = ParseExpression scan5
+        let scan7 = ExpectToken ")" scan6
+        let scan8 = ExpectToken ";" scan7
+        AssertFormat {AssertToken=atoken; ExpectedFormat=literal; Expr=expr}, scan8
 
     | ({Text="concept"} as conceptKeywordToken) :: scan2 ->
         // concept ::= "concept" ident "=" expr ";"

@@ -1,5 +1,6 @@
     module ::= { statement }    
-    statement ::=   concept | unit | assignment | vardecl | forget | probe | ";"
+    statement ::=  assertf | concept | unit | assignment | vardecl | forget | probe | ";"
+    assertf ::= "assertf" "(" str "," expr ")" ";"
     concept ::= "concept" ident "=" expr ";"
     unit ::= "unit" ident "=" expr ";"
     assignment ::= [ ident ":=" ] expr ";"    
@@ -22,4 +23,5 @@
  9  numeric ::= /[0-9]+(\.[0-9]*)?([eE][\+\-]?[0-9]+)?i?/
  9  ident ::= /[A-Za-z_][A-Za-z_0-9]*/
  9  eref ::= /#[0-9]*/
+    str ::= /"[^"]*"/
 

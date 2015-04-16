@@ -8,6 +8,7 @@ let TokenRegex =
         | [0-9]+(\.[0-9]*)?([eE][\+\-]?[0-9]+)?i?   # real or imaginary constant with optional scientific notation
         | \#[0-9]*                                  # eref: reference to prior expression
         | //[^\n]*                                  # comment -- eats the rest of the line
+        | "[^"]*"                                   # string literal
         | <= | >= | !=                              # multi-character comparison operators
         | :=                                        # assignment operator
         | \S                                        # all other non-whitespace single chars are tokens
@@ -23,6 +24,7 @@ type TokenKind =
     | IntegerLiteral
     | RealFloatLiteral
     | ImagFloatLiteral
+    | StringLiteral
     | Punctuation
     | EndOfFile         // sentinel value that lets us report which file we found unexpected EOF in
 
@@ -86,7 +88,16 @@ let IsNumericLiteral (text:string) =
         let c = text.[0]
         (c >= '0') && (c <= '9')
 
-let KeywordTable = Set.ofList(["concept"; "forget"; "probe"; "unit"; "var"])
+let KeywordTable = 
+    Set.ofList [ 
+        "assertf"; 
+        "concept"; 
+        "forget"; 
+        "probe"; 
+        "unit"; 
+        "var"; 
+    ]
+
 let IsKeyword text = Set.contains text KeywordTable 
 
 type NumericRange =         // the set of values a variable, function, etc, is allowed to range over
@@ -113,6 +124,9 @@ let IsRangeName text = Map.containsKey text RangeNameTable
 
 let RangeName r = Map.find r RangeTypeTable
 
+let IsStringLiteralText (text:string) =
+    (text.Length >= 2) && text.StartsWith("\"") && text.EndsWith("\"")
+
 let ClassifyToken text precedence =
     if precedence < Precedence_Atom then
         TokenKind.Operator
@@ -131,6 +145,8 @@ let ClassifyToken text precedence =
             TokenKind.IntegerLiteral
     elif text.StartsWith("#") then
         TokenKind.ExpressionReference
+    elif IsStringLiteralText text then
+        TokenKind.StringLiteral
     else
         TokenKind.Punctuation
 
