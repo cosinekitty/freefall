@@ -213,10 +213,136 @@ let Function_Ln = { new IFunctionHandler with
         SimpleEquationDistributor funcToken leftList rightList
 }
 
+let Function_Cos = { new IFunctionHandler with
+
+    member this.EvalRange funcToken rangelist =
+        match rangelist with
+        | [range] ->
+            match range with
+            | IntegerRange -> RealRange
+            | RationalRange -> RealRange
+            | RealRange -> RealRange
+            | ComplexRange -> ComplexRange
+        | _ -> FailExactArgCount "Function" 1 rangelist.Length funcToken
+
+    member this.EvalConcept context funcToken argList =
+        match argList with
+        | [arg] -> 
+            let argConcept = ExpressionConcept context arg
+            if IsConceptDimensionless argConcept then
+                Dimensionless
+            else
+                SyntaxError funcToken ("cos() requires a dimensionless argument, but found " + FormatConcept argConcept)
+        | _ -> FailExactArgCount "Function" 1 argList.Length funcToken
+
+    member this.EvalNumeric context funcToken qlist =
+        match qlist with
+            | [PhysicalQuantity(number,concept)] -> 
+                if (IsNumberZero number) || (concept = Zero) then
+                    Unity
+                elif concept <> Dimensionless then
+                    SyntaxError funcToken ("cos() requires a dimensionless argument, but found " + FormatConcept concept)
+                else
+                    match number with
+                    | Rational(a,b) -> 
+                        let x = (float a) / (float b)
+                        PhysicalQuantity(Real(System.Math.Cos(x)), Dimensionless)
+                    | Real(x) -> 
+                        PhysicalQuantity(Real(System.Math.Cos(x)), Dimensionless)
+                    | Complex(z) -> 
+                        PhysicalQuantity(Complex(Complex.Cos(z)), Dimensionless)
+            | _ -> FailExactArgCount "Function" 1 qlist.Length funcToken
+
+    member this.SimplifyStep context funcToken argList =
+        match argList with
+        | [arg] -> 
+            if IsZeroExpression arg then
+                UnityAmount      // cos(0) = 1
+            else 
+                Functor(funcToken, [arg])
+        | _ -> FailExactArgCount "Function" 1 argList.Length funcToken
+
+    member this.Differential context varNameList funcToken argList =
+        // d(cos(z)) = -sin(z)dz
+        match argList with
+        | [z] ->
+            let sin_z = MakeFunction "sin" [z]
+            let dz = TakeDifferential context varNameList z
+            Product[Negative(sin_z); dz]
+        | _ -> FailExactArgCount "Function" 1 argList.Length funcToken
+            
+    member this.DistributeAcrossEquation context funcToken leftList rightList =
+        SimpleEquationDistributor funcToken leftList rightList
+}
+
+let Function_Sin = { new IFunctionHandler with
+
+    member this.EvalRange funcToken rangelist =
+        match rangelist with
+        | [range] ->
+            match range with
+            | IntegerRange -> RealRange
+            | RationalRange -> RealRange
+            | RealRange -> RealRange
+            | ComplexRange -> ComplexRange
+        | _ -> FailExactArgCount "Function" 1 rangelist.Length funcToken
+
+    member this.EvalConcept context funcToken argList =
+        match argList with
+        | [arg] -> 
+            let argConcept = ExpressionConcept context arg
+            if IsConceptDimensionless argConcept then
+                Dimensionless
+            else
+                SyntaxError funcToken ("sin() requires a dimensionless argument, but found " + FormatConcept argConcept)
+        | _ -> FailExactArgCount "Function" 1 argList.Length funcToken
+
+    member this.EvalNumeric context funcToken qlist =
+        match qlist with
+            | [PhysicalQuantity(number,concept)] -> 
+                if (IsNumberZero number) || (concept = Zero) then
+                    ZeroQuantity
+                elif concept <> Dimensionless then
+                    SyntaxError funcToken ("sin() requires a dimensionless argument, but found " + FormatConcept concept)
+                else
+                    match number with
+                    | Rational(a,b) -> 
+                        let x = (float a) / (float b)
+                        PhysicalQuantity(Real(System.Math.Sin(x)), Dimensionless)
+                    | Real(x) -> 
+                        PhysicalQuantity(Real(System.Math.Sin(x)), Dimensionless)
+                    | Complex(z) -> 
+                        PhysicalQuantity(Complex(Complex.Sin(z)), Dimensionless)
+            | _ -> FailExactArgCount "Function" 1 qlist.Length funcToken
+
+    member this.SimplifyStep context funcToken argList =
+        match argList with
+        | [arg] -> 
+            if IsZeroExpression arg then
+                ZeroAmount      // sin(0) = 0
+            else 
+                Functor(funcToken, [arg])
+        | _ -> FailExactArgCount "Function" 1 argList.Length funcToken
+
+    member this.Differential context varNameList funcToken argList =
+        // d(sin(z)) = cos(z)dz
+        match argList with
+        | [z] ->
+            let cos_z = MakeFunction "cos" [z]
+            let dz = TakeDifferential context varNameList z
+            Product[cos_z; dz]
+        | _ -> FailExactArgCount "Function" 1 argList.Length funcToken
+            
+    member this.DistributeAcrossEquation context funcToken leftList rightList =
+        SimpleEquationDistributor funcToken leftList rightList
+}
+
 let IntrinsicFunctions = 
     [
+        ("cos", Function_Cos);
         ("exp", Function_Exp);
         ("ln",  Function_Ln);
+        ("sin", Function_Sin);
     ]
 
 //-------------------------------------------------------------------------------------------------
