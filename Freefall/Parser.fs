@@ -100,7 +100,7 @@ and ParseDivMul scan =
         if op.Text = "*" then 
             factorlist.Add(right)
         elif op.Text = "/" then
-            factorlist.Add(Reciprocal(right))
+            factorlist.Add(MakeReciprocal right)
         else
             SyntaxError op "Unsupported multop"
 
@@ -159,7 +159,7 @@ and ParseAtom scan =
         let expr = 
             match funcName.Text with
             | "neg"   -> Negative(RequireExactlyOneArg funcName argList)
-            | "recip" -> Reciprocal(RequireExactlyOneArg funcName argList)
+            | "recip" -> MakeReciprocal(RequireExactlyOneArg funcName argList)
             | "sum"   -> Sum(argList)
             | "prod"  -> Product(argList)
             | "pow"   -> 

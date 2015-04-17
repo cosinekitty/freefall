@@ -283,7 +283,6 @@ type Expression =
     | Solitaire of Token                            // a symbol representing a unit, concept, named expression, or variable.
     | Functor of Token * list<Expression>           // (func-or-macro-name, [args...])
     | Negative of Expression
-    | Reciprocal of Expression
     | Sum of list<Expression>
     | Product of list<Expression>
     | Power of Expression * Expression
@@ -298,7 +297,6 @@ let PrimaryToken expr =     // FIXFIXFIX - rework Expression so that this functi
     | Solitaire(t) -> Some(t)
     | Functor(t,_) -> Some(t)
     | Negative(_) -> None
-    | Reciprocal(_) -> None
     | Sum(_) -> None
     | Product(_) -> None
     | Power(_) -> None
@@ -347,6 +345,10 @@ let IsExpressionEqualToInteger expr n =
         | Amount(PhysicalQuantity(number,concept)) -> 
             (concept = Dimensionless) && (IsNumberEqualToInteger (new BigInteger(n)) number)
         | _ -> false
+
+let MakeReciprocal expr = Power(expr, NegativeOneAmount)
+
+let Divide a b = Product[a; MakeReciprocal b]
 
 let IsConceptDimensionless concept =
     (concept = Zero) || (concept = Dimensionless)
@@ -451,7 +453,6 @@ let rec FormatExpressionRaw expr =
     | Solitaire(token) -> token.Text
     | Functor(funcName, argList) -> funcName.Text + "(" + FormatExprListRaw argList + ")"
     | Negative arg -> "neg(" + FormatExpressionRaw arg + ")"
-    | Reciprocal arg -> "recip(" + FormatExpressionRaw arg + ")"
     | Sum terms -> "sum(" + FormatExprListRaw terms + ")"
     | Product factors -> "prod(" + FormatExprListRaw factors + ")"
     | Power(a,b) -> "pow(" + FormatExpressionRaw a + "," + FormatExpressionRaw b + ")"
@@ -478,7 +479,6 @@ and ExpressionPrecedence expr =
     | Solitaire(_) -> Precedence_Atom
     | Functor(_,_) -> Precedence_Atom
     | Negative(_) -> Precedence_Neg
-    | Reciprocal(_) -> Precedence_Mul
     | Sum(terms) -> 
         match terms with
         | [] -> Precedence_Atom                        // formatted as "0"
@@ -502,7 +502,6 @@ and FormatExpressionPrec expr parentPrecedence =
         | Solitaire(token) -> token.Text
         | Functor(funcName, argList) -> funcName.Text + "(" + FormatExprList argList + ")"
         | Negative arg -> "-" + FormatExpressionPrec arg Precedence_Neg
-        | Reciprocal arg -> "1/" + FormatExpressionPrec arg Precedence_Mul
         | Sum terms ->
             match terms with
             | [] -> "0"
@@ -552,7 +551,16 @@ and JoinRemainingFactors exprlist =
 
 and RemainingFactorText expr =
     match expr with
-    | Reciprocal(arg) -> "/" + FormatExpressionPrec arg Precedence_Mul
+    | Power(x, Amount(PhysicalQuantity(Rational(a,b),concept))) when (concept = Dimensionless) && (a.Sign < 0) -> 
+        let abs_a_text = BigInteger.Negate(a).ToString();
+        let xtext = FormatExpressionPrec x Precedence_Mul
+        if b.IsOne then
+            if abs_a_text = "1" then
+                "/" + xtext
+            else
+                "/" + xtext + "^" + abs_a_text
+        else
+            "/" + xtext + "^(" + abs_a_text + "/" + b.ToString() + ")"
     | Negative(arg) -> "*(-" + FormatExpressionPrec arg Precedence_Neg + ")"
     | _ -> "*" + FormatExpressionPrec expr Precedence_Mul
     
@@ -681,9 +689,6 @@ let rec AreIdentical context a b =
     | (Negative(na),Negative(nb)) -> AreIdentical context na nb
     | (Negative(_), _) -> false
     | (_, Negative(_)) -> false
-    | (Reciprocal(ra),Reciprocal(rb)) -> AreIdentical context ra rb
-    | (Reciprocal(_), _) -> false
-    | (_, Reciprocal(_)) -> false
     | (Sum(aterms),Sum(bterms)) -> ArePermutedLists context aterms bterms
     | (Sum(_), _) -> false
     | (_, Sum(_)) -> false
@@ -775,9 +780,9 @@ let AreOppositeTerms context a b =
     (AreIdentical context a (Negative b)) ||
     (AreIdentical context b (Negative a))
 
-let AreOppositeFactors context a b =
-    (AreIdentical context a (Reciprocal b)) ||
-    (AreIdentical context b (Reciprocal a))
+let AreOppositeFactors context a b =        // FIXFIXFIX - may be better to generalize to a^x * a^y ==> a^(x+y)
+    (AreIdentical context a (MakeReciprocal b)) ||
+    (AreIdentical context b (MakeReciprocal a))
 
 let rec CancelOpposite testfunc termlist =
     match termlist with
@@ -836,8 +841,6 @@ let rec MakeTermPattern context term =
         TermPattern(Unity, term)     // func(_) => 1*func(_)
     | Negative arg ->
         TermPattern(NegativeOneQuantity, arg)        // neg(x) ==> (-1)*x
-    | Reciprocal arg ->
-        TermPattern(Unity, arg)        // recip(x) ==> 1*recip(x)
     | Sum terms ->
         // This shouldn't happen because flattener should have already folded this into the higher sum.
         failwith "Flattener failure: found sum() term inside a sum()."
@@ -923,7 +926,6 @@ let rec MakeFactorPattern context factor =
         | FunctionEntry(fe) -> SyntaxError token "Cannot use function name as a variable."
     | Functor(funcName, argList) -> FactorPattern(factor, UnityAmount)
     | Negative arg -> FactorPattern(factor, UnityAmount)
-    | Reciprocal arg -> FactorPattern(arg, NegativeOneAmount)       // recip(x) ==> x^(-1)
     | Sum terms -> FactorPattern(factor, UnityAmount)
     | Product factors -> failwith "Flattener failure: prod() should have been marged into parent."
     | Power(x,y) -> FactorPattern(x,y)
@@ -940,8 +942,6 @@ let UnmakeFactorPattern (FactorPattern(x,y)) =
             ExpressionError x "Cannot raise 0 to the 0 power."
         else
             UnityAmount
-    elif IsExpressionEqualToInteger y -1 then
-        Reciprocal(x)
     else
         Power(x,y)
 
@@ -1019,12 +1019,6 @@ let rec SimplifyStep context expr =
         match SimplifyStep context arg with
         | Amount(PhysicalQuantity(number,concept)) -> Amount(PhysicalQuantity((NegateNumber number),concept))
         | sarg -> Negative(sarg)
-
-    | Reciprocal(Reciprocal(x)) -> SimplifyStep context x
-    | Reciprocal(arg) -> 
-        match SimplifyStep context arg with
-        | Amount(PhysicalQuantity(number,concept)) -> Amount(PhysicalQuantity((InvertNumber number), (InvertConcept concept)))
-        | sarg -> Reciprocal(sarg)
 
     | Sum(termlist) ->
         let simpargs = 
@@ -1120,7 +1114,6 @@ let rec ExpressionConcept context expr =
     | Del(vartoken,_) -> FindSolitaireConcept context vartoken
     | Functor(funcName,argList) -> FindFunctorConcept context funcName argList
     | Negative(arg) -> ExpressionConcept context arg
-    | Reciprocal(arg) -> ReciprocalConcept context arg
     | Sum(terms) -> SumConcept context terms
     | Product(factors) -> ProductConcept context factors
     | Power(a,b) -> PowerConcept context a b
@@ -1243,8 +1236,6 @@ let rec EvalConcept context expr =
     | Del(vartoken,order) ->
         SyntaxError vartoken "The @ operator is not allowed to appear in a concept expression."
 
-    | Reciprocal(arg) -> EvalConcept context arg |> InvertConcept
-
     | Product(factors) -> 
         List.map (EvalConcept context) factors 
         |> List.fold (fun a b -> MultiplyConcepts a b) Dimensionless 
@@ -1308,9 +1299,6 @@ let rec EvalQuantity context expr =
     | Negative(arg) -> 
         EvalQuantity context arg
         |> NegateQuantity
-    | Reciprocal(arg) ->
-        EvalQuantity context arg
-        |> InvertQuantity
     | Sum(terms) -> 
         List.map (EvalQuantity context) terms
         |> AddQuantityList
@@ -1366,7 +1354,6 @@ let rec ExpressionNumericRange context expr =
         let rlist = List.map (ExpressionNumericRange context) argList
         handler.EvalRange funcName rlist
     | Negative(arg) -> ExpressionNumericRange context arg
-    | Reciprocal(arg) -> PromoteNumericRangePair RationalRange (ExpressionNumericRange context arg)
     | Sum(terms) -> 
         List.map (ExpressionNumericRange context) terms
         |> PromoteNumericRangeList

@@ -119,7 +119,6 @@ let rec ExpandMacros context rawexpr =
         | UnitEntry(_) -> FailNonFuncMacro funcName "a unit"
         | AssignmentEntry(_) -> FailNonFuncMacro funcName "an assignment target"
     | Negative(arg) -> Negative(ExpandMacros context arg)
-    | Reciprocal(arg) -> Reciprocal(ExpandMacros context arg)
     | Sum(terms) -> Sum(List.map (ExpandMacros context) terms)
     | Product(factors) -> Product(List.map (ExpandMacros context) factors)
     | Power(a,b) -> Power((ExpandMacros context a), (ExpandMacros context b))
@@ -185,10 +184,6 @@ and TransformEquations context expr =
         match TransformEquations context arg with
         | Equals(a,b) -> Equals(Negative(a), Negative(b))
         | xarg -> Negative(xarg)
-    | Reciprocal(arg) -> 
-        match TransformEquations context arg with
-        | Equals(a,b) -> Equals(Reciprocal(a), Reciprocal(b))   // FIXFIXFIX - what about a<>0, b<>0 constraints?
-        | xarg -> Reciprocal(xarg)
     | Sum(terms) -> 
         let numEquations, leftList, rightList = TransformAndPartition context terms
         if numEquations = 0 then        // It is tempting to check for leftList=rightList, but that can happen even when there are equations!

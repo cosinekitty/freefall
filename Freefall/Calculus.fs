@@ -30,8 +30,7 @@ let rec TakeDifferential derivKind context varNameList expr =
                         UnityAmount     // d/dx (x) = 1
                     else
                         // d/dx (y) = dy / dx
-                        let primaryVarToken = MakeVariableToken primaryVarName
-                        Product[Del(token,1); Reciprocal(Del(primaryVarToken,1))]
+                        Divide (Del(token,1)) (Del(MakeVariableToken primaryVarName,1))
             else
                 ZeroAmount
         | ConceptEntry(concept) -> SyntaxError token "Concept not allowed in differential expression."
@@ -45,11 +44,6 @@ let rec TakeDifferential derivKind context varNameList expr =
     | Negative(arg) -> 
         // d(-x) = -(dx)
         Negative(TakeDifferential derivKind context varNameList arg)
-    | Reciprocal(arg) ->
-        // d(1/x) = d(x^(-1)) = -x^(-2)dx
-        let dx = TakeDifferential derivKind context varNameList arg
-        let neg2 = IntegerAmount -2
-        Product[Negative(Power(arg,neg2)); dx]
     | Sum(termlist) ->
         // d(a + b + c + ...) = da + db + dc + ...
         Sum(List.map (TakeDifferential derivKind context varNameList) termlist)
@@ -60,7 +54,7 @@ let rec TakeDifferential derivKind context varNameList expr =
         let dv = TakeDifferential derivKind context varNameList v
         let dw = TakeDifferential derivKind context varNameList w
         let ln_v = MakeFunction "ln" [v]
-        Product[expr; Sum[Product[w;Reciprocal(v);dv]; Product[ln_v;dw]]]
+        Product[expr; Sum[Product[w;MakeReciprocal v;dv]; Product[ln_v;dw]]]
     | Equals(a,b) ->
         // d(a=b) ==> da = db
         let da = TakeDifferential derivKind context varNameList a
@@ -72,7 +66,7 @@ let rec TakeDifferential derivKind context varNameList expr =
         if IsInVariableList vartoken varNameList then
             match derivKind with
             | Differential -> Del(vartoken,1+order)
-            | Derivative -> Product[Del(vartoken,1+order); Reciprocal(Del(MakeVariableToken primaryVarName,1))]
+            | Derivative -> Product[Del(vartoken,1+order); MakeReciprocal (Del(MakeVariableToken primaryVarName,1))]
         else
             ZeroAmount
 

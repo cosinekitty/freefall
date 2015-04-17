@@ -192,7 +192,7 @@ let Function_Ln = { new IFunctionHandler with
         match argList with
         | [z] ->
             let dz = TakeDifferential derivKind context varNameList z
-            Product[dz; Reciprocal(z)]
+            Divide dz z
         | _ -> FailExactArgCount "Function" 1 argList.Length funcToken
             
     member this.DistributeAcrossEquation context funcToken leftList rightList =
