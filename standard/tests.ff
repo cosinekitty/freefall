@@ -26,3 +26,4 @@ assertf("3+4", 3+4);
 assertf("3-4", sum(3,-4));
 assertf("3-4", 3-4);
 assertf("(a+b)*(c-d)/(x+y)", (a+b)*(c-d)/(x+y));
+assertf("3/4", 3/4);

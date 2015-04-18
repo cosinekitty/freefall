@@ -363,9 +363,12 @@ let MakeNegative expr =
 
 let MakeReciprocal expr = 
     match expr with
-    | Amount(quantity) -> Amount(InvertQuantity quantity)
-    | Power(a,b) -> Power(a, MakeNegative b)
-    | _ -> Power(expr, NegativeOneAmount)
+    | Amount(PhysicalQuantity(Rational(_,_),concept) as quantity) when concept = Dimensionless -> 
+        Amount(InvertQuantity quantity)
+    | Power(a,b) -> 
+        Power(a, MakeNegative b)
+    | _ -> 
+        Power(expr, NegativeOneAmount)
 
 let Divide a b = Product[a; MakeReciprocal b]
 
@@ -578,7 +581,14 @@ and RemainingFactorText expr =
                 "/" + xtext + "^" + abs_a_text
         else
             "/" + xtext + "^(" + abs_a_text + "/" + b.ToString() + ")"
-    | _ -> "*" + FormatExpressionPrec expr Precedence_Mul
+    | Amount(PhysicalQuantity(Rational(a,b),concept)) when (concept = Dimensionless) && a.IsOne ->
+        // Multiplying by 1/b is the same as dividing by b, and is more pleasant to read.
+        if b.IsOne then
+            ""
+        else
+            "/" + b.ToString()
+    | _ -> 
+        "*" + FormatExpressionPrec expr Precedence_Mul
     
 //-----------------------------------------------------------------------------------------------------
 //  Context provides mutable state needed to execute a series of Freefall statements.
