@@ -118,7 +118,6 @@ let rec ExpandMacros context rawexpr =
         | ConceptEntry(_) -> FailNonFuncMacro funcName "a concept"
         | UnitEntry(_) -> FailNonFuncMacro funcName "a unit"
         | AssignmentEntry(_) -> FailNonFuncMacro funcName "an assignment target"
-    | Negative(arg) -> Negative(ExpandMacros context arg)
     | Sum(terms) -> Sum(List.map (ExpandMacros context) terms)
     | Product(factors) -> Product(List.map (ExpandMacros context) factors)
     | Power(a,b) -> Power((ExpandMacros context a), (ExpandMacros context b))
@@ -180,10 +179,6 @@ and TransformEquations context expr =
         else
             let handler = FindFunctionEntry context name
             handler.DistributeAcrossEquation context name leftList rightList
-    | Negative(arg) -> 
-        match TransformEquations context arg with
-        | Equals(a,b) -> Equals(Negative(a), Negative(b))
-        | xarg -> Negative(xarg)
     | Sum(terms) -> 
         let numEquations, leftList, rightList = TransformAndPartition context terms
         if numEquations = 0 then        // It is tempting to check for leftList=rightList, but that can happen even when there are equations!

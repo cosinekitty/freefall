@@ -17,6 +17,7 @@ asserti(simp(ln(exp(a))), a);
 asserti(simp(-a*-a*-b*-a),a^3*b);
 asserti(simp((x+y+z)^0), 1);
 asserti(simp((x+y+z)^1), x+y+z);
+asserti(simp((x+y)-y), x);
 
 // Expression formatter tests.
 assertf("123", simp(122+1));

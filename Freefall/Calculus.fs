@@ -41,9 +41,6 @@ let rec TakeDifferential derivKind context varNameList expr =
     | Functor(funcNameToken,argList) ->
         let handler = FindFunctionEntry context funcNameToken
         handler.Differential derivKind context varNameList funcNameToken argList
-    | Negative(arg) -> 
-        // d(-x) = -(dx)
-        Negative(TakeDifferential derivKind context varNameList arg)
     | Sum(termlist) ->
         // d(a + b + c + ...) = da + db + dc + ...
         Sum(List.map (TakeDifferential derivKind context varNameList) termlist)

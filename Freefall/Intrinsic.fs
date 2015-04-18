@@ -254,7 +254,7 @@ let Function_Cos = { new IFunctionHandler with
         | [z] ->
             let sin_z = MakeFunction "sin" [z]
             let dz = TakeDifferential derivKind context varNameList z
-            Product[Negative(sin_z); dz]
+            Product[MakeNegative sin_z; dz]
         | _ -> FailExactArgCount "Function" 1 argList.Length funcToken
             
     member this.DistributeAcrossEquation context funcToken leftList rightList =

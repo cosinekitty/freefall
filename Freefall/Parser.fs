@@ -79,7 +79,7 @@ and ParseAddSub scan =
         if op.Text = "+" then
             termlist.Add(right)
         elif op.Text = "-" then
-            termlist.Add(Negative(right))
+            termlist.Add(MakeNegative right)
         else
             SyntaxError op "Unsupported addop."
 
@@ -114,7 +114,7 @@ and ParseNegPow scan =
 
     | ({Text="-"} as negop) :: rscan ->
         let right, xscan = ParseNegPow rscan
-        Negative(right), xscan
+        MakeNegative right, xscan
 
     | _ ->
         let atom, xscan = ParseAtom scan
@@ -162,7 +162,7 @@ and ParseAtom scan =
         let argList, scan3 = ParseArgList scan2
         let expr = 
             match funcName.Text with
-            | "neg"   -> Negative(RequireExactlyOneArg funcName argList)
+            | "neg"   -> MakeNegative (RequireExactlyOneArg funcName argList)
             | "pow"   -> 
                 let a, b = RequireExactlyTwoArgs funcName argList
                 Power(a,b)
