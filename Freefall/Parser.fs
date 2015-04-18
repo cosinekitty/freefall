@@ -105,7 +105,7 @@ and ParseDivMul scan =
             SyntaxError op "Unsupported multop"
 
     if factorlist.Count = 1 then
-        expr, xscan
+        factorlist.[0], xscan
     else
         Product(List.ofSeq factorlist), xscan
 
