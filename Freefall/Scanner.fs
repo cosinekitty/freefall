@@ -20,6 +20,7 @@ type TokenKind =
     | NumericRangeName
     | Operator
     | Identifier
+    | PseudoFunction        // sum, prod, recip, neg, pow: not in symbol table, yet must be prevented from use as identifiers
     | ExpressionReference
     | IntegerLiteral
     | RealFloatLiteral
@@ -100,6 +101,17 @@ let KeywordTable =
 
 let IsKeyword text = Set.contains text KeywordTable 
 
+let PseudoFunctionTable =
+    Set.ofList [
+        "neg";
+        "pow";
+        "prod";
+        "recip";
+        "sum";
+    ]
+
+let IsPseudoFunction text = Set.contains text PseudoFunctionTable
+
 type NumericRange =         // the set of values a variable, function, etc, is allowed to range over
     | IntegerRange
     | RationalRange
@@ -132,6 +144,8 @@ let ClassifyToken text precedence =
         TokenKind.Operator
     elif IsKeyword text then
         TokenKind.Keyword
+    elif IsPseudoFunction text then
+        TokenKind.PseudoFunction
     elif IsRangeName text then
         TokenKind.NumericRangeName
     elif IsIdentifier text then

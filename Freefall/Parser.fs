@@ -154,18 +154,22 @@ and ParseAtom scan =
 
     | [] -> Impossible ()    // RequireToken already checks this case, but I want to eliminate warning here.
 
-    | ({Kind=TokenKind.Identifier;} as funcName) :: {Text="(";} :: scan2 ->
+    | ({Kind=TokenKind.Identifier} as funcName) :: {Text="(";} :: scan2 ->
+        let argList, scan3 = ParseArgList scan2
+        Functor(funcName,argList), scan3
+
+    | ({Kind=TokenKind.PseudoFunction} as funcName) :: {Text="(";} :: scan2 ->
         let argList, scan3 = ParseArgList scan2
         let expr = 
             match funcName.Text with
             | "neg"   -> Negative(RequireExactlyOneArg funcName argList)
-            | "recip" -> MakeReciprocal(RequireExactlyOneArg funcName argList)
-            | "sum"   -> Sum(argList)
-            | "prod"  -> Product(argList)
             | "pow"   -> 
                 let a, b = RequireExactlyTwoArgs funcName argList
                 Power(a,b)
-            | _       -> Functor(funcName,argList)
+            | "prod"  -> Product(argList)
+            | "recip" -> MakeReciprocal(RequireExactlyOneArg funcName argList)
+            | "sum"   -> Sum(argList)
+            | _ -> SyntaxError funcName "Internal error - unsupported pseudo-function."
         expr, scan3
 
     | ({Kind=TokenKind.Identifier;} as token) :: rscan ->
