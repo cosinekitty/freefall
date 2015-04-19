@@ -406,7 +406,8 @@ let FormatNumber x =
             numer.ToString()
         else
             numer.ToString() + "/" + denom.ToString()
-    | Real re -> re.ToString()
+    | Real re -> 
+        RealString re
     | Complex(c) -> 
         // (-3.4-5.6i)
         // (-3.4+5.6i)
@@ -416,7 +417,24 @@ let FormatNumber x =
                 "+" + (RealString c.Imaginary)
             else
                 RealString c.Imaginary
-        "(" + rtext + itext + "i)"            
+        "(" + rtext + itext + "i)"
+
+let NumberPrecedence x =
+    match x with
+    | Rational(numer,denom) ->
+        if denom.IsOne then
+            if numer.Sign < 0 then
+                Precedence_Neg
+            else
+                Precedence_Atom
+        else
+            Precedence_Mul
+    | Real(x) ->
+        if x < 0.0 then
+            Precedence_Neg
+        else
+            Precedence_Atom
+    | Complex(c) -> Precedence_Atom    // complex numbers are always rendered inside parentheses
 
 let FormatDimension name (numer:BigInteger,denom:BigInteger) =
     if numer.IsZero then
@@ -444,6 +462,16 @@ let FormatDimensions namelist concept =
     | Zero -> "0"
     | Concept(powlist) -> List.fold2 AccumDimension "" namelist powlist
 
+let DimensionsPrecedence concept =
+    // Cheat: convert to string, then inspect the string.
+    let text = FormatDimensions BaseUnitNames concept
+    if text.Contains("*") then
+        Precedence_Mul
+    elif text.Contains("^") then
+        Precedence_Pow
+    else
+        Precedence_Atom
+
 let FormatConcept concept = 
     let text = FormatDimensions ConceptNames concept
     if text = "" then
@@ -465,6 +493,24 @@ let FormatQuantity (PhysicalQuantity(scalar,concept)) =
             conceptText
         else
             scalarText + "*" + conceptText
+
+let QuantityPrecedence (PhysicalQuantity(scalar,concept)) =
+    if IsNumberZero scalar then
+        Precedence_Atom
+    else
+        let scalarPrec = NumberPrecedence scalar
+        if concept = Dimensionless then
+            scalarPrec
+        elif concept = Zero then
+            Precedence_Atom
+        else
+            let conceptPrec = DimensionsPrecedence concept
+            if Precedence_Mul < scalarPrec && Precedence_Mul < conceptPrec then
+                Precedence_Mul
+            elif scalarPrec < conceptPrec then
+                scalarPrec
+            else
+                conceptPrec
 
 //-----------------------------------------------------------------------------------------------------
 // The "raw" expression formatter displays an expression showing its actual representation.
@@ -496,7 +542,7 @@ let rec FormatExpression expr =
 
 and ExpressionPrecedence expr =
     match expr with
-    | Amount(_) -> Precedence_Atom
+    | Amount(quantity) -> QuantityPrecedence quantity
     | Solitaire(_) -> Precedence_Atom
     | Functor(_,_) -> Precedence_Atom
     | Sum(terms) -> 
@@ -551,15 +597,14 @@ and FormatExprList exprlist =
 
 and JoinRemainingTerms exprlist =
     // sum(a, b, c) -->  JoinRemainingTerms[b;c]
-    // If b is Negative(x), then we want to format it is as subtraction, not adding a neg.
-    // If b is Product(a,x) where a is negative, we want to show "- abs(a)*x", etc.
+    // If b is Product(a,x) where a is negative, we want to show "- abs(a)*x".
     match exprlist with
     | [] -> ""
     | first :: rest -> RemainingTermText first + JoinRemainingTerms rest
 
 and RemainingTermText expr =
     let rtext = FormatExpressionPrec expr Precedence_Add
-    if rtext.StartsWith("-") then
+    if rtext.StartsWith("-") then       // FIXFIXFIX : seems risky - what about -1^2?
         rtext
     else
         "+" + rtext
@@ -622,7 +667,7 @@ and Context = {
     SymbolTable: Dictionary<string,SymbolEntry>;
     NumberedExpressionList: ResizeArray<Expression>;
     AssignmentHook: option<string> -> int -> Expression -> unit;            // AssignmentHook targetName refIndex assignedExpr
-    ProbeHook: Expression -> NumericRange -> PhysicalConcept -> unit;
+    ProbeHook: Context -> Expression -> NumericRange -> PhysicalConcept -> unit;
 }
 
 let AppendNumberedExpression {NumberedExpressionList=numExprList;} expr =

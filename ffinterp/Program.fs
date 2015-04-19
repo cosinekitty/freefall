@@ -5,6 +5,7 @@ open Freefall.Expr
 open Freefall.Stmt
 open Freefall.Parser
 open Freefall.Intrinsic
+open Freefall.Latex
 
 let PrintTokenDiagnostic token =
     printfn "Near '%s' @ col %d" token.Text token.ColumnNumber
@@ -75,9 +76,10 @@ let MyAssignmentHook (targetName:option<string>) (refIndex:int) (assignedExpr:Ex
     printfn "#%d := %s" refIndex (FormatExpression assignedExpr)
     printfn ""
 
-let MyProbeHook (expr:Expression) (range:NumericRange) (concept:PhysicalConcept) =
+let MyProbeHook context expr range concept =
     printfn "PROBE(expr)    : %s" (FormatExpression expr)
     printfn "PROBE(raw)     : %s" (FormatExpressionRaw expr)
+    printfn "PROBE(latex)   : %s" (FormatLatex context expr)
     printfn "PROBE(range)   : %s" (RangeName range)
     printfn "PROBE(concept) : %s" (FormatConcept concept)
     printfn ""

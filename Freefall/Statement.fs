@@ -241,7 +241,7 @@ let ExecuteStatement context statement shouldReportAssignments =
         let expr = PrepareExpression context rawexpr
         let range = ExpressionNumericRange context expr
         let concept = ExpressionConcept context expr
-        context.ProbeHook expr range concept
+        context.ProbeHook context expr range concept
 
     | UnitDef {UnitName=idtoken; Expr=expr;} ->
         let quantity = EvalQuantity context expr
