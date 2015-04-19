@@ -50,6 +50,9 @@ let ExecuteLine context line lineNumber =
             | None -> ()
             | Some(token) -> PrintLineDiagnostic line token
 
+        | FreefallRuntimeException(message) ->
+            printfn "Runtime error: %s" message
+
         | UnexpectedEndException(None) ->
             printfn "Syntax error: unexpected end of input"
 
