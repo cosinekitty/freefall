@@ -1149,7 +1149,11 @@ and FindFunctorConcept context funcNameToken argExprList =
 and EquationConcept context a b =
     let aConcept = ExpressionConcept context a
     let bConcept = ExpressionConcept context b
-    if aConcept <> bConcept then
+    if aConcept = Zero then         // zero is compatible with any concept (use other concept)
+        bConcept
+    elif bConcept = Zero then
+        aConcept
+    elif aConcept <> bConcept then
         ExpressionError b (sprintf "Incompatible units: cannot equate/compare %s and %s" (FormatConcept aConcept) (FormatConcept bConcept))
     else
         aConcept
