@@ -799,41 +799,6 @@ let AddQuantities a b =
 let MultiplyQuantities (PhysicalQuantity(aNumber,aConcept)) (PhysicalQuantity(bNumber,bConcept)) =
     Amount(PhysicalQuantity(MultiplyNumbers aNumber bNumber, MultiplyConcepts aConcept bConcept))
 
-let AreOppositeTerms context a b =          // FIXFIXFIX - generalize to a*x + b*x ==> (a+b)*x
-    (AreIdentical context a (MakeNegative b)) ||
-    (AreIdentical context b (MakeNegative a))
-
-let AreOppositeFactors context a b =        // FIXFIXFIX - generalize to a^x * a^y ==> a^(x+y)
-    if (IsZeroExpression a) || (IsZeroExpression b) then
-        false
-    else
-        (AreIdentical context a (MakeReciprocal b)) ||
-        (AreIdentical context b (MakeReciprocal a))
-
-let rec CancelOpposite testfunc termlist =
-    match termlist with
-    | [] -> []
-    | first :: rest -> 
-        let rcancel = CancelOpposite testfunc rest
-        match rcancel with
-        | [] -> [first]
-        | next :: others -> 
-            if testfunc first next then
-                others
-            else
-                let shorter = first :: others
-                let attempt = CancelOpposite testfunc shorter
-                if shorter = attempt then
-                    first :: rcancel
-                else
-                    CancelOpposite testfunc (next :: attempt)
-
-let CancelOppositeTerms context termlist = 
-    CancelOpposite (AreOppositeTerms context) termlist
-
-let CancelOppositeFactors context factorlist = 
-    CancelOpposite (AreOppositeFactors context) factorlist
-
 // Add together all constant terms in a sum list and move the result to the front of the list.
 let rec MergeConstants mergefunc terms =
     match terms with
@@ -874,7 +839,10 @@ let rec MakeTermPattern context term =
         | [arg] -> MakeTermPattern context arg
         | first :: rest ->
             match first with
-            | Amount(quantity) -> TermPattern(quantity, (Product rest))
+            | Amount(quantity) -> 
+                match rest with
+                | [second] -> TermPattern(quantity, second)
+                | _ -> TermPattern(quantity, (Product rest))
             | _ -> TermPattern(Unity, term)
     | Power(x,y) -> TermPattern(Unity, term)
     | Equals(_,_) -> ExpressionError term "Equality should not appear in a term."
@@ -981,8 +949,8 @@ let rec FindMatchingFactorPattern context (FactorPattern(x1,y1) as pattern) merg
             | Some(mpattern, residue) -> Some(mpattern, first::residue)
 
 
-let MergeLikeFactors context termlist =
-    let plist = List.map (MakeFactorPattern context) termlist
+let MergeLikeFactors context factorList =
+    let plist = List.map (MakeFactorPattern context) factorList
     let mlist = MergeLikePatterns FindMatchingFactorPattern context plist
     List.map UnmakeFactorPattern mlist
 
@@ -1026,9 +994,9 @@ let rec SimplifyStep context expr =
     | Sum(termlist) ->
         let simpargs = 
             SimplifySumArgs (List.map (SimplifyStep context) termlist) 
-            |> CancelOppositeTerms context 
             |> MergeConstants AddQuantities
             |> MergeLikeTerms context
+
         match simpargs with
         | [] -> ZeroAmount
         | [term] -> term
@@ -1037,18 +1005,16 @@ let rec SimplifyStep context expr =
     | Product(factorlist) ->
         let simpfactors = 
             SimplifyProductArgs (List.map (SimplifyStep context) factorlist) 
-            |> CancelOppositeFactors context
             |> MergeConstants MultiplyQuantities
+            |> MergeLikeFactors context
 
-        let mergedFactors = MergeLikeFactors context simpfactors
-
-        if List.exists IsZeroExpression mergedFactors then
+        if List.exists IsZeroExpression simpfactors then
             ZeroAmount
         else
-            match mergedFactors with
+            match simpfactors with
             | [] -> UnityAmount
             | [factor] -> factor
-            | _ -> Product mergedFactors
+            | _ -> Product simpfactors
 
     | Power(x,y) ->
         let sx = SimplifyStep context x
