@@ -1274,9 +1274,15 @@ let rec EvalQuantity context expr =
 //-----------------------------------------------------------------------------------------------------
 // Numeric range analysis - determines whether an expression will always be integer, rational, real, complex.
 
-let QuantityNumericRange (PhysicalQuantity(number,_)) =
+let QuantityNumericRange (PhysicalQuantity(number,concept)) =
     match number with
-    | Rational(a,b) -> if b.IsOne then IntegerRange else RationalRange
+    | Rational(_,b) -> 
+        if concept <> Dimensionless then
+            RealRange       // We don't consider 3*meter/second an integer; it is a real number because units are an artifice.
+        elif b.IsOne then 
+            IntegerRange 
+        else 
+            RationalRange
     | Real(_) -> RealRange
     | Complex(_) -> ComplexRange   // FIXFIXFIX - consider "demoting" complex to real if imaginary part is 0? Would require great care throughout the code.
 
