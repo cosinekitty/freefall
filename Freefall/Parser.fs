@@ -322,6 +322,11 @@ let ParseStatement scan =
         let scan4 = ExpectSemicolon scan3
         Probe(expr), scan4
 
+    | {Text="save"} :: scan2 ->
+        let filename, scan3 = ExpectStringLiteral scan2
+        let scan4 = ExpectSemicolon scan3
+        Save(filename), scan4
+
     | ({Text="unit"} as unitKeywordToken) :: scan2 ->
         // unit ::= "unit" ident "=" expr ";"
         match scan2 with

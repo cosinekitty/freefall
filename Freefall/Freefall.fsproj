@@ -37,6 +37,7 @@
     <Compile Include="Parser.fs" />
     <Compile Include="Intrinsic.fs" />
     <Compile Include="Latex.fs" />
+    <Compile Include="Html.fs" />
   </ItemGroup>
   <!-- <Import Project="$(MSBuildExtensionsPath32)\..\Microsoft SDKs\F#\3.1\Framework\v4.0\Microsoft.FSharp.Targets" /> -->
   <Import Project="/usr/lib/cli/fsharp/Microsoft.FSharp.Targets" />

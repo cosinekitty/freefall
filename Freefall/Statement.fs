@@ -39,6 +39,7 @@ type Statement =
     | ForgetAllNumberedExpressions
     | ForgetNamedExpressions of list<Token>
     | Probe of Expression
+    | Save of string
     | UnitDef of UnitDefinition
     | VarDecl of MultiVariableDeclaration
 
@@ -75,6 +76,9 @@ let FormatStatement statement =
 
     | ForgetNamedExpressions(idlist) ->
         sprintf "forget %s;" (JoinTokenList idlist)
+
+    | Save(filename) ->
+        sprintf "save \"%s\";" filename
 
     | Probe(expr) ->
         sprintf "probe %s;" (FormatExpression expr)
@@ -215,7 +219,7 @@ let ExecuteStatement context statement shouldReportAssignments =
     | Assignment {TargetName=target; Expr=rawexpr;} ->
         let expr = PrepareExpression context rawexpr
         ValidateExpressionConcept context expr
-        let refIndex = context.NumberedExpressionList.Count
+        let refIndex = context.NumberedExpressionList.Count + 1
         match target with
         | Some(assignToken) -> 
             DefineSymbol context assignToken (AssignmentEntry(expr))
@@ -236,6 +240,9 @@ let ExecuteStatement context statement shouldReportAssignments =
 
     | ForgetNamedExpressions(idlist) ->
         List.iter (DeleteNamedExpression context) idlist
+
+    | Save(filename) ->
+        context.SaveToFile context filename
 
     | Probe(rawexpr) ->
         let expr = PrepareExpression context rawexpr

@@ -1,5 +1,9 @@
-    module ::= { statement }    
-    statement ::=  assertf | concept | unit | assignment | vardecl | forget | probe | ";"
+    module ::= { statement }
+    
+    statement ::=  assertf | concept | unit | assignment | 
+                   vardecl | forget | probe | save | ";"
+
+    save ::= "save" str ";"                   
     assertf ::= "assertf" "(" str "," expr ")" ";"
     concept ::= "concept" ident "=" expr ";"
     unit ::= "unit" ident "=" expr ";"

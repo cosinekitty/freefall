@@ -360,12 +360,13 @@ let RunStandardScript context filename =
 // Create a context with intrinsic symbols built it.
 // Execute initialization script to define certain units, concepts, etc.
 
-let MakeContext assignmentHook probeHook = 
+let MakeContext assignmentHook probeHook saveHook = 
     let context = {
         SymbolTable = new Dictionary<string, SymbolEntry>()
         NumberedExpressionList = new ResizeArray<Expression>()
         AssignmentHook = assignmentHook
         ProbeHook = probeHook
+        SaveToFile = saveHook
     }
 
     for {ConceptName=conceptName; BaseUnitName=baseUnitName; ConceptValue=concept} in BaseConcepts do

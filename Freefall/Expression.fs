@@ -668,16 +668,17 @@ and Context = {
     NumberedExpressionList: ResizeArray<Expression>;
     AssignmentHook: option<string> -> int -> Expression -> unit;            // AssignmentHook targetName refIndex assignedExpr
     ProbeHook: Context -> Expression -> NumericRange -> PhysicalConcept -> unit;
+    SaveToFile: Context -> string -> unit;
 }
 
 let AppendNumberedExpression {NumberedExpressionList=numExprList;} expr =
     numExprList.Add(expr)
 
 let FindNumberedExpression {NumberedExpressionList=numExprList;} token index =
-    if (index >= 0) && (index < numExprList.Count) then
-        numExprList.[index]
+    if (index >= 1) && (index <= numExprList.Count) then
+        numExprList.[index-1]
     else
-        SyntaxError token (sprintf "Invalid expression index: expected 0..%d" (numExprList.Count-1))
+        SyntaxError token (sprintf "Invalid expression index: expected 1..%d" numExprList.Count)
 
 let FindPreviousExpression {NumberedExpressionList=numExprList;} token =
     if numExprList.Count > 0 then

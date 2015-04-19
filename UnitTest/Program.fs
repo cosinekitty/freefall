@@ -22,7 +22,10 @@ let MyProbeHook (context:Context) (expr:Expression) (range:NumericRange) (concep
     printfn "PROBE(concept) : %s" (FormatConcept concept)
     printfn ""
 
-let MyContext = MakeContext MyAssignmentHook MyProbeHook
+let MySaveHook context fileNameToken =
+    printfn "File saver not implemented."
+
+let MyContext = MakeContext MyAssignmentHook MyProbeHook MySaveHook
 
 let VarTokenX = MakeIdentifierToken "x"
 DefineSymbol MyContext VarTokenX (VariableEntry(RealRange,Dimensionless))

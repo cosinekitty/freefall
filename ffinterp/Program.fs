@@ -6,6 +6,7 @@ open Freefall.Stmt
 open Freefall.Parser
 open Freefall.Intrinsic
 open Freefall.Latex
+open Freefall.Html
 
 let PrintTokenDiagnostic token =
     printfn "Near '%s' @ col %d" token.Text token.ColumnNumber
@@ -87,7 +88,7 @@ let MyProbeHook context expr range concept =
 [<EntryPoint>]
 let main argv = 
     try
-        let context = MakeContext MyAssignmentHook MyProbeHook
+        let context = MakeContext MyAssignmentHook MyProbeHook HtmlSave
         Array.map (ExecuteFile context) argv |> ignore
         0
     with 
