@@ -109,7 +109,8 @@ and FormatLatexPrec context expr parentPrecedence =
         | Amount(quantity) -> LatexFormatQuantity context quantity
         | Solitaire(nameToken) -> nameToken.Text    // FIXFIXFIX - convert Greek letters (and underscores?)
         | Functor(nameToken,argList) ->
-            nameToken.Text + "\\left(" + ListFormatLatex context argList + "\\right)"
+            let func = FindFunctionEntry context nameToken
+            func.LatexName + "\\left(" + ListFormatLatex context argList + "\\right)"
         | Sum(termList) ->
             match termList with
             | [] -> "0"

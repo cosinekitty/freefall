@@ -137,6 +137,8 @@ let Function_Exp = { new IFunctionHandler with
             
     member this.DistributeAcrossEquation context funcToken leftList rightList =
         SimpleEquationDistributor funcToken leftList rightList
+
+    member this.LatexName = "\\exp"
 }
 
 let LnReal x =
@@ -197,6 +199,8 @@ let Function_Ln = { new IFunctionHandler with
             
     member this.DistributeAcrossEquation context funcToken leftList rightList =
         SimpleEquationDistributor funcToken leftList rightList
+
+    member this.LatexName = "\\ln"
 }
 
 let Function_Cos = { new IFunctionHandler with
@@ -259,6 +263,8 @@ let Function_Cos = { new IFunctionHandler with
             
     member this.DistributeAcrossEquation context funcToken leftList rightList =
         SimpleEquationDistributor funcToken leftList rightList
+
+    member this.LatexName = "\\cos"
 }
 
 let Function_Sin = { new IFunctionHandler with
@@ -321,6 +327,8 @@ let Function_Sin = { new IFunctionHandler with
             
     member this.DistributeAcrossEquation context funcToken leftList rightList =
         SimpleEquationDistributor funcToken leftList rightList
+
+    member this.LatexName = "\\sin"
 }
 
 let IntrinsicFunctions = 

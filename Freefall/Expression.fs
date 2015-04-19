@@ -654,6 +654,7 @@ type IFunctionHandler =
     abstract member SimplifyStep : Context -> Token -> list<Expression> -> Expression
     abstract member Differential : DerivativeKind -> Context -> list<string> -> Token -> list<Expression> -> Expression
     abstract member DistributeAcrossEquation : Context -> Token -> list<Expression> -> list<Expression> -> Expression
+    abstract member LatexName : string
 
 and SymbolEntry =
     | VariableEntry of NumericRange * PhysicalConcept
