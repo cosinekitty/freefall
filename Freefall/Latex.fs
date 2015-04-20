@@ -94,6 +94,26 @@ let rec SplitNumerDenom factorList =
             rNumerList, (Power(x, Amount(PhysicalQuantity(Rational((BigInteger.Negate a),b), concept))) :: rDenomList)
         | _ -> (first :: rNumerList), rDenomList
 
+// Some Latex Greek letters are written using Latin letters.
+// For example, capital chi is written using X.
+// Because there is no way to tell Latin X from Greek X,
+// it is considered undesirable to even refer to them as distinct
+// math symbols, since the reader can't tell them apart.
+// Just like Latex, we don't support such capital Greek letters here.
+let GreekLetterSet = 
+    Set.ofList 
+        [ "alpha"; "beta"; "gamma"; "Gamma"; "delta"; "Delta"; "epsilon"; "varepsilon"; "zeta"; "eta"; "theta"; "Theta"; 
+          "vartheta"; "iota"; "kappa"; "lambda"; "Lambda"; "mu"; "nu"; "xi"; "Xi"; "omicron"; "pi"; "Pi"; "varpi"; "rho"; 
+          "varrho"; "sigma"; "varsigma"; "Sigma"; "tau"; "upsilon"; "Upsilon"; "phi"; "Phi"; "varphi"; "chi"; "psi"; 
+          "Psi"; "omega"; "Omega" ]
+
+
+let LatexFixName (name:string) =
+    if Set.contains name GreekLetterSet then
+        @"\" + name
+    else
+        name
+
 let rec FormatLatex context expr =
     FormatLatexPrec context expr Precedence_Or
 
@@ -107,7 +127,22 @@ and FormatLatexPrec context expr parentPrecedence =
     let innerText =
         match expr with
         | Amount(quantity) -> LatexFormatQuantity context quantity
-        | Solitaire(nameToken) -> nameToken.Text    // FIXFIXFIX - convert Greek letters (and underscores?)
+        | Solitaire(nameToken) -> 
+            // FIXFIXFIX - convert underscores to subscripts?
+            let text = LatexFixName nameToken.Text
+            match FindSymbolEntry context nameToken with
+            | VariableEntry(_,_) ->
+                // FIXFIXFIX - We prefer variables to be italicized, except it is weird when they are multi-character.
+                text
+            | ConceptEntry(_) -> Impossible ()
+            | UnitEntry(PhysicalQuantity(number,concept)) ->
+                if concept <> Dimensionless then
+                    "\\mathrm{" + text + "}"
+                else
+                    text
+            | AssignmentEntry(_) -> Impossible ()
+            | MacroEntry(_) -> Impossible()
+            | FunctionEntry(_) -> SyntaxError nameToken "Attempt to use a function name as a variable."
         | Functor(nameToken,argList) ->
             let func = FindFunctionEntry context nameToken
             func.LatexName + "\\left(" + ListFormatLatex context argList + "\\right)"
@@ -173,4 +208,4 @@ and LatexFormatFactorList context factorList =
     | first :: rest ->
         let ftext = FormatLatexPrec context first Precedence_Mul
         let rtext = LatexFormatFactorList context rest
-        ftext + " " + rtext
+        ftext + " " + rtext     // FIXFIXFIX - does not handle things like 3*4 ("3 4" renders like "34" in LaTeX).  Also "kilogram*meter/second^2".
