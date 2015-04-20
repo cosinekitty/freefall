@@ -1,5 +1,6 @@
 ﻿module Freefall.Latex
 open System.Numerics
+open System.Text.RegularExpressions
 open Freefall.Scanner
 open Freefall.Expr
 open Freefall.Calculus
@@ -111,14 +112,26 @@ let GreekLetterSet =
           "varrho"; "sigma"; "varsigma"; "Sigma"; "tau"; "upsilon"; "Upsilon"; "phi"; "Phi"; "varphi"; "chi"; "psi"; 
           "Psi"; "omega"; "Omega" ]
 
-let LatexFixName (name:string) =
-    // FIXFIXFIX - convert underscores to subscripts?
+let LatexFixNamePart (name:string) =
     if Set.contains name GreekLetterSet then
         @"\" + name, LatexFactorSeparator.Space
     elif name.Length > 1 then
         @"\mathrm{" + name + "}", LatexFactorSeparator.SurroundDots
     else
         name, LatexFactorSeparator.Space
+
+let rec UFixName (name:string) =
+    let underscoreIndex = name.IndexOf('_')
+    if underscoreIndex < 0 then
+        LatexFixNamePart name
+    else
+        let prefix, sep = LatexFixNamePart (name.Substring(0, underscoreIndex))
+        let rest, _ = UFixName (name.Substring(underscoreIndex+1))
+        prefix + "_{" + rest + "}", sep
+
+let LatexFixName (name:string) =
+    // Must protect ourselves from underscores at front of name, or multiple consecutive underscores.
+    UFixName (Regex.Replace(Regex.Replace(name, @"^_*", ""), @"_+", "_"))
 
 let rec FormatLatex context expr =
     let text, sep = FormatLatexPrec context expr Precedence_Or
