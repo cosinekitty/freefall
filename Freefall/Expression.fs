@@ -335,6 +335,11 @@ let IsUnityExpression expr =
     | Amount(quantity) -> IsUnityQuantity quantity
     | _ -> false
 
+let IsNegativeUnityExpression expr =
+    match expr with
+    | Amount(quantity) -> IsNegativeUnityQuantity quantity
+    | _ -> false
+
 let IsExpressionEqualToInteger expr n =
     if n = 0 then
         IsZeroExpression expr       // must be handled as a special case

@@ -6,6 +6,8 @@ open Freefall.Calculus
 open Freefall.Stmt
 open Freefall.Parser
 
+type LatexFactorSeparator = Space | LeftDot | SurroundDots
+
 let LatexRealString (x:float) =
     let text = RealString x
     let eIndex = text.IndexOf("e")
@@ -62,19 +64,21 @@ let LatexFormatDimensions namelist concept =
     | Concept(powlist) -> List.fold2 LatexAccumDimension "" namelist powlist
 
 let LatexFormatQuantity context (PhysicalQuantity(scalar,concept)) =
-    if IsNumberZero scalar then
-        "0"     // special case because zero makes all units irrelevant
-    else
-        let scalarText = LatexFormatNumber scalar
-        let conceptText = LatexFormatDimensions BaseUnitNames concept
-        if conceptText = "" then
-            scalarText
-        elif conceptText = "0" then
-            "0"
-        elif scalarText = "1" then
-            conceptText
+    let text =
+        if IsNumberZero scalar then
+            "0"     // special case because zero makes all units irrelevant
         else
-            scalarText + " " + conceptText
+            let scalarText = LatexFormatNumber scalar
+            let conceptText = LatexFormatDimensions BaseUnitNames concept
+            if conceptText = "" then
+                scalarText
+            elif conceptText = "0" then
+                "0"
+            elif scalarText = "1" then
+                conceptText
+            else
+                scalarText + " " + conceptText
+    text, LatexFactorSeparator.LeftDot
 
 let LatexExpressionPrecedence expr =
     // Special case: numbers are formatted with scientific notation as multiplication.
@@ -107,15 +111,18 @@ let GreekLetterSet =
           "varrho"; "sigma"; "varsigma"; "Sigma"; "tau"; "upsilon"; "Upsilon"; "phi"; "Phi"; "varphi"; "chi"; "psi"; 
           "Psi"; "omega"; "Omega" ]
 
-
 let LatexFixName (name:string) =
+    // FIXFIXFIX - convert underscores to subscripts?
     if Set.contains name GreekLetterSet then
-        @"\" + name
+        @"\" + name, LatexFactorSeparator.Space
+    elif name.Length > 1 then
+        @"\mathrm{" + name + "}", LatexFactorSeparator.SurroundDots
     else
-        name
+        name, LatexFactorSeparator.Space
 
 let rec FormatLatex context expr =
-    FormatLatexPrec context expr Precedence_Or
+    let text, sep = FormatLatexPrec context expr Precedence_Or
+    text
 
 and ListFormatLatex context argList =
     match argList with
@@ -123,34 +130,23 @@ and ListFormatLatex context argList =
     | [single] -> FormatLatex context single
     | first::rest -> (FormatLatex context first) + ", " + (ListFormatLatex context rest)
 
-and FormatLatexPrec context expr parentPrecedence =
-    let innerText =
+and FormatLatexPrec context expr parentPrecedence : (string * LatexFactorSeparator) =
+    let innerText, separator =
         match expr with
-        | Amount(quantity) -> LatexFormatQuantity context quantity
+        | Amount(quantity) -> 
+            LatexFormatQuantity context quantity
         | Solitaire(nameToken) -> 
-            // FIXFIXFIX - convert underscores to subscripts?
-            let text = LatexFixName nameToken.Text
-            match FindSymbolEntry context nameToken with
-            | VariableEntry(_,_) ->
-                // FIXFIXFIX - We prefer variables to be italicized, except it is weird when they are multi-character.
-                text
-            | ConceptEntry(_) -> Impossible ()
-            | UnitEntry(PhysicalQuantity(number,concept)) ->
-                if concept <> Dimensionless then
-                    "\\mathrm{" + text + "}"
-                else
-                    text
-            | AssignmentEntry(_) -> Impossible ()
-            | MacroEntry(_) -> Impossible()
-            | FunctionEntry(_) -> SyntaxError nameToken "Attempt to use a function name as a variable."
+            LatexFixName nameToken.Text
         | Functor(nameToken,argList) ->
             let func = FindFunctionEntry context nameToken
-            func.LatexName + "\\left(" + ListFormatLatex context argList + "\\right)"
+            func.LatexName + "\\left(" + ListFormatLatex context argList + "\\right)", LatexFactorSeparator.Space
         | Sum(termList) ->
             match termList with
-            | [] -> "0"
-            | [single] -> FormatLatex context single
-            | first::rest -> FormatLatexPrec context first Precedence_Add + LatexJoinRemainingTerms context rest
+            | [] -> "0", LatexFactorSeparator.LeftDot
+            | [single] -> FormatLatexPrec context single Precedence_Or
+            | first::rest -> 
+                let t, s = FormatLatexPrec context first Precedence_Add
+                t + (LatexJoinRemainingTerms context rest), s
         | Product(factorList) ->
             // Split the factor list into numerator factors and denominator factors.
             // For example: prod(pow(x,-2), y, pow(z,-1))
@@ -158,34 +154,36 @@ and FormatLatexPrec context expr parentPrecedence =
             // denominator list = [pow(x,2); z]
             // Gets rendered as y / (x^2 * z).
             match SplitNumerDenom factorList with
-            | [], [] -> "1"
-            | numerList, [] -> LatexFormatFactorList context numerList
+            | [], [] -> "1", LatexFactorSeparator.LeftDot
+            | numerList, [] -> LatexFormatFactorList context numerList 0
             | numerList, denomList -> 
-                let numerText = LatexFormatFactorList context numerList
-                let denomText = LatexFormatFactorList context denomList
-                "\\frac{" + numerText + "}{" + denomText + "}"
+                let numerText, sep = LatexFormatFactorList context numerList 0
+                let denomText, _ = LatexFormatFactorList context denomList 0
+                "\\frac{" + numerText + "}{" + denomText + "}", sep
 
         | Power(a,b) ->
-            let atext = FormatLatexPrec context a Precedence_Pow
-            let btext = FormatLatexPrec context b Precedence_Pow
-            atext + "^{" + btext + "}"
+            let atext, sep = FormatLatexPrec context a Precedence_Pow
+            let btext, _ = FormatLatexPrec context b Precedence_Pow
+            atext + "^{" + btext + "}", sep
+
         | Equals(a,b) ->
-            let atext = FormatLatexPrec context a Precedence_Rel
-            let btext = FormatLatexPrec context b Precedence_Rel
-            atext + " = " + btext
+            let atext, _ = FormatLatexPrec context a Precedence_Rel
+            let btext, _ = FormatLatexPrec context b Precedence_Rel
+            atext + " = " + btext, LatexFactorSeparator.Space
+
         | NumExprRef(hashToken,listIndex) -> FailLingeringMacro hashToken
         | PrevExprRef(hashToken) -> FailLingeringMacro hashToken
         | Del(opToken,order) ->
             let vtext = FormatLatex context (Solitaire(opToken))
             if order > 1 then
-                "\\partial^{" + order.ToString() + "}" + vtext
+                "\\partial^{" + order.ToString() + "}" + vtext, LatexFactorSeparator.Space
             else
-                "\\partial " + vtext
+                "\\partial " + vtext, LatexFactorSeparator.Space
 
     if parentPrecedence < LatexExpressionPrecedence expr then
-        innerText
+        innerText, separator
     else
-        "\\left(" + innerText + "\\right)"
+        "\\left(" + innerText + "\\right)", LatexFactorSeparator.Space
 
 and LatexJoinRemainingTerms context termList =
     match termList with
@@ -194,18 +192,34 @@ and LatexJoinRemainingTerms context termList =
         let rtext = LatexJoinRemainingTerms context rest
 
         // check for anything that looks "negative" so we can turn it into subtraction
-        let ftext = FormatLatexPrec context first Precedence_Add
+        let ftext, separator = FormatLatexPrec context first Precedence_Add
 
         if ftext.StartsWith("-") then
             ftext + rtext
         else
             "+" + ftext + rtext
 
-and LatexFormatFactorList context factorList =
+and LatexFormatFactorList context factorList index =
     match factorList with
-    | [] -> "1"
-    | [single] -> FormatLatex context single
+    | [] -> 
+        if index = 0 then 
+            "1", LatexFactorSeparator.LeftDot 
+        else 
+            "", LatexFactorSeparator.Space
     | first :: rest ->
-        let ftext = FormatLatexPrec context first Precedence_Mul
-        let rtext = LatexFormatFactorList context rest
-        ftext + " " + rtext     // FIXFIXFIX - does not handle things like 3*4 ("3 4" renders like "34" in LaTeX).  Also "kilogram*meter/second^2".
+        let ftext, fsep = FormatLatexPrec context first Precedence_Mul
+        let rtext, rsep = LatexFormatFactorList context rest (1+index)
+        let septext =
+            match fsep, rsep with
+            | LatexFactorSeparator.SurroundDots, _ -> " \\cdot "
+            | _, LatexFactorSeparator.LeftDot -> " \\cdot "
+            | _, LatexFactorSeparator.SurroundDots -> " \\cdot "
+            | _, LatexFactorSeparator.Space -> " "
+        ftext + septext + rtext, fsep
+        // There are a lot of special cases with representation of product lists.
+        // prod(3,4,5) ==>  3 \cdot 4 \cdot 5
+        // prod(-5,foot,-6,10) ==> -5 \cdot foot \cdot -6 \cdot 10
+        // prod(-5,x) ==> -5 x
+        // prod(kilogram,meter,second^2) ==> kilogram \cdot meter \cdot second^{2}
+        // prod(longname,x,y) ==> longname \cdot x y
+        // prod(alpha,beta) ==> \alpha \beta
