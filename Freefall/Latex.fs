@@ -7,7 +7,7 @@ open Freefall.Calculus
 open Freefall.Stmt
 open Freefall.Parser
 
-type LatexFactorSeparator = Space | LeftDot | SurroundDots
+type LatexFactorSeparator = Empty | Space | LeftDot | SurroundDots
 
 let LatexRealString (x:float) =
     let text = RealString x
@@ -44,12 +44,14 @@ let LatexFormatNumber x =
 let LatexFormatDimension name (numer:BigInteger,denom:BigInteger) =
     if numer.IsZero then
         ""      // this dimension does not contribute to formatting, e.g. meter^0
-    elif numer.IsOne && denom.IsOne then
-        name    // meter^(1/1) is written as "meter"
-    elif denom.IsOne then
-        name + "^{" + numer.ToString() + "}"
     else
-        name + "^{\\frac{" + numer.ToString() + "}{" + denom.ToString() + "}"
+        "\\mathrm{" + name + "}" +
+            if numer.IsOne && denom.IsOne then
+                ""    // meter^(1/1) is written as "meter"
+            elif denom.IsOne then
+                "^{" + numer.ToString() + "}"
+            else
+                "^{\\frac{" + numer.ToString() + "}{" + denom.ToString() + "}"
 
 let LatexAccumDimension prefix name (numer,denom) =
     let text = LatexFormatDimension name (numer,denom)
@@ -95,8 +97,15 @@ let rec SplitNumerDenom factorList =
         match first with
         | Amount(PhysicalQuantity(Rational(a,b),concept)) when concept = Dimensionless && a.IsOne && (not b.IsOne) ->
             rNumerList, (Amount(PhysicalQuantity(Rational(b,a),concept)) :: rDenomList)
-        | Power(x, Amount(PhysicalQuantity(Rational(a,b),concept))) when concept = Dimensionless && a.Sign < 0 ->
-            rNumerList, (Power(x, Amount(PhysicalQuantity(Rational((BigInteger.Negate a),b), concept))) :: rDenomList)
+
+        | Power(x, Amount(PhysicalQuantity(Rational(a,b),concept) as quantity)) when concept = Dimensionless && a.Sign < 0 ->
+            let recip =
+                if IsNegativeUnityQuantity quantity then
+                    x
+                else
+                    Power(x, Amount(PhysicalQuantity(Rational((BigInteger.Negate a),b), Dimensionless)))
+            rNumerList, (recip :: rDenomList)
+
         | _ -> (first :: rNumerList), rDenomList
 
 // Some Latex Greek letters are written using Latin letters.
@@ -148,11 +157,14 @@ and FormatLatexPrec context expr parentPrecedence : (string * LatexFactorSeparat
         match expr with
         | Amount(quantity) -> 
             LatexFormatQuantity context quantity
+
         | Solitaire(nameToken) -> 
             LatexFixName nameToken.Text
+
         | Functor(nameToken,argList) ->
             let func = FindFunctionEntry context nameToken
             func.LatexName + "\\left(" + ListFormatLatex context argList + "\\right)", LatexFactorSeparator.Space
+
         | Sum(termList) ->
             match termList with
             | [] -> "0", LatexFactorSeparator.LeftDot
@@ -160,6 +172,7 @@ and FormatLatexPrec context expr parentPrecedence : (string * LatexFactorSeparat
             | first::rest -> 
                 let t, s = FormatLatexPrec context first Precedence_Add
                 t + (LatexJoinRemainingTerms context rest), s
+
         | Product(factorList) ->
             // Split the factor list into numerator factors and denominator factors.
             // For example: prod(pow(x,-2), y, pow(z,-1))
@@ -186,6 +199,7 @@ and FormatLatexPrec context expr parentPrecedence : (string * LatexFactorSeparat
 
         | NumExprRef(hashToken,listIndex) -> FailLingeringMacro hashToken
         | PrevExprRef(hashToken) -> FailLingeringMacro hashToken
+
         | Del(opToken,order) ->
             let vtext = FormatLatex context (Solitaire(opToken))
             if order > 1 then
@@ -218,16 +232,19 @@ and LatexFormatFactorList context factorList index =
         if index = 0 then 
             "1", LatexFactorSeparator.LeftDot 
         else 
-            "", LatexFactorSeparator.Space
+            "", LatexFactorSeparator.Empty
+
     | first :: rest ->
         let ftext, fsep = FormatLatexPrec context first Precedence_Mul
         let rtext, rsep = LatexFormatFactorList context rest (1+index)
         let septext =
             match fsep, rsep with
+            | _, LatexFactorSeparator.Empty -> ""
             | LatexFactorSeparator.SurroundDots, _ -> " \\cdot "
             | _, LatexFactorSeparator.LeftDot -> " \\cdot "
             | _, LatexFactorSeparator.SurroundDots -> " \\cdot "
             | _, LatexFactorSeparator.Space -> " "
+
         ftext + septext + rtext, fsep
         // There are a lot of special cases with representation of product lists.
         // prod(3,4,5) ==>  3 \cdot 4 \cdot 5
