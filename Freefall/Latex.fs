@@ -14,7 +14,7 @@ let LatexRealString (x:float) =
     else
         // "1.23e-5" ==> "1.23x10^(-5)"  (only in Latex format, of course)
         let mantissa = text.Substring(0, eIndex)
-        let exponent = text.Substring(eIndex+1)
+        let exponent = System.Int32.Parse(text.Substring(eIndex+1)).ToString()
         mantissa + " \\times 10^{" + exponent + "}"
 
 let LatexFormatNumber x =
