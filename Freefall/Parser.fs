@@ -238,6 +238,18 @@ and ParseAtom scan =
     | badtoken :: _ -> 
         SyntaxError badtoken "Syntax error."
 
+let ParseIntegerValuedExpression scan =
+    let expr, scan2 = ParseAddSub scan
+    let number = EvalDimensionlessNumber expr
+    match number with
+    | Rational(a,b) ->
+        if b.IsOne then
+            a, scan2
+        else
+            ExpressionError expr "Integer value required, but found non-integer rational."
+    | Real(_) -> ExpressionError expr "Integer value required, but found real."
+    | Complex(_) -> ExpressionError expr "Integer value required, but found complex."
+
 //---------------------------------------------------------------------------------------
 // Statement parser
 
@@ -264,17 +276,36 @@ let ParseTypeAndSemicolon scan =
     //      In the above rule, expr is a concept expression, e.g., distance/time
     //
     // typename ::= "complex" | "real" | "rational" | "integer" [intrange]
-    // intrange ::= "(" numexpr "," numexpr ")"       // both numexpr must evaluate to integers
-    //
-    //      FIXFIXFIX - intrange not yet implemented
+    // intrange ::= "(" [numexpr] "," [numexpr] ")"       // numexpr(s) must evaluate to integers
     match RequireToken scan with 
 
-    | {Kind=TokenKind.NumericRangeName; Text=text;} :: {Text=";";} :: scan2 ->
-        RangeNameTable.[text], UnityAmount, scan2   // range present but concept absent means concept defaults to dimensionless unity
+    | {Kind=TokenKind.NumericRangeName; Text=text} :: {Text=";"} :: scan2 ->
+        UnboundedRange text, UnityAmount, scan2   // range present but concept absent means concept defaults to dimensionless unity
+
+    | {Kind=TokenKind.NumericRangeName; Text=text} :: {Text="("} :: {Text=","} :: {Text=")"} :: scan2 ->
+        UnboundedRange text, UnityAmount, (ExpectSemicolon scan2)
+
+    | ({Text="integer"} as token) :: {Text="("} :: {Text=","} :: scan2 ->       // omitted lower bound = negative infinity
+        let upperLimit, scan3 = ParseIntegerValuedExpression scan2
+        let scan4 = scan3 |> ExpectToken ")" |> ExpectSemicolon
+        IntegerRange(NegInf, FiniteLimit(upperLimit)), UnityAmount, scan4
+
+    | ({Text="integer"} as token) :: {Text="("} :: scan2 ->                     // explicit lower bound
+        let lowerLimit, scan3 = ParseIntegerValuedExpression scan2
+        let scan4 = ExpectToken "," scan3
+        match scan4 with
+        | {Text=")"} :: scan5 -> 
+            // lower limit only
+            IntegerRange(FiniteLimit(lowerLimit), PosInf), UnityAmount, (ExpectSemicolon scan5)
+        | _ ->
+            // lower and upper limits must both be there
+            let upperLimit, scan5 = ParseIntegerValuedExpression scan4
+            let scan6 = scan5 |> ExpectToken ")" |> ExpectSemicolon
+            IntegerRange(FiniteLimit(lowerLimit), FiniteLimit(upperLimit)), UnityAmount, scan6
 
     | {Kind=TokenKind.NumericRangeName; Text=text} :: scan2 ->
-        let conceptExpr, scan3 = ParseExpression scan2
-        RangeNameTable.[text], conceptExpr, (ExpectSemicolon scan3)
+        let conceptExpr, scan3 = ParseExpression scan2      // FIXFIXFIX - do we need to verify conceptExpr is a concept?
+        UnboundedRange text, conceptExpr, (ExpectSemicolon scan3)
 
     | _ ->
         let conceptExpr, scan2 = ParseExpression scan

@@ -80,7 +80,7 @@ let Function_Exp = { new IFunctionHandler with
         match rangelist with
         | [range] ->
             match range with
-            | IntegerRange -> RealRange
+            | IntegerRange(_,_) -> RealRange    // FIXFIXFIX - could determine integer result range in some cases
             | RationalRange -> RealRange
             | RealRange -> RealRange
             | ComplexRange -> ComplexRange
@@ -209,7 +209,7 @@ let Function_Cos = { new IFunctionHandler with
         match rangelist with
         | [range] ->
             match range with
-            | IntegerRange -> RealRange
+            | IntegerRange(_,_) -> RealRange
             | RationalRange -> RealRange
             | RealRange -> RealRange
             | ComplexRange -> ComplexRange
@@ -273,7 +273,7 @@ let Function_Sin = { new IFunctionHandler with
         match rangelist with
         | [range] ->
             match range with
-            | IntegerRange -> RealRange
+            | IntegerRange(_,_) -> RealRange
             | RationalRange -> RealRange
             | RealRange -> RealRange
             | ComplexRange -> ComplexRange

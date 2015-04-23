@@ -1,4 +1,5 @@
 ﻿module Freefall.Scanner
+open System.Numerics
 open System.Text.RegularExpressions
 open Microsoft.FSharp.Collections
 
@@ -112,29 +113,73 @@ let PseudoFunctionTable =
 
 let IsPseudoFunction text = Set.contains text PseudoFunctionTable
 
+type IntegerLimit =
+    | NegInf
+    | FiniteLimit of BigInteger
+    | PosInf
+
 type NumericRange =         // the set of values a variable, function, etc, is allowed to range over
-    | IntegerRange
+    | IntegerRange of IntegerLimit * IntegerLimit
     | RationalRange
     | RealRange
     | ComplexRange
 
-let RangeTupleList = 
-        [
-            ("integer",  IntegerRange); 
-            ("rational", RationalRange); 
-            ("real",     RealRange); 
-            ("complex",  ComplexRange);
-        ]
+let IsEmptyRange range =    // is this a range that excludes all possible values (it is an empty set)?
+    match range with
+    | ComplexRange -> false
+    | RealRange -> false
+    | RationalRange -> false
+    | IntegerRange(NegInf, _) -> false
+    | IntegerRange(_, PosInf) -> false
+    | IntegerRange(PosInf, _) -> true
+    | IntegerRange(_, NegInf) -> true
+    | IntegerRange(FiniteLimit(a), FiniteLimit(b)) -> (a > b)
 
-let RangeNameTable = Map.ofList RangeTupleList
+let IsZeroRange range =     // is this a range that contains only the value 0?
+    match range with
+    | ComplexRange -> false
+    | RealRange -> false
+    | RationalRange -> false
+    | IntegerRange(NegInf, _) -> false      // this is an infinite set, not {0}
+    | IntegerRange(PosInf, _) -> false      // this is an empty set, not {0}
+    | IntegerRange(_, PosInf) -> false      // this is an infinite set, not {0}
+    | IntegerRange(_, NegInf) -> false      // this is an empty set, not {0}
+    | IntegerRange(FiniteLimit(a), FiniteLimit(b)) -> (a.IsZero && b.IsZero)
 
-let RangeTypeTable = 
-    List.map (fun (name,enum) -> (enum,name)) RangeTupleList
-    |> Map.ofList
+let EmptyRange = IntegerRange(PosInf, NegInf)
+let ZeroRange  = IntegerRange(FiniteLimit(BigInteger.Zero), FiniteLimit(BigInteger.Zero))
 
-let IsRangeName text = Map.containsKey text RangeNameTable
+let IsRangeName text = 
+    match text with
+    | "integer" -> true
+    | "rational" -> true
+    | "real" -> true
+    | "complex" -> true
+    | _ -> false
 
-let RangeName r = Map.find r RangeTypeTable
+let UnboundedRange text =
+    match text with
+    | "integer" -> IntegerRange(NegInf, PosInf)
+    | "rational" -> RationalRange
+    | "real" -> RealRange
+    | "complex" -> ComplexRange
+    | _ -> failwith "Invalid range name '%s'" text
+
+let RangeName r = 
+    match r with
+    | ComplexRange -> "complex"
+    | RealRange -> "real"
+    | RationalRange -> "rational"
+    | IntegerRange(NegInf,PosInf) -> "integer"
+    | IntegerRange(NegInf,FiniteLimit(b)) -> sprintf "integer(,%O)" b
+    | IntegerRange(FiniteLimit(a), PosInf) -> sprintf "integer(%O,)" a
+    | IntegerRange(FiniteLimit(a),FiniteLimit(b)) -> 
+        if a <= b then
+            sprintf "integer(%O,%O)" a b
+        else
+            "empty"
+    | IntegerRange(_,NegInf) -> "empty"
+    | IntegerRange(PosInf,_) -> "empty"
 
 let IsStringLiteralText (text:string) =
     (text.Length >= 2) && text.StartsWith("\"") && text.EndsWith("\"")

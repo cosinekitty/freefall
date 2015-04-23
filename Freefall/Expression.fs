@@ -1327,32 +1327,149 @@ let rec EvalQuantity context expr =
     | NumExprRef(t,_) -> FailLingeringMacro t
     | PrevExprRef(t) -> FailLingeringMacro t
 
+let rec AddDimensionlessNumberList numlist =
+    match numlist with
+    | [] -> Rational(R0)
+    | first :: rest -> AddNumbers first (AddDimensionlessNumberList rest)
+
+let rec MultiplyDimensionlessNumberList numlist =
+    match numlist with
+    | [] -> Rational(R1)
+    | first :: rest -> MultiplyNumbers first (MultiplyDimensionlessNumberList rest)
+
+let rec EvalDimensionlessNumber expr =
+    match expr with
+    | Amount(PhysicalQuantity(number,concept)) ->
+        if concept = Dimensionless then
+            number
+        else
+            ExpressionError expr "Dimensional quantity not allowed."
+    | Solitaire(vartoken) -> 
+        SyntaxError vartoken "Symbol not allowed"
+    | Del(vartoken,order) ->
+        SyntaxError vartoken "Infinitesimal not allowed"
+    | Functor(funcName,argList) -> 
+        SyntaxError funcName "Function not allowed"
+    | Sum(terms) -> 
+        List.map EvalDimensionlessNumber terms
+        |> AddDimensionlessNumberList
+    | Product(factors) -> 
+        List.map EvalDimensionlessNumber factors
+        |> MultiplyDimensionlessNumberList
+    | Power(a,b) -> 
+        ExpressionError expr "Power expressions not yet supported here."
+    | Equals(a,b) -> ExpressionError expr "Equality operator not allowed in numeric expression."
+    | NumExprRef(t,_) -> FailLingeringMacro t
+    | PrevExprRef(t) -> FailLingeringMacro t
+
 //-----------------------------------------------------------------------------------------------------
 // Numeric range analysis - determines whether an expression will always be integer, rational, real, complex.
 
 let QuantityNumericRange (PhysicalQuantity(number,concept)) =
     match number with
-    | Rational(_,b) -> 
+    | Rational(a,b) -> 
         if concept <> Dimensionless then
             RealRange       // We don't consider 3*meter/second an integer; it is a real number because units are an artifice.
         elif b.IsOne then 
-            IntegerRange 
+            IntegerRange(FiniteLimit(a), FiniteLimit(a))
         else 
             RationalRange
     | Real(_) -> RealRange
     | Complex(_) -> ComplexRange   // FIXFIXFIX - consider "demoting" complex to real if imaginary part is 0? Would require great care throughout the code.
 
-let PromoteNumericRangePair a b =
-    match (a, b) with
-    | (ComplexRange, _) | (_, ComplexRange) -> ComplexRange
-    | (RealRange, _) | (_, RealRange) -> RealRange
-    | (RationalRange, _) | (_, RationalRange) -> RationalRange
-    | (IntegerRange, IntegerRange) -> IntegerRange
+let MinIntegerLimit a b =
+    match a, b with
+    | NegInf, _ | _, NegInf -> NegInf
+    | PosInf, x | x, PosInf -> x
+    | FiniteLimit(af), FiniteLimit(bf) -> FiniteLimit(BigInteger.Min(af, bf))
 
-let rec PromoteNumericRangeList rangeList =
+let MaxIntegerLimit a b =
+    match a, b with
+    | NegInf, x | x, NegInf -> x
+    | PosInf, _ | _, PosInf -> PosInf
+    | FiniteLimit(af), FiniteLimit(bf) -> FiniteLimit(BigInteger.Max(af, bf))
+
+let NumericRangePairIntersection a b =      // Find the overlap (set intersection) between two numeric ranges
+    if (IsEmptyRange a) || (IsEmptyRange b) then
+        EmptyRange
+    else
+        match (a, b) with
+        | (ComplexRange, x) | (x, ComplexRange) -> x
+        | (RealRange, x) | (x, RealRange) -> x
+        | (RationalRange, x) | (x, RationalRange) -> x
+        | (IntegerRange(a1,a2), IntegerRange(b1,b2)) ->
+            IntegerRange(MaxIntegerLimit a1 b1, MinIntegerLimit a2 b2)
+
+let SumIntegerLimit a b =
+    match a, b with
+    | NegInf, PosInf -> failwith "Indeterminate sum NegInf + PosInf"
+    | PosInf, NegInf -> failwith "Indeterminate sum PosInf + NegInf"
+    | NegInf, _ | _, NegInf -> NegInf
+    | PosInf, _ | _, PosInf -> PosInf
+    | FiniteLimit(aLimit), FiniteLimit(bLimit) -> FiniteLimit(aLimit + bLimit)
+
+let rec SumRangeList rangeList =
     match rangeList with
-    | [] -> IntegerRange      // works for sums and products: sum() = 0, product() = 1, both of which are integers.
-    | firstRange :: rest -> PromoteNumericRangePair firstRange (PromoteNumericRangeList rest)
+    | [] -> IntegerRange(FiniteLimit(BigInteger.Zero), FiniteLimit(BigInteger.Zero))
+    | firstRange :: rest -> 
+        let restRange = SumRangeList rest
+        if (IsEmptyRange firstRange) || (IsEmptyRange restRange) then
+            EmptyRange
+        else
+            match firstRange, restRange with
+            | (ComplexRange, _) | (_, ComplexRange) -> ComplexRange
+            | (RealRange, _) | (_, RealRange) -> RealRange
+            | (RationalRange, _) | (_, RationalRange) -> RationalRange
+            | (IntegerRange(a1,a2), IntegerRange(b1,b2)) -> IntegerRange(SumIntegerLimit a1 b1, SumIntegerLimit a2 b2)
+
+let MultiplyIntegerLimits a b =
+    match a, b with
+    | PosInf, PosInf -> PosInf
+    | NegInf, NegInf -> PosInf
+    | NegInf, PosInf -> NegInf
+    | PosInf, NegInf -> NegInf
+
+    | NegInf, FiniteLimit(x) 
+    | FiniteLimit(x), NegInf ->
+        match x.Sign with
+        | -1 -> PosInf
+        |  0 -> FiniteLimit(BigInteger.Zero)    // note that we are not multiplying -infinity * 0, but -(really large)*0 = 0
+        | +1 -> NegInf
+        |  _ -> failwith "Impossible x.Sign"
+
+    | PosInf, FiniteLimit(x)
+    | FiniteLimit(x), PosInf ->
+        match x.Sign with
+        | -1 -> NegInf
+        |  0 -> FiniteLimit(BigInteger.Zero)
+        | +1 -> PosInf
+        |  _ -> failwith "Impossible x.Sign"
+
+    | FiniteLimit(x), FiniteLimit(y) ->
+        FiniteLimit(x * y)
+
+let rec ProductRangeList rangeList =
+    match rangeList with
+    | [] -> IntegerRange(FiniteLimit(BigInteger.One), FiniteLimit(BigInteger.One))
+    | firstRange :: rest ->
+        let restRange = ProductRangeList rest
+        if (IsEmptyRange firstRange) || (IsEmptyRange restRange) then
+            EmptyRange
+        elif (IsZeroRange firstRange) || (IsZeroRange restRange) then
+            ZeroRange
+        else
+            match firstRange, restRange with
+            | (ComplexRange, _) | (_, ComplexRange) -> ComplexRange     // complex subsumes lower ranges
+            | (RealRange, _) | (_, RealRange) -> RealRange              // real subsumes lower ranges
+            | (RationalRange, _) | (_, RationalRange) -> RationalRange  // rational subsumes integer
+            | (IntegerRange(a1,a2), IntegerRange(b1,b2)) ->
+                let c1 = MultiplyIntegerLimits a1 b1
+                let c2 = MultiplyIntegerLimits a1 b2
+                let c3 = MultiplyIntegerLimits a2 b1
+                let c4 = MultiplyIntegerLimits a2 b2
+                let cMin = MinIntegerLimit (MinIntegerLimit c1 c2) (MinIntegerLimit c3 c4)
+                let cMax = MaxIntegerLimit (MaxIntegerLimit c1 c2) (MaxIntegerLimit c3 c4)
+                IntegerRange(cMin, cMax)
 
 let rec ExpressionNumericRange context expr =
     match expr with
@@ -1365,7 +1482,7 @@ let rec ExpressionNumericRange context expr =
     | Del(vartoken,order) ->
         let range, concept = FindVariableEntry context vartoken
         match range with
-        | IntegerRange -> SyntaxError vartoken "Cannot apply @ operator to an integer variable."
+        | IntegerRange(_,_) -> SyntaxError vartoken "Cannot apply @ operator to an integer variable."
         | RationalRange -> SyntaxError vartoken "Cannot apply @ operator to a rational variable."
         | RealRange -> RealRange
         | ComplexRange -> ComplexRange
@@ -1375,33 +1492,37 @@ let rec ExpressionNumericRange context expr =
         handler.EvalRange funcName rlist
     | Sum(terms) -> 
         List.map (ExpressionNumericRange context) terms
-        |> PromoteNumericRangeList
+        |> SumRangeList
     | Product(factors) -> 
         List.map (ExpressionNumericRange context) factors
-        |> PromoteNumericRangeList
+        |> ProductRangeList
     | Power(a,b) -> 
         let aRange = ExpressionNumericRange context a
         let bRange = ExpressionNumericRange context b
-        match (aRange, bRange) with
-        | (IntegerRange, IntegerRange) -> RationalRange     // 3 ^ (-2) = 1/9
-        | (IntegerRange, RationalRange) -> RealRange        // 3 ^ (1/2) = sqrt(3)
-        | (IntegerRange, RealRange) -> RealRange
-        | (IntegerRange, ComplexRange) -> ComplexRange
-        | (RationalRange, IntegerRange) -> RationalRange
-        | (RationalRange, RationalRange) -> RealRange
-        | (RationalRange, RealRange) -> RealRange
-        | (RationalRange, ComplexRange) -> ComplexRange
-        | (RealRange, IntegerRange) -> RealRange
-        | (RealRange, RationalRange) -> RealRange
-        | (RealRange, RealRange) -> RealRange
-        | (RealRange, ComplexRange) -> ComplexRange
-        | (ComplexRange, IntegerRange) -> ComplexRange
-        | (ComplexRange, RationalRange) -> ComplexRange
-        | (ComplexRange, RealRange) -> ComplexRange
-        | (ComplexRange, ComplexRange) -> ComplexRange
-    | Equals(a,b) -> 
+        if (IsEmptyRange aRange) || (IsEmptyRange bRange) then
+            EmptyRange
+        else
+            match (aRange, bRange) with
+            // FIXFIXFIX - try to handle all the integer range special cases
+            | (IntegerRange(_,_), IntegerRange(_,_)) -> RationalRange     // 3 ^ (-2) = 1/9
+            | (IntegerRange(_,_), RationalRange) -> RealRange        // 3 ^ (1/2) = sqrt(3)
+            | (IntegerRange(_,_), RealRange) -> RealRange
+            | (IntegerRange(_,_), ComplexRange) -> ComplexRange
+            | (RationalRange, IntegerRange(_,_)) -> RationalRange
+            | (RationalRange, RationalRange) -> RealRange
+            | (RationalRange, RealRange) -> RealRange
+            | (RationalRange, ComplexRange) -> ComplexRange
+            | (RealRange, IntegerRange(_,_)) -> RealRange
+            | (RealRange, RationalRange) -> RealRange
+            | (RealRange, RealRange) -> RealRange
+            | (RealRange, ComplexRange) -> ComplexRange
+            | (ComplexRange, IntegerRange(_,_)) -> ComplexRange
+            | (ComplexRange, RationalRange) -> ComplexRange
+            | (ComplexRange, RealRange) -> ComplexRange
+            | (ComplexRange, ComplexRange) -> ComplexRange
+    | Equals(a,b) ->    
         let aRange = ExpressionNumericRange context a
         let bRange = ExpressionNumericRange context b
-        PromoteNumericRangePair aRange bRange
+        NumericRangePairIntersection aRange bRange
     | NumExprRef(t,_) -> FailLingeringMacro t
     | PrevExprRef(t) -> FailLingeringMacro t
