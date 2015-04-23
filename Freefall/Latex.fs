@@ -235,21 +235,28 @@ and LatexFormatFactorList context factorList index =
             "", LatexFactorSeparator.Empty
 
     | first :: rest ->
-        let ftext, fsep = FormatLatexPrec context first Precedence_Mul
-        let rtext, rsep = LatexFormatFactorList context rest (1+index)
-        let septext =
-            match fsep, rsep with
-            | _, LatexFactorSeparator.Empty -> ""
-            | LatexFactorSeparator.SurroundDots, _ -> " \\cdot "
-            | _, LatexFactorSeparator.LeftDot -> " \\cdot "
-            | _, LatexFactorSeparator.SurroundDots -> " \\cdot "
-            | _, LatexFactorSeparator.Space -> " "
-
-        ftext + septext + rtext, fsep
         // There are a lot of special cases with representation of product lists.
         // prod(3,4,5) ==>  3 \cdot 4 \cdot 5
         // prod(-5,foot,-6,10) ==> -5 \cdot foot \cdot -6 \cdot 10
         // prod(-5,x) ==> -5 x
+        // prod(-1,x) ==> -x
         // prod(kilogram,meter,second^2) ==> kilogram \cdot meter \cdot second^{2}
         // prod(longname,x,y) ==> longname \cdot x y
         // prod(alpha,beta) ==> \alpha \beta
+
+        if (index = 0) && (IsNegativeUnityExpression first) then
+            // Format prod(-1, ...) as -(...)
+            let rtext, rsep = LatexFormatFactorList context rest index
+            "-" + rtext, LatexFactorSeparator.Space
+        else
+            let ftext, fsep = FormatLatexPrec context first Precedence_Mul
+            let rtext, rsep = LatexFormatFactorList context rest (1+index)
+            let septext =
+                match fsep, rsep with
+                | _, LatexFactorSeparator.Empty -> ""
+                | LatexFactorSeparator.SurroundDots, _ -> " \\cdot "
+                | _, LatexFactorSeparator.LeftDot -> " \\cdot "
+                | _, LatexFactorSeparator.SurroundDots -> " \\cdot "
+                | _, LatexFactorSeparator.Space -> " "
+
+            ftext + septext + rtext, fsep
