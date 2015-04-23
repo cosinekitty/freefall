@@ -84,7 +84,7 @@ let MyProbeHook context expr range concept =
     printfn "PROBE(expr)    : %s" (FormatExpression expr)
     printfn "PROBE(raw)     : %s" (FormatExpressionRaw expr)
     printfn "PROBE(latex)   : %s" (FormatLatex context expr)
-    printfn "PROBE(range)   : %s" (RangeName range)
+    printfn "PROBE(range)   : %s" (FormatRange range)
     printfn "PROBE(concept) : %s" (FormatConcept concept)
     printfn ""
 

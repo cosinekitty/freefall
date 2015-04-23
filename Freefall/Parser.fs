@@ -285,38 +285,38 @@ let ParseTypeAndSemicolon scan =
     //      In the above rule, expr is a concept expression, e.g., distance/time
     //
     // typename ::= "complex" | "real" | "rational" | "integer" [intrange]
-    // intrange ::= "(" [numexpr] "," [numexpr] ")"       // numexpr(s) must evaluate to integers
+    // intrange ::= "[" [numexpr] "," [numexpr] "]"       // numexpr(s) must evaluate to integers
     match RequireToken scan with 
 
     | {Kind=TokenKind.NumericRangeName; Text=text} :: {Text=";"} :: scan2 ->
         UnboundedRange text, UnityAmount, scan2   // range present but concept absent means concept defaults to dimensionless unity
 
-    | {Kind=TokenKind.NumericRangeName; Text=text} :: {Text="("} :: {Text=","} :: {Text=")"} :: scan2 ->
+    | {Kind=TokenKind.NumericRangeName; Text=text} :: {Text="["} :: {Text=","} :: {Text="]"} :: scan2 ->
         UnboundedRange text, UnityAmount, (ExpectSemicolon scan2)
 
-    | ({Text="integer"} as token) :: {Text="("} :: {Text=","} :: scan2 ->       // omitted lower bound = negative infinity
+    | ({Text="integer"} as token) :: {Text="["} :: {Text=","} :: scan2 ->       // omitted lower bound = negative infinity
         let upperLimit, scan3 = ParseIntegerValuedExpression scan2
-        let scan4 = scan3 |> ExpectToken ")" |> ExpectSemicolon
+        let scan4 = scan3 |> ExpectToken "]" |> ExpectSemicolon
         let range = MakeIntegerRange token NegInf (FiniteLimit(upperLimit))
         range, UnityAmount, scan4
 
-    | ({Text="integer"} as token) :: {Text="("} :: scan2 ->                     // explicit lower bound
+    | ({Text="integer"} as token) :: {Text="["} :: scan2 ->                     // explicit lower bound
         let lowerLimit, scan3 = ParseIntegerValuedExpression scan2
         let scan4 = ExpectToken "," scan3
         match scan4 with
-        | {Text=")"} :: scan5 -> 
+        | {Text="]"} :: scan5 -> 
             // lower limit only
             let range = MakeIntegerRange token (FiniteLimit(lowerLimit)) PosInf
             range, UnityAmount, (ExpectSemicolon scan5)
         | _ ->
             // lower and upper limits must both be there
             let upperLimit, scan5 = ParseIntegerValuedExpression scan4
-            let scan6 = scan5 |> ExpectToken ")" |> ExpectSemicolon
+            let scan6 = scan5 |> ExpectToken "]" |> ExpectSemicolon
             let range = MakeIntegerRange token (FiniteLimit(lowerLimit)) (FiniteLimit(upperLimit))
             range, UnityAmount, scan6
 
     | {Kind=TokenKind.NumericRangeName; Text=text} :: scan2 ->
-        let conceptExpr, scan3 = ParseExpression scan2      // FIXFIXFIX - do we need to verify conceptExpr is a concept?
+        let conceptExpr, scan3 = ParseExpression scan2
         UnboundedRange text, conceptExpr, (ExpectSemicolon scan3)
 
     | _ ->

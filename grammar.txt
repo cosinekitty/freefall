@@ -14,7 +14,7 @@
     probe ::= "probe" expr ";"          // reports ancillary information about an expression
     idspec ::= "*" | ident { "," ident }
     typename ::= "complex" | "real" | "rational" | "integer" [intrange]
-    intrange ::= "(" [numexpr] "," [numexpr] ")"       // numexpr(s) must evaluate to integers
+    intrange ::= "[" [numexpr] "," [numexpr] "]"       // numexpr(s) must evaluate to integers
  4  expr ::= numexpr [relop numexpr]
     relop ::= "=" | "!=" | "<" | ">" | "<=" | ">="
     numexpr ::= mulexpr { addop mulexpr }

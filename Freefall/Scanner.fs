@@ -165,17 +165,17 @@ let UnboundedRange text =
     | "complex" -> ComplexRange
     | _ -> failwith "Invalid range name '%s'" text
 
-let RangeName r = 
+let FormatRange r = 
     match r with
     | ComplexRange -> "complex"
     | RealRange -> "real"
     | RationalRange -> "rational"
     | IntegerRange(NegInf,PosInf) -> "integer"
-    | IntegerRange(NegInf,FiniteLimit(b)) -> sprintf "integer(,%O)" b
-    | IntegerRange(FiniteLimit(a), PosInf) -> sprintf "integer(%O,)" a
+    | IntegerRange(NegInf,FiniteLimit(b)) -> sprintf "integer[,%O]" b
+    | IntegerRange(FiniteLimit(a), PosInf) -> sprintf "integer[%O,]" a
     | IntegerRange(FiniteLimit(a),FiniteLimit(b)) -> 
         if a <= b then
-            sprintf "integer(%O,%O)" a b
+            sprintf "integer[%O,%O]" a b
         else
             "empty"
     | IntegerRange(_,NegInf) -> "empty"

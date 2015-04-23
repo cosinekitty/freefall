@@ -18,7 +18,7 @@ let MyAssignmentHook (targetName:option<string>) (refIndex:int) (assignedExpr:Ex
 
 let MyProbeHook (context:Context) (expr:Expression) (range:NumericRange) (concept:PhysicalConcept) =
     printfn "PROBE(expr)    : %s" (FormatExpression expr)
-    printfn "PROBE(range)   : %s" (RangeName range)
+    printfn "PROBE(range)   : %s" (FormatRange range)
     printfn "PROBE(concept) : %s" (FormatConcept concept)
     printfn ""
 

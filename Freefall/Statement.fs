@@ -88,7 +88,7 @@ let FormatStatement statement =
 
     | VarDecl {VarNameList=vlist; Range=range; ConceptExpr=conceptExpr;} ->
         let varNamesText = JoinTokenList vlist
-        let rangeText = RangeName range
+        let rangeText = FormatRange range
         let conceptText = FormatExpression conceptExpr
         let typeText =
             if conceptText = "1" then
