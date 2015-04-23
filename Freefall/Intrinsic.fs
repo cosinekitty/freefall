@@ -34,6 +34,11 @@ let EvalMacroExpander context macroToken argList =
     | [arg] -> Amount(EvalQuantity context arg)
     | _ -> FailSingleArgMacro macroToken argList
 
+let FloatMacroExpander context macroToken argList =
+    match argList with
+    | [arg] -> Amount(ApproxQuantity context arg)
+    | _ -> FailSingleArgMacro macroToken argList
+
 let DiffVariableToken context expr =
     match expr with
     | Solitaire(token) ->
@@ -72,6 +77,7 @@ let IntrinsicMacros =
         ("deriv",   DiffDerivMacroExpander Derivative)
         ("diff",    DiffDerivMacroExpander Differential)
         ("eval",    EvalMacroExpander)
+        ("float",   FloatMacroExpander)
         ("simp",    SimplifyMacroExpander)
     ]
 

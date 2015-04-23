@@ -1065,6 +1065,18 @@ let rec EvalQuantity context expr =
     | NumExprRef(t,_) -> FailLingeringMacro t
     | PrevExprRef(t) -> FailLingeringMacro t
 
+let ApproxQuantity context expr =
+    // Same as EvalQuantity, only we reduce non-integer rationals to floating point approximations.
+    let (PhysicalQuantity(number,concept) as quantity) = EvalQuantity context expr
+    match number with
+    | Rational(a,b) when b <> 1I -> 
+        PhysicalQuantity(Real((float a) / (float b)), concept)
+
+    | Rational(_,_)
+    | Real(_)
+    | Complex(_) ->
+        quantity
+
 let rec AddDimensionlessNumberList numlist =
     match numlist with
     | [] -> Rational(R0)
