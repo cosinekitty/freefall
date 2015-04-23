@@ -217,13 +217,13 @@ type BaseConceptEntry = {
 }
 
 let BaseConcepts = [
-    {ConceptName="mass";            BaseUnitName="kilogram";    ConceptValue=Concept[R1; R0; R0; R0; R0; R0; R0]};
-    {ConceptName="distance";        BaseUnitName="meter";       ConceptValue=Concept[R0; R1; R0; R0; R0; R0; R0]};
-    {ConceptName="time";            BaseUnitName="second";      ConceptValue=Concept[R0; R0; R1; R0; R0; R0; R0]};
-    {ConceptName="temperature";     BaseUnitName="kelvin";      ConceptValue=Concept[R0; R0; R0; R1; R0; R0; R0]};
-    {ConceptName="substance";       BaseUnitName="mole";        ConceptValue=Concept[R0; R0; R0; R0; R1; R0; R0]};
-    {ConceptName="current";         BaseUnitName="ampere";      ConceptValue=Concept[R0; R0; R0; R0; R0; R1; R0]};
-    {ConceptName="luminosity";      BaseUnitName="candela";     ConceptValue=Concept[R0; R0; R0; R0; R0; R0; R1]};
+    {ConceptName="mass";            BaseUnitName="kilogram";    ConceptValue=Concept[R1; R0; R0; R0; R0; R0; R0]}
+    {ConceptName="distance";        BaseUnitName="meter";       ConceptValue=Concept[R0; R1; R0; R0; R0; R0; R0]}
+    {ConceptName="time";            BaseUnitName="second";      ConceptValue=Concept[R0; R0; R1; R0; R0; R0; R0]}
+    {ConceptName="temperature";     BaseUnitName="kelvin";      ConceptValue=Concept[R0; R0; R0; R1; R0; R0; R0]}
+    {ConceptName="substance";       BaseUnitName="mole";        ConceptValue=Concept[R0; R0; R0; R0; R1; R0; R0]}
+    {ConceptName="current";         BaseUnitName="ampere";      ConceptValue=Concept[R0; R0; R0; R0; R0; R1; R0]}
+    {ConceptName="luminosity";      BaseUnitName="candela";     ConceptValue=Concept[R0; R0; R0; R0; R0; R0; R1]}
 ]
 
 let NumDimensions = BaseConcepts.Length

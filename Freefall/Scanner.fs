@@ -92,23 +92,23 @@ let IsNumericLiteral (text:string) =
 
 let KeywordTable = 
     Set.ofList [ 
-        "assertf"; 
-        "concept"; 
-        "forget"; 
-        "probe"; 
-        "unit"; 
-        "var"; 
+        "assertf"
+        "concept"
+        "forget" 
+        "probe" 
+        "unit" 
+        "var" 
     ]
 
 let IsKeyword text = Set.contains text KeywordTable 
 
 let PseudoFunctionTable =
     Set.ofList [
-        "neg";
-        "pow";
-        "prod";
-        "recip";
-        "sum";
+        "neg"
+        "pow"
+        "prod"
+        "recip"
+        "sum"
     ]
 
 let IsPseudoFunction text = Set.contains text PseudoFunctionTable

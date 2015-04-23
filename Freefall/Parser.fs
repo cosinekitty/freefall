@@ -13,7 +13,7 @@ open Freefall.Stmt
 let FileNameFromOrigin origin =
     match origin with
     | None -> None
-    | Some {Filename=filename;} -> Some(filename)
+    | Some {Filename=filename} -> Some(filename)
 
 let RequireToken scan =
     match scan with
@@ -25,7 +25,7 @@ let Impossible () = failwith "Internal error - this should not be possible!"
 
 let ExpectToken text scan =
     match RequireToken scan with
-    | {Text=actual;} :: scan2 as token when actual=text -> scan2
+    | {Text=actual} :: scan2 as token when actual=text -> scan2
     | token :: _ -> SyntaxError token (sprintf "Expected '%s'" text)
     | _ -> Impossible ()
 
@@ -52,7 +52,7 @@ let RequireExactlyOneArg funcName argList =
 
 let RequireExactlyTwoArgs funcName argList =
     match argList with
-    | [a; b;] -> (a, b)
+    | [a ; b] -> (a, b)
     | _ -> SyntaxError funcName "Function requires exactly 2 arguments."
 
 //---------------------------------------------------------------------------------------
@@ -61,7 +61,7 @@ let RequireExactlyTwoArgs funcName argList =
 let rec ParseExpression scan =
     let expr, scan2 = ParseAddSub scan
     match scan2 with
-    | {Text="=";} :: scan3 ->
+    | {Text="="} :: scan3 ->
         let right, scan4 = ParseAddSub scan3
         (Equals(expr,right)), scan4
     | _ ->
@@ -130,17 +130,17 @@ and ParseArgList scan =
     // arglist ::= [ expr { "," expr } ] ")"
     match RequireToken scan with
 
-    | {Text=")";} :: scan2 -> 
+    | {Text=")"} :: scan2 -> 
         [], scan2
 
     | _ ->
         let expr, scan2 = ParseExpression scan
         match scan2 with
-        | {Text=",";} :: scan3 ->
+        | {Text=","} :: scan3 ->
             let restArgs, scan4 = ParseArgList scan3
             (expr :: restArgs), scan4
         
-        | {Text=")";} :: scan3 ->
+        | {Text=")"} :: scan3 ->
             [expr], scan3
 
         | badtoken :: _ ->
@@ -154,11 +154,11 @@ and ParseAtom scan =
 
     | [] -> Impossible ()    // RequireToken already checks this case, but I want to eliminate warning here.
 
-    | ({Kind=TokenKind.Identifier} as funcName) :: {Text="(";} :: scan2 ->
+    | ({Kind=TokenKind.Identifier} as funcName) :: {Text="("} :: scan2 ->
         let argList, scan3 = ParseArgList scan2
         Functor(funcName,argList), scan3
 
-    | ({Kind=TokenKind.PseudoFunction} as funcName) :: {Text="(";} :: scan2 ->
+    | ({Kind=TokenKind.PseudoFunction} as funcName) :: {Text="("} :: scan2 ->
         let argList, scan3 = ParseArgList scan2
         let expr = 
             match funcName.Text with
@@ -172,10 +172,10 @@ and ParseAtom scan =
             | _ -> SyntaxError funcName "Internal error - unsupported pseudo-function."
         expr, scan3
 
-    | ({Kind=TokenKind.Identifier;} as token) :: rscan ->
+    | ({Kind=TokenKind.Identifier} as token) :: rscan ->
         (Solitaire(token)), rscan     // "solitaire" is a word for a lone symbol that only context can distinguish between variable, unit, or concept.
 
-    | ({Kind=TokenKind.ImagFloatLiteral; Text=text;} as imagtoken) :: rscan ->
+    | ({Kind=TokenKind.ImagFloatLiteral; Text=text} as imagtoken) :: rscan ->
         if not (text.EndsWith("i")) then
             SyntaxError imagtoken "Internal error - imaginary literal should have ended with 'i'"
         else
@@ -185,14 +185,14 @@ and ParseAtom scan =
             else
                 SyntaxError imagtoken "Imaginary literal is not valid."
 
-    | ({Kind=TokenKind.RealFloatLiteral; Text=text;} as realtoken) :: rscan ->
+    | ({Kind=TokenKind.RealFloatLiteral; Text=text} as realtoken) :: rscan ->
         let isValid, realvalue = System.Double.TryParse(text)
         if isValid then
             (Amount(PhysicalQuantity(Real(realvalue), Dimensionless))), rscan
         else
             SyntaxError realtoken "Real literal is not valid."
 
-    | ({Kind=TokenKind.IntegerLiteral; Text=text;} as inttoken) :: rscan ->
+    | ({Kind=TokenKind.IntegerLiteral; Text=text} as inttoken) :: rscan ->
         let isValid, intvalue = BigInteger.TryParse(text)
         if isValid then
             (Amount(PhysicalQuantity(Rational(intvalue,BigInteger.One), Dimensionless))), rscan
@@ -206,7 +206,7 @@ and ParseAtom scan =
         | [] -> raise (UnexpectedEndException None)
         | badtoken :: zscan -> SyntaxError badtoken "Expected ')'"
 
-    | ({Kind=TokenKind.ExpressionReference; Text=reftext;} as reftoken) :: xscan ->
+    | ({Kind=TokenKind.ExpressionReference; Text=reftext} as reftoken) :: xscan ->
         if reftext = "#" then
             // A reference to the previous expression statement.
             PrevExprRef(reftoken), xscan
@@ -327,10 +327,10 @@ let ParseTypeAndSemicolon scan =
 let ParseStatement scan =
     match RequireToken scan with 
 
-    | {Text=";";} :: rscan -> 
+    | {Text=";"} :: rscan -> 
         DoNothing, rscan
 
-    | ({Text="assertf";} as atoken) :: scan2 ->
+    | ({Text="assertf"} as atoken) :: scan2 ->
         // assertf ::= "assertf" "(" str "," expr ")" ";"
         let scan3 = ExpectToken "(" scan2
         let literal, scan4 = ExpectStringLiteral scan3
@@ -379,13 +379,13 @@ let ParseStatement scan =
             UnitDef{UnitName=idtoken; Expr=expr}, scan5
         | _ -> SyntaxError unitKeywordToken "Expected 'ident = expr;' after 'unit'."
 
-    | {Text="var";} :: scan2 ->
+    | {Text="var"} :: scan2 ->
         // vardecl ::= "var" ident { "," ident } ":" type ";"
         let identList, scan3 = ParseIdentList scan2 ":"
         let range, conceptExpr, scan4 = ParseTypeAndSemicolon scan3
-        VarDecl{VarNameList=identList; Range=range; ConceptExpr=conceptExpr;}, scan4
+        VarDecl{VarNameList=identList; Range=range; ConceptExpr=conceptExpr}, scan4
 
-    | ({Kind=TokenKind.Identifier} as target) :: {Text=":=";} :: rscan ->
+    | ({Kind=TokenKind.Identifier} as target) :: {Text=":="} :: rscan ->
         let expr, xscan = ParseExpression rscan
         Assignment{TargetName=Some(target); Expr=expr}, (ExpectSemicolon xscan)
 

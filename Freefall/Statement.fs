@@ -5,30 +5,30 @@ open Expr
 //--------------------------------------------------------------------------------------------------
 
 type MultiVariableDeclaration = {
-    VarNameList : list<Token>;
-    Range : NumericRange;
-    ConceptExpr : Expression;
+    VarNameList : list<Token>
+    Range : NumericRange
+    ConceptExpr : Expression
 }
 
 type AssignmentStatement = {
-    TargetName : option<Token>;      // the optional user-specified name by which the entire expression should be known later
-    Expr : Expression;
+    TargetName : option<Token>       // the optional user-specified name by which the entire expression should be known later
+    Expr : Expression
 }
 
 type ConceptDefinition = {
-    ConceptName : Token;
-    Expr : Expression;
+    ConceptName : Token
+    Expr : Expression
 }
 
 type UnitDefinition = {
-    UnitName : Token;
-    Expr : Expression;
+    UnitName : Token
+    Expr : Expression
 }
 
 type FormatAssertion = {
-    AssertToken : Token;
-    ExpectedFormat : string;
-    Expr : Expression;
+    AssertToken : Token
+    ExpectedFormat : string
+    Expr : Expression
 }
 
 type Statement =

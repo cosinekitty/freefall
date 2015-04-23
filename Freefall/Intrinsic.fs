@@ -69,11 +69,11 @@ let AssertIdenticalMacroExpander context macroToken argList =
 
 let IntrinsicMacros =
     [
-        ("asserti", AssertIdenticalMacroExpander);
-        ("deriv",   DiffDerivMacroExpander Derivative);
-        ("diff",    DiffDerivMacroExpander Differential);
-        ("eval",    EvalMacroExpander);
-        ("simp",    SimplifyMacroExpander);
+        ("asserti", AssertIdenticalMacroExpander)
+        ("deriv",   DiffDerivMacroExpander Derivative)
+        ("diff",    DiffDerivMacroExpander Differential)
+        ("eval",    EvalMacroExpander)
+        ("simp",    SimplifyMacroExpander)
     ]
 
 //-------------------------------------------------------------------------------------------------
