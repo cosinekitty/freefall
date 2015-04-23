@@ -18,6 +18,13 @@ let FailExactArgCount symbolType requiredCount actualCount token =
 let FailSingleArgMacro macroToken (argList:list<Expression>) =
     FailExactArgCount "Macro" 1 argList.Length macroToken
 
+let FailDimensionalArgument funcToken argConcept =
+    SyntaxError funcToken (sprintf "%s() requires a dimensionless argument, but found %s" funcToken.Text (FormatConcept argConcept))
+
+let VerifyDimensionlessArgument funcToken argConcept =
+    if not (IsConceptDimensionless argConcept) then
+        FailDimensionalArgument funcToken argConcept
+
 let SimplifyMacroExpander context macroToken argList =
     match argList with
     | [arg] -> Simplify context arg
@@ -89,29 +96,24 @@ let Function_Exp = { new IFunctionHandler with
     member this.EvalConcept context funcToken argList =
         match argList with
         | [arg] -> 
-            let argConcept = ExpressionConcept context arg
-            if IsConceptDimensionless argConcept then
-                Dimensionless
-            else
-                SyntaxError funcToken ("exp() requires a dimensionless argument, but found " + FormatConcept argConcept)
+            ExpressionConcept context arg |> VerifyDimensionlessArgument funcToken
+            Dimensionless
         | _ -> FailExactArgCount "Function" 1 argList.Length funcToken
 
     member this.EvalNumeric context funcToken qlist =
         match qlist with
             | [PhysicalQuantity(number,concept)] -> 
+                VerifyDimensionlessArgument funcToken concept
                 if (IsNumberZero number) || (concept = Zero) then
                     Unity
-                elif concept <> Dimensionless then
-                    SyntaxError funcToken ("exp() requires a dimensionless argument, but found " + FormatConcept concept)
                 else
                     match number with
                     | Rational(a,b) -> 
-                        let expx = (System.Math.Exp((float a)/(float b)))
-                        PhysicalQuantity(Real(expx), Dimensionless)
+                        let x = (float a) / (float b)
+                        PhysicalQuantity(Real(System.Math.Exp(x)), Dimensionless)
 
                     | Real(x) -> 
-                        let expx = System.Math.Exp(x)
-                        PhysicalQuantity(Real(expx), Dimensionless)
+                        PhysicalQuantity(Real(System.Math.Exp(x)), Dimensionless)
 
                     | Complex(z) ->
                         PhysicalQuantity(Complex(Complex.Exp(z)), Dimensionless)
@@ -157,11 +159,8 @@ let Function_Ln = { new IFunctionHandler with
     member this.EvalConcept context funcToken argList =
         match argList with
         | [arg] -> 
-            let argConcept = ExpressionConcept context arg
-            if IsConceptDimensionless argConcept then
-                Dimensionless
-            else
-                SyntaxError funcToken ("ln() requires a dimensionless argument, but found " + FormatConcept argConcept)
+            ExpressionConcept context arg |> VerifyDimensionlessArgument funcToken
+            Dimensionless
         | _ -> FailExactArgCount "Function" 1 argList.Length funcToken
 
     member this.EvalNumeric context funcToken qlist =
@@ -169,9 +168,8 @@ let Function_Ln = { new IFunctionHandler with
             | [PhysicalQuantity(number,concept)] -> 
                 if (IsNumberZero number) || (concept = Zero) then
                     SyntaxError funcToken "Cannot evaluate ln(0)."
-                elif concept <> Dimensionless then
-                    SyntaxError funcToken ("ln() requires a dimensionless argument, but found " + FormatConcept concept)
                 else
+                    VerifyDimensionlessArgument funcToken concept
                     match number with
                     | Rational(a,b) -> LnReal ((float a) / (float b))
                     | Real(x) -> LnReal x
@@ -218,20 +216,16 @@ let Function_Cos = { new IFunctionHandler with
     member this.EvalConcept context funcToken argList =
         match argList with
         | [arg] -> 
-            let argConcept = ExpressionConcept context arg
-            if IsConceptDimensionless argConcept then
-                Dimensionless
-            else
-                SyntaxError funcToken ("cos() requires a dimensionless argument, but found " + FormatConcept argConcept)
+            ExpressionConcept context arg |> VerifyDimensionlessArgument funcToken
+            Dimensionless
         | _ -> FailExactArgCount "Function" 1 argList.Length funcToken
 
     member this.EvalNumeric context funcToken qlist =
         match qlist with
             | [PhysicalQuantity(number,concept)] -> 
+                VerifyDimensionlessArgument funcToken concept
                 if (IsNumberZero number) || (concept = Zero) then
                     Unity
-                elif concept <> Dimensionless then
-                    SyntaxError funcToken ("cos() requires a dimensionless argument, but found " + FormatConcept concept)
                 else
                     match number with
                     | Rational(a,b) -> 
@@ -282,20 +276,16 @@ let Function_Sin = { new IFunctionHandler with
     member this.EvalConcept context funcToken argList =
         match argList with
         | [arg] -> 
-            let argConcept = ExpressionConcept context arg
-            if IsConceptDimensionless argConcept then
-                Dimensionless
-            else
-                SyntaxError funcToken ("sin() requires a dimensionless argument, but found " + FormatConcept argConcept)
+            ExpressionConcept context arg |> VerifyDimensionlessArgument funcToken
+            Dimensionless
         | _ -> FailExactArgCount "Function" 1 argList.Length funcToken
 
     member this.EvalNumeric context funcToken qlist =
         match qlist with
             | [PhysicalQuantity(number,concept)] -> 
+                VerifyDimensionlessArgument funcToken concept
                 if (IsNumberZero number) || (concept = Zero) then
                     ZeroQuantity
-                elif concept <> Dimensionless then
-                    SyntaxError funcToken ("sin() requires a dimensionless argument, but found " + FormatConcept concept)
                 else
                     match number with
                     | Rational(a,b) -> 
@@ -331,12 +321,106 @@ let Function_Sin = { new IFunctionHandler with
     member this.LatexName = "\\sin"
 }
 
+let Function_Uroot = { new IFunctionHandler with        // uroot(n) = exp((2*pi*i) / n), where n = 1, 2, 3, ...
+    member this.EvalRange funcToken rangelist =
+        // uroot argument must be a specific positive integer.
+        // That is, the range include a single positive integer value.
+        match rangelist with
+        | [range] ->
+            match range with
+            | IntegerRange(FiniteLimit(lo), FiniteLimit(hi)) ->
+                if (lo <> hi) || (lo.Sign <= 0) then
+                    SyntaxError funcToken "Argument to uroot have a single positive integer value."
+                elif lo.IsOne then
+                    // uroot(1) = 1
+                    IntegerRange(FiniteLimit(BigInteger.One), FiniteLimit(BigInteger.One))
+                elif 0 = lo.CompareTo(2L) then
+                    // uroot(2) = -1
+                    IntegerRange(FiniteLimit(BigInteger.MinusOne), FiniteLimit(BigInteger.MinusOne))
+                else
+                    // uroot(3), uroot(4), uroot(5) are all complex
+                    ComplexRange
+
+            | _ -> SyntaxError funcToken "Argument to uroot must be a positive integer."
+        | _ -> FailExactArgCount "Function" 1 rangelist.Length funcToken
+
+    member this.EvalConcept context funcToken argList =
+        match argList with
+        | [arg] -> 
+            ExpressionConcept context arg |> VerifyDimensionlessArgument funcToken
+            Dimensionless
+        | _ -> FailExactArgCount "Function" 1 argList.Length funcToken
+
+    member this.EvalNumeric context funcToken qlist =
+        match qlist with
+            | [PhysicalQuantity(number,concept)] -> 
+                VerifyDimensionlessArgument funcToken concept
+                if (IsNumberZero number) || (concept = Zero) then
+                    SyntaxError funcToken "uroot(0) is not defined."
+                else
+                    match number with
+                    | Rational(a,b) -> 
+                        if (not b.IsOne) || (a.Sign <= 0) then
+                            SyntaxError funcToken "uroot must have a positive integer argument."
+                        elif a.IsOne then
+                            Unity
+                        elif 0 = a.CompareTo(2L) then
+                            NegativeOneQuantity
+                        elif 0 = a.CompareTo(4L) then
+                            // Not strictly necessary, but without this special case we get "sloppy" result:
+                            //    Freefall:3> eval(uroot(4));
+                            //    Statement: eval(uroot(4));
+                            //    #2 := (6.12303176911189e-17+1.0i)
+                            PhysicalQuantity(Complex(Complex.ImaginaryOne), Dimensionless)
+                        else
+                            // uroot(n) = exp((2*pi*i) / n)
+                            let z = new Complex(0.0, 2.0 * System.Math.PI / (float a))
+                            PhysicalQuantity(Complex(Complex.Exp(z)), Dimensionless)
+                    | _ ->
+                        SyntaxError funcToken "uroot must have a positive integer argument."
+            | _ -> FailExactArgCount "Function" 1 qlist.Length funcToken
+
+    member this.SimplifyStep context funcToken argList =
+        match argList with
+        | [Amount(PhysicalQuantity(number, concept)) as arg] ->
+            VerifyDimensionlessArgument funcToken concept
+            if (IsNumberZero number) || (concept = Zero) then
+                SyntaxError funcToken "uroot(0) is not defined."
+            else
+                match number with
+                | Rational(a,b) -> 
+                    if (not b.IsOne) || (a.Sign <= 0) then
+                        SyntaxError funcToken "uroot must have a positive integer argument."
+                    elif a.IsOne then
+                        UnityAmount
+                    elif 0 = a.CompareTo(2L) then
+                        NegativeOneAmount
+                    else
+                        // uroot(n) = exp((2*pi*i) / n), so do not simplify
+                        Functor(funcToken, [arg])
+                | _ ->
+                    SyntaxError funcToken "uroot must have a positive integer argument."
+        | _ -> FailExactArgCount "Function" 1 argList.Length funcToken
+
+    member this.Differential derivKind context varNameList funcToken argList =
+        // uroot(n) is a constant, so the derivative is always 0.
+        match argList with
+        | [_] -> ZeroAmount
+        | _ -> FailExactArgCount "Function" 1 argList.Length funcToken
+            
+    member this.DistributeAcrossEquation context funcToken leftList rightList =
+        SyntaxError funcToken "uroot does not distribute across equations."
+
+    member this.LatexName = "\\mathrm{uroot}"
+}
+
 let IntrinsicFunctions = 
     [
-        ("cos", Function_Cos);
-        ("exp", Function_Exp);
-        ("ln",  Function_Ln);
-        ("sin", Function_Sin);
+        ("cos",     Function_Cos)
+        ("exp",     Function_Exp)
+        ("ln",      Function_Ln)
+        ("sin",     Function_Sin)
+        ("uroot",   Function_Uroot)
     ]
 
 //-------------------------------------------------------------------------------------------------
