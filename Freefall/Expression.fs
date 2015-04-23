@@ -659,11 +659,12 @@ and SymbolEntry =
     | FunctionEntry of IFunctionHandler
 
 and Context = {
-    SymbolTable: Dictionary<string,SymbolEntry>;
-    NumberedExpressionList: ResizeArray<Expression>;
-    AssignmentHook: option<string> -> int -> Expression -> unit;            // AssignmentHook targetName refIndex assignedExpr
-    ProbeHook: Context -> Expression -> NumericRange -> PhysicalConcept -> unit;
-    SaveToFile: Context -> string -> unit;
+    SymbolTable: Dictionary<string,SymbolEntry>
+    NumberedExpressionList: ResizeArray<Expression>
+    AssignmentHook: option<string> -> int -> Expression -> unit            // AssignmentHook targetName refIndex assignedExpr
+    ProbeHook: Context -> Expression -> NumericRange -> PhysicalConcept -> unit
+    SaveToFile: Context -> string -> unit
+    NextConstantSubscript: ref<int>
 }
 
 let AppendNumberedExpression {NumberedExpressionList=numExprList;} expr =
@@ -687,13 +688,20 @@ let DefineIntrinsicSymbol {SymbolTable=symtable;} symbol entry =
     else
         symtable.Add(symbol, entry)
 
-let DefineSymbol {SymbolTable=symtable;} ({Text=symbol; Kind=kind} as symtoken) symentry =
+let DefineSymbol {SymbolTable=symtable} ({Text=symbol; Kind=kind} as symtoken) symentry =
     if kind <> TokenKind.Identifier then
         SyntaxError symtoken "Expected identifier for symbol name"
     elif (symtable.ContainsKey(symbol)) then
         SyntaxError symtoken "Symbol is already defined"
     else
         symtable.Add(symbol, symentry)
+
+let CreateVariable ({SymbolTable=symtable; NextConstantSubscript=subscript} as context) prefix range concept =
+    incr subscript
+    let varName = sprintf "%s_%d" prefix !subscript
+    let varToken = {Text=varName; Kind=TokenKind.Identifier; Precedence=Precedence_Atom; Origin=None; ColumnNumber = -1}
+    DefineSymbol context varToken (VariableEntry(range, concept))
+    varToken
 
 let DeletedNumberedExpressions {NumberedExpressionList=numlist} =
     (numlist.Clear())

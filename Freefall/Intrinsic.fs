@@ -465,6 +465,7 @@ let MakeContext assignmentHook probeHook saveHook =
         AssignmentHook = assignmentHook
         ProbeHook = probeHook
         SaveToFile = saveHook
+        NextConstantSubscript = ref 0
     }
 
     for {ConceptName=conceptName; BaseUnitName=baseUnitName; ConceptValue=concept} in BaseConcepts do
