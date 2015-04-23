@@ -115,7 +115,7 @@ let IsPseudoFunction text = Set.contains text PseudoFunctionTable
 
 type IntegerLimit =
     | NegInf
-    | FiniteLimit of BigInteger
+    | FiniteLimit of bigint
     | PosInf
 
 type NumericRange =         // the set of values a variable, function, etc, is allowed to range over
@@ -147,7 +147,7 @@ let IsZeroRange range =     // is this a range that contains only the value 0?
     | IntegerRange(FiniteLimit(a), FiniteLimit(b)) -> (a.IsZero && b.IsZero)
 
 let EmptyRange = IntegerRange(PosInf, NegInf)
-let ZeroRange  = IntegerRange(FiniteLimit(BigInteger.Zero), FiniteLimit(BigInteger.Zero))
+let ZeroRange  = IntegerRange(FiniteLimit(0I), FiniteLimit(0I))
 
 let IsRangeName text = 
     match text with

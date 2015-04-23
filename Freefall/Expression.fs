@@ -10,12 +10,12 @@ open Scanner
 exception FreefallRuntimeException of string
 exception UnexpectedEndException of option<string>       // Some(filename) or None
 
-let MinConvertibleBigInteger = new BigInteger(System.Int32.MinValue + 1)        // tricky: avoid two's complement bug: -(-2147483648) = -2147483648!  Freaky!
-let MaxConvertibleBigInteger = new BigInteger(System.Int32.MaxValue)
+let MinConvertibleBigInteger = bigint (System.Int32.MinValue + 1)        // tricky: avoid two's complement bug: -(-2147483648) = -2147483648!  Freaky!
+let MaxConvertibleBigInteger = bigint (System.Int32.MaxValue)
 let CanConvertBigInteger big = (big >= MinConvertibleBigInteger) && (big <= MaxConvertibleBigInteger) 
 
 type Number = 
-    | Rational of BigInteger * BigInteger
+    | Rational of bigint * bigint
     | Real of float
     | Complex of Complex
 
@@ -37,33 +37,33 @@ let NegateNumber number =
     | Real(x) -> Real(-x)
     | Complex(c) -> Complex(-c)
 
-let rec GreatestCommonDivisor (a:BigInteger) (b:BigInteger) =         // caller must ensure that a and b are both non-negative
+let rec GreatestCommonDivisor (a:bigint) (b:bigint) =         // caller must ensure that a and b are both non-negative
     if b.IsZero then
-        if a.IsZero then BigInteger.One else a
+        if a.IsZero then 1I else a
     else
         GreatestCommonDivisor b (a%b)
 
-let rec MakeRationalPair (numer:BigInteger) (denom:BigInteger) =
+let rec MakeRationalPair (numer:bigint) (denom:bigint) =
     if denom.IsZero then 
         raise (FreefallRuntimeException("Rational number cannot have zero denominator."))
     elif numer.IsZero then
-        (BigInteger.Zero, BigInteger.One)
-    elif denom < BigInteger.Zero then
+        (0I, 1I)
+    elif denom.Sign < 0 then
         MakeRationalPair (-numer) (-denom)
     else
-        let gcd = GreatestCommonDivisor (BigInteger.Abs(numer)) denom
+        let gcd = GreatestCommonDivisor (bigint.Abs(numer)) denom
         (numer/gcd, denom/gcd)
 
-let MakeRational (numer:BigInteger) (denom:BigInteger) =
+let MakeRational (numer:bigint) (denom:bigint) =
     Rational(MakeRationalPair numer denom)
 
-let AddExponentLists (alist:list<BigInteger * BigInteger>) (blist:list<BigInteger * BigInteger>) =
+let AddExponentLists (alist:list<bigint * bigint>) (blist:list<bigint * bigint>) =
     List.map2 (fun (a,b) (c,d) -> MakeRationalPair (a*d + c*b) (b*d)) alist blist
 
-let SubtractExponentLists (alist:list<BigInteger * BigInteger>) (blist:list<BigInteger * BigInteger>) =
+let SubtractExponentLists (alist:list<bigint * bigint>) (blist:list<bigint * bigint>) =
     List.map2 (fun (a,b) (c,d) -> MakeRationalPair (a*d - c*b) (b*d)) alist blist        
 
-let NegateExponentList (clist:list<BigInteger * BigInteger>) =
+let NegateExponentList (clist:list<bigint * bigint>) =
     List.map (fun (a,b) -> MakeRationalPair (-a) b) clist
 
 let rec AddNumbers anum bnum =
@@ -101,15 +101,15 @@ let PowerNumbers anum bnum =
     | (Rational(an,ad), Rational(bn,bd)) ->
         if bd.IsOne && (CanConvertBigInteger bn) then
             // We can raise any rational to any 32-bit integer power with an exact rational result.
-            // BigInteger supports non-negative 32-bit signed exponents only.
+            // bigint supports non-negative 32-bit signed exponents only.
             // Raising to any negative power just means we need to take a reciprocal when we are done.
             // (an/ad)^b = (an)^b / (ad)^b          if   b = 0, 1, 2, ...
             // (an/ad)^b = (ad)^(-b) / (an)^(-b)    if b = -1, -2, ...
             let intpow = int bn
             if intpow < 0 then
-                Rational(BigInteger.Pow(ad, -intpow), BigInteger.Pow(an, -intpow))
+                Rational(bigint.Pow(ad, -intpow), bigint.Pow(an, -intpow))
             else
-                Rational(BigInteger.Pow(an, intpow), BigInteger.Pow(ad, intpow))                
+                Rational(bigint.Pow(an, intpow), bigint.Pow(ad, intpow))                
         else
             // Any nonrational (or very large) power requires numerical approximation.
             let a = (float an) / (float ad)
@@ -137,8 +137,8 @@ let PowerNumbers anum bnum =
         Complex(Complex.Pow(a,b))
 
 type PhysicalConcept = 
-    | Zero                              // a special case because 0 is considered compatible with any concept: 0*meter = 0*second. Weird but necessary.
-    | Concept of list<BigInteger * BigInteger>    // list must have NumDimensions elements, each representing a rational number for the exponent of that dimension
+    | Zero                                // a special case because 0 is considered compatible with any concept: 0*meter = 0*second. Weird but necessary.
+    | Concept of list<bigint * bigint>    // list must have NumDimensions elements, each representing a rational number for the exponent of that dimension
 
 // Functions to help build concepts from other concepts...
 
@@ -175,13 +175,13 @@ let ExponentiateConcept xconcept ynum yden =
     | Zero ->
         if ynum.IsZero then
             raise (FreefallRuntimeException("Cannot raise 0 to the 0 power."))
-        elif ynum < BigInteger.Zero then
+        elif ynum.Sign < 0 then
             raise (FreefallRuntimeException("Cannot raise 0 to a negative power."))
         else
             Zero    // 0^x = 0 for all positive rational x
 
-let R0 = (BigInteger.Zero, BigInteger.One)      // Represents the integer 0 = 0/1
-let R1 = (BigInteger.One,  BigInteger.One)      // Represents the integer 1 = 1/1
+let R0 = (0I, 1I)      // Represents the integer 0 = 0/1
+let R1 = (1I, 1I)      // Represents the integer 1 = 1/1
 
 // A concept to represent any dimensionless quantity...
 let Dimensionless = Concept[R0; R0; R0; R0; R0; R0; R0]
@@ -236,18 +236,16 @@ type PhysicalQuantity = PhysicalQuantity of Number * PhysicalConcept
 let Number0 = Rational(R0)
 let Number1 = Rational(R1)
 
-let IntegerNumber (n:int) = Rational(new BigInteger(n), BigInteger.One)
-
 let ZeroQuantity = PhysicalQuantity(Number0, Zero)
 let Unity = PhysicalQuantity(Number1, Dimensionless)
 
-let IntegerQuantity n = 
-    if n = 0 then
+let IntegerQuantity (n:bigint) = 
+    if n.IsZero then
         ZeroQuantity    // We want concept to be Zero, not Dimensionless, in this special case
     else
-        PhysicalQuantity((IntegerNumber n), Dimensionless)
+        PhysicalQuantity(Rational(n, 1I), Dimensionless)
 
-let NegativeOneQuantity = IntegerQuantity -1
+let NegativeOneQuantity = PhysicalQuantity(Rational(-1I, 1I), Dimensionless)
 
 let InvertNumber number =        // calculate the numeric reciprocal
     if IsNumberZero number then
@@ -313,17 +311,16 @@ let ExpressionError expr message =
  
 let ZeroAmount = Amount(ZeroQuantity)
 let UnityAmount = Amount(Unity)
-let IntegerAmount (n:int) = Amount(IntegerQuantity n)
-let NegativeOneAmount = IntegerAmount(-1)
+let NegativeOneAmount = Amount(IntegerQuantity (-1I))
 
 let IsZeroQuantity (PhysicalQuantity(number,concept)) =
     (concept = Zero) || (IsNumberZero number)
 
 let IsUnityQuantity (PhysicalQuantity(number,concept)) =
-    (concept = Dimensionless) && (IsNumberEqualToInteger BigInteger.One number)
+    (concept = Dimensionless) && (IsNumberEqualToInteger 1I number)
 
 let IsNegativeUnityQuantity (PhysicalQuantity(number,concept)) =
-    (concept = Dimensionless) && (IsNumberEqualToInteger BigInteger.MinusOne number)
+    (concept = Dimensionless) && (IsNumberEqualToInteger (-1I) number)
 
 let IsZeroExpression expr =
     match expr with
@@ -339,15 +336,6 @@ let IsNegativeUnityExpression expr =
     match expr with
     | Amount(quantity) -> IsNegativeUnityQuantity quantity
     | _ -> false
-
-let IsExpressionEqualToInteger expr n =
-    if n = 0 then
-        IsZeroExpression expr       // must be handled as a special case
-    else
-        match expr with
-        | Amount(PhysicalQuantity(number,concept)) -> 
-            (concept = Dimensionless) && (IsNumberEqualToInteger (new BigInteger(n)) number)
-        | _ -> false
 
 let MakeNegative expr = 
     match expr with
@@ -441,13 +429,13 @@ let NumberPrecedence x =
             Precedence_Atom
     | Complex(c) -> Precedence_Atom    // complex numbers are always rendered inside parentheses
 
-let FormatDimension name (numer:BigInteger,denom:BigInteger) =
+let FormatDimension name (numer:bigint,denom:bigint) =
     if numer.IsZero then
         ""      // this dimension does not contribute to formatting, e.g. meter^0
     elif numer.IsOne && denom.IsOne then
         name    // meter^(1/1) is written as "meter"
     elif denom.IsOne then
-        if numer < BigInteger.Zero then
+        if numer.Sign < 0 then
             name + "^(" + numer.ToString() + ")"        // meter^(-1)
         else
             name + "^" + numer.ToString()               // meter^3
@@ -622,7 +610,7 @@ and JoinRemainingFactors exprlist =
 and RemainingFactorText expr =
     match expr with
     | Power(x, Amount(PhysicalQuantity(Rational(a,b),concept))) when (concept = Dimensionless) && (a.Sign < 0) -> 
-        let abs_a_text = BigInteger.Negate(a).ToString();
+        let abs_a_text = bigint.Negate(a).ToString();
         let xtext = FormatExpressionPrec x Precedence_Mul
         if b.IsOne then
             if abs_a_text = "1" then
@@ -1381,13 +1369,13 @@ let MinIntegerLimit a b =
     match a, b with
     | NegInf, _ | _, NegInf -> NegInf
     | PosInf, x | x, PosInf -> x
-    | FiniteLimit(af), FiniteLimit(bf) -> FiniteLimit(BigInteger.Min(af, bf))
+    | FiniteLimit(af), FiniteLimit(bf) -> FiniteLimit(bigint.Min(af, bf))
 
 let MaxIntegerLimit a b =
     match a, b with
     | NegInf, x | x, NegInf -> x
     | PosInf, _ | _, PosInf -> PosInf
-    | FiniteLimit(af), FiniteLimit(bf) -> FiniteLimit(BigInteger.Max(af, bf))
+    | FiniteLimit(af), FiniteLimit(bf) -> FiniteLimit(bigint.Max(af, bf))
 
 let NumericRangePairIntersection a b =      // Find the overlap (set intersection) between two numeric ranges
     if (IsEmptyRange a) || (IsEmptyRange b) then
@@ -1410,7 +1398,7 @@ let SumIntegerLimit a b =
 
 let rec SumRangeList rangeList =
     match rangeList with
-    | [] -> IntegerRange(FiniteLimit(BigInteger.Zero), FiniteLimit(BigInteger.Zero))
+    | [] -> IntegerRange(FiniteLimit(0I), FiniteLimit(0I))
     | firstRange :: rest -> 
         let restRange = SumRangeList rest
         if (IsEmptyRange firstRange) || (IsEmptyRange restRange) then
@@ -1433,7 +1421,7 @@ let MultiplyIntegerLimits a b =
     | FiniteLimit(x), NegInf ->
         match x.Sign with
         | -1 -> PosInf
-        |  0 -> FiniteLimit(BigInteger.Zero)    // note that we are not multiplying -infinity * 0, but -(really large)*0 = 0
+        |  0 -> FiniteLimit(0I)    // note that we are not multiplying -infinity * 0, but -(really large)*0 = 0
         | +1 -> NegInf
         |  _ -> failwith "Impossible x.Sign"
 
@@ -1441,7 +1429,7 @@ let MultiplyIntegerLimits a b =
     | FiniteLimit(x), PosInf ->
         match x.Sign with
         | -1 -> NegInf
-        |  0 -> FiniteLimit(BigInteger.Zero)
+        |  0 -> FiniteLimit(0I)
         | +1 -> PosInf
         |  _ -> failwith "Impossible x.Sign"
 
@@ -1450,7 +1438,7 @@ let MultiplyIntegerLimits a b =
 
 let rec ProductRangeList rangeList =
     match rangeList with
-    | [] -> IntegerRange(FiniteLimit(BigInteger.One), FiniteLimit(BigInteger.One))
+    | [] -> IntegerRange(FiniteLimit(1I), FiniteLimit(1I))
     | firstRange :: rest ->
         let restRange = ProductRangeList rest
         if (IsEmptyRange firstRange) || (IsEmptyRange restRange) then

@@ -88,7 +88,7 @@ let Function_Exp = { new IFunctionHandler with
         | [range] ->
             match range with
             | IntegerRange(FiniteLimit(lo), FiniteLimit(hi)) when lo.IsZero && hi.IsZero -> 
-                IntegerRange(FiniteLimit(BigInteger.One), FiniteLimit(BigInteger.One))
+                IntegerRange(FiniteLimit(1I), FiniteLimit(1I))
             | IntegerRange(_,_) -> RealRange
             | RationalRange -> RealRange
             | RealRange -> RealRange
@@ -335,10 +335,10 @@ let Function_Uroot = { new IFunctionHandler with        // uroot(n) = exp((2*pi*
                     SyntaxError funcToken "Argument to uroot have a single positive integer value."
                 elif lo.IsOne then
                     // uroot(1) = 1
-                    IntegerRange(FiniteLimit(BigInteger.One), FiniteLimit(BigInteger.One))
-                elif 0 = lo.CompareTo(2L) then
+                    IntegerRange(FiniteLimit(1I), FiniteLimit(1I))
+                elif lo = 2I then
                     // uroot(2) = -1
-                    IntegerRange(FiniteLimit(BigInteger.MinusOne), FiniteLimit(BigInteger.MinusOne))
+                    IntegerRange(FiniteLimit(-1I), FiniteLimit(-1I))
                 else
                     // uroot(3), uroot(4), uroot(5) are all complex
                     ComplexRange

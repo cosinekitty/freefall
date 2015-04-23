@@ -41,7 +41,7 @@ let LatexFormatNumber x =
                 LatexRealString c.Imaginary
         "(" + rtext + itext + " i)"
 
-let LatexFormatDimension name (numer:BigInteger,denom:BigInteger) =
+let LatexFormatDimension name (numer:bigint, denom:bigint) =
     if numer.IsZero then
         ""      // this dimension does not contribute to formatting, e.g. meter^0
     else
@@ -103,7 +103,7 @@ let rec SplitNumerDenom factorList =
                 if IsNegativeUnityQuantity quantity then
                     x
                 else
-                    Power(x, Amount(PhysicalQuantity(Rational((BigInteger.Negate a),b), Dimensionless)))
+                    Power(x, Amount(PhysicalQuantity(Rational(-a,b), Dimensionless)))
             rNumerList, (recip :: rDenomList)
 
         | _ -> (first :: rNumerList), rDenomList

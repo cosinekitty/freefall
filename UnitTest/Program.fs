@@ -36,9 +36,9 @@ let VarTokenF = MakeIdentifierToken "F"
 let ForceVar = Solitaire(VarTokenF)
 DefineSymbol MyContext VarTokenF (VariableEntry(RealRange,ForceConcept))
 
-let AlmostPi = Amount(PhysicalQuantity(Rational(new BigInteger(22),new BigInteger(7)), Dimensionless))
+let AlmostPi = Amount(PhysicalQuantity(Rational(22I,7I), Dimensionless))
 
-let Weight = Amount(PhysicalQuantity(Rational(new BigInteger(3),new BigInteger(4)), ForceConcept))
+let Weight = Amount(PhysicalQuantity(Rational(3I,4I), ForceConcept))
 
 let WeightSquared = Product[Weight;Weight]
 
