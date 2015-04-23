@@ -219,6 +219,9 @@ let ExecuteStatement context statement shouldReportAssignments =
     | Assignment {TargetName=target; Expr=rawexpr;} ->
         let expr = PrepareExpression context rawexpr
         ValidateExpressionConcept context expr
+        let range = ExpressionNumericRange context expr
+        if IsEmptyRange range then
+            ExpressionError rawexpr "Range of expression values is an empty set. This indicates it is impossible or solutionless."
         let refIndex = context.NumberedExpressionList.Count + 1
         match target with
         | Some(assignToken) -> 

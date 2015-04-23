@@ -1473,7 +1473,8 @@ let rec ProductRangeList rangeList =
 
 let rec ExpressionNumericRange context expr =
     match expr with
-    | Amount(quantity) -> QuantityNumericRange quantity
+    | Amount(quantity) -> 
+        QuantityNumericRange quantity
     | Solitaire(vartoken) -> 
         match FindSymbolEntry context vartoken with
         | UnitEntry(_) -> RealRange             // all physical units are inherently real-valued

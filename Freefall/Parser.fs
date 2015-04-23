@@ -270,6 +270,15 @@ let rec ParseIdentList scan terminator =
     | token :: _ ->
         SyntaxError token "Expected identifier"
 
+let ValidateRange errorToken range =
+    if IsEmptyRange range then
+        SyntaxError errorToken "This numeric range is an empty set."
+    else
+        range
+
+let MakeIntegerRange errorToken lowerBound upperBound =
+    ValidateRange errorToken (IntegerRange(lowerBound,upperBound))
+
 let ParseTypeAndSemicolon scan =
     // type ::= typename [expr] | expr 
     //
@@ -288,7 +297,8 @@ let ParseTypeAndSemicolon scan =
     | ({Text="integer"} as token) :: {Text="("} :: {Text=","} :: scan2 ->       // omitted lower bound = negative infinity
         let upperLimit, scan3 = ParseIntegerValuedExpression scan2
         let scan4 = scan3 |> ExpectToken ")" |> ExpectSemicolon
-        IntegerRange(NegInf, FiniteLimit(upperLimit)), UnityAmount, scan4
+        let range = MakeIntegerRange token NegInf (FiniteLimit(upperLimit))
+        range, UnityAmount, scan4
 
     | ({Text="integer"} as token) :: {Text="("} :: scan2 ->                     // explicit lower bound
         let lowerLimit, scan3 = ParseIntegerValuedExpression scan2
@@ -296,12 +306,14 @@ let ParseTypeAndSemicolon scan =
         match scan4 with
         | {Text=")"} :: scan5 -> 
             // lower limit only
-            IntegerRange(FiniteLimit(lowerLimit), PosInf), UnityAmount, (ExpectSemicolon scan5)
+            let range = MakeIntegerRange token (FiniteLimit(lowerLimit)) PosInf
+            range, UnityAmount, (ExpectSemicolon scan5)
         | _ ->
             // lower and upper limits must both be there
             let upperLimit, scan5 = ParseIntegerValuedExpression scan4
             let scan6 = scan5 |> ExpectToken ")" |> ExpectSemicolon
-            IntegerRange(FiniteLimit(lowerLimit), FiniteLimit(upperLimit)), UnityAmount, scan6
+            let range = MakeIntegerRange token (FiniteLimit(lowerLimit)) (FiniteLimit(upperLimit))
+            range, UnityAmount, scan6
 
     | {Kind=TokenKind.NumericRangeName; Text=text} :: scan2 ->
         let conceptExpr, scan3 = ParseExpression scan2      // FIXFIXFIX - do we need to verify conceptExpr is a concept?
