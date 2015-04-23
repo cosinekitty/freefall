@@ -1021,257 +1021,6 @@ let FindVariableEntry context vartoken =
     | MacroEntry(_) -> FailLingeringMacro vartoken
     | FunctionEntry(_) -> FailNonVariable vartoken "function name"
 
-let rec SimplifyStep context expr =
-    match expr with
-    | Amount(_) -> expr     // already as simple as possible
-    | Solitaire(_) -> expr  // already as simple as possible
-    | Del(_) -> expr        // already as simple as possible
-
-    | Functor(funcName, argList) ->
-        let simpArgList = List.map (SimplifyStep context) argList
-        let funcHandler = FindFunctionEntry context funcName
-        funcHandler.SimplifyStep context funcName simpArgList
-
-    | Sum(termlist) ->
-        let simpargs = 
-            SimplifySumArgs (List.map (SimplifyStep context) termlist) 
-            |> MergeConstants AddQuantities
-            |> MergeLikeTerms context
-
-        match simpargs with
-        | [] -> ZeroAmount
-        | [term] -> term
-        | _ -> Sum simpargs
-
-    | Product(factorlist) ->
-        let simpfactors = 
-            SimplifyProductArgs (List.map (SimplifyStep context) factorlist) 
-            |> MergeConstants MultiplyQuantities
-            |> MergeLikeFactors context
-
-        if List.exists IsZeroExpression simpfactors then
-            ZeroAmount
-        else
-            match simpfactors with
-            | [] -> UnityAmount
-            | [factor] -> factor
-            | _ -> Product simpfactors
-
-    | Power(x,y) ->
-        let sx = SimplifyStep context x
-        let sy = SimplifyStep context y
-        if IsZeroExpression sy then
-            if IsZeroExpression sx then
-                ExpressionError expr "Cannot evaluate 0^0."
-            else
-                UnityAmount
-        elif IsUnityExpression sy then
-            sx
-        else
-            Power(sx,sy)            
-
-    | Equals(a,b) ->
-        Equals((SimplifyStep context a), (SimplifyStep context b))
-
-    | NumExprRef(t,_) ->
-        FailLingeringMacro t
-
-    | PrevExprRef(t) ->
-        FailLingeringMacro t
-
-// Sum(Sum(A,B,C), Sum(D,E)) = Sum(A,B,C,D,E)
-// We want to "lift" all inner Sum() contents to the top level of a list.
-and SimplifySumArgs simpargs =           
-    match simpargs with
-    | [] -> []
-    | (Sum terms)::rest -> (SimplifySumArgs (RemoveZeroes terms)) @ (SimplifySumArgs rest)
-    | first::rest -> SkipZero first (SimplifySumArgs rest)
-
-and SimplifyProductArgs simpargs =           
-    match simpargs with
-    | [] -> []
-    | (Product factors)::rest -> (SimplifyProductArgs (RemoveUnities factors)) @ (SimplifyProductArgs rest)
-    | first::rest -> SkipUnity first (SimplifyProductArgs rest)
-
-//---------------------------------------------------------------------------
-// Aggressive, iterative simplifier...
-
-let Simplify context expr =
-    // Keep iterating SimplifyStep until the expression stops changing.
-    let mutable prev = expr
-    let mutable simp = SimplifyStep context expr
-    while simp <> prev do
-        prev <- simp
-        simp <- SimplifyStep context simp
-    simp
-
-//-----------------------------------------------------------------------------------------------------
-// Unit determination - verify that units are coherent and determine what they are.
-// For example, sum(3*meter,4*second) should raise an exception because adding distance to time is illegal.
-// However, sum(3*meter,4*meter) should be seen as distance units (expressible in meters).
-// Returns Zero for 0*anything, which has no specific units.
-
-let rec ExpressionConcept context expr =
-    match expr with
-    | Amount(PhysicalQuantity(number,concept)) -> if IsNumberZero number then Zero else concept
-    | Solitaire(vartoken) -> FindSolitaireConcept context vartoken
-    | Del(vartoken,_) -> FindSolitaireConcept context vartoken
-    | Functor(funcName,argList) -> FindFunctorConcept context funcName argList
-    | Sum(terms) -> SumConcept context terms
-    | Product(factors) -> ProductConcept context factors
-    | Power(a,b) -> PowerConcept context a b
-    | Equals(a,b) -> EquationConcept context a b
-    | NumExprRef(t,_) -> FailLingeringMacro t
-    | PrevExprRef(t) -> FailLingeringMacro t
-
-and FindSolitaireConcept context token =
-    match FindSymbolEntry context token with
-    | VariableEntry(_,concept) -> concept
-    | ConceptEntry(concept) -> SyntaxError token "Not allowed to use concept name in an expression."
-    | UnitEntry(PhysicalQuantity(_,concept)) -> concept
-    | AssignmentEntry(expr) -> ExpressionConcept context expr
-    | MacroEntry(_) -> SyntaxError token "Attempt to use macro name without parenthesized argument list."
-    | FunctionEntry(_) -> SyntaxError token "Attempt to use function name without parenthesized argument list."
-
-and FindFunctorConcept context funcNameToken argExprList =
-    match FindSymbolEntry context funcNameToken with
-    | FunctionEntry(handler) -> handler.EvalConcept context funcNameToken argExprList
-    | MacroEntry(_) -> FailLingeringMacro funcNameToken
-    | VariableEntry(_) -> SyntaxError funcNameToken "Attempt to use a variable as a function/macro."
-    | ConceptEntry(_) -> SyntaxError funcNameToken "Attempt to use a concept as a function/macro."
-    | UnitEntry(_) -> SyntaxError funcNameToken "Attempt to use a unit as a function/macro."
-    | AssignmentEntry(_) -> SyntaxError funcNameToken "Attempt to use an assignment target as a function/macro."
-
-and EquationConcept context a b =
-    let aConcept = ExpressionConcept context a
-    let bConcept = ExpressionConcept context b
-    if aConcept = Zero then         // zero is compatible with any concept (use other concept)
-        bConcept
-    elif bConcept = Zero then
-        aConcept
-    elif aConcept <> bConcept then
-        ExpressionError b (sprintf "Incompatible units: cannot equate/compare %s and %s" (FormatConcept aConcept) (FormatConcept bConcept))
-    else
-        aConcept
-
-and SumConcept context terms =
-    match terms with 
-    | [] -> Zero        // sum() = 0, which has no specific units -- see comments above.
-    | first::rest -> 
-        let firstConcept = ExpressionConcept context first
-        let restConcept = SumConcept context rest
-        match (firstConcept, restConcept) with
-        | (Zero,Zero) -> Zero                    // 0+0 = 0, which has no specific units
-        | (Concept(_),Zero) -> firstConcept      // x+0 = x with specific units
-        | (Zero,Concept(_)) -> restConcept       // 0+y = y
-        | (Concept(f),Concept(r)) ->
-            if f <> r then
-                ExpressionError first (sprintf "Incompatible units: cannot add %s and %s" (FormatConcept firstConcept) (FormatConcept restConcept))
-            else
-                firstConcept
-
-and ProductConcept context factors =
-    match factors with 
-    | [] -> Dimensionless     // product() = 1, which has dimensionless units            
-    | first::rest -> MultiplyConcepts (ExpressionConcept context first) (ProductConcept context rest)
-
-and PowerConcept context x y =
-    let xConcept = ExpressionConcept context x
-    let yConcept = ExpressionConcept context y
-    if yConcept = Zero then
-        if xConcept = Zero then
-            ExpressionError y "Cannot raise 0 to 0 power."
-        else
-            Dimensionless
-    elif yConcept = Dimensionless then
-        if IsConceptDimensionless xConcept then     // 0^(-3) is an error, but is dimensionless nontheless
-            // If x is dimensionless, then y may be any dimensionless expression, e.g. 2.7182818^y.
-            // A dimensionless value to a dimensionless power is dimensionless.        
-            Dimensionless
-        else
-            // If x is dimensional, then y must be rational (e.g. x^(-3/4)).
-            // In this case, multiply the exponent list of x's dimensions with the rational value of y.
-            // FIXFIXFIX - may need to rework 'Simplify context y' as 'EvalQuantity context y' in the following line...
-            let ySimp = Simplify context y      // take any possible opportunity to boil this down to a number.
-            match ySimp with
-            | Amount(PhysicalQuantity(Rational(ynum,yden),ySimpConcept)) ->
-                if ySimpConcept <> Dimensionless then
-                    failwith "IMPOSSIBLE - y concept changed after simplification."
-                else
-                    ExponentiateConcept xConcept ynum yden
-            | _ -> ExpressionError y "Cannot raise a dimensional expression to a non-rational power."
-    else
-        ExpressionError y "Cannot raise an expression to a dimensional power."
-
-and ReciprocalConcept context arg =
-    match ExpressionConcept context arg with
-    | Zero -> Zero
-    | Concept(dimlist) -> 
-        // Take the reciprocal by negating each rational number in the list of dimensional exponents.
-        Concept(List.map (fun (numer,denom) -> MakeRationalPair (-numer) denom) dimlist)
-
-let ValidateExpressionConcept context expr =
-    // Call ExpressionConcept just for the side-effect of looking for errors
-    ExpressionConcept context expr |> ignore
-
-//---------------------------------------------------------------------------------------------
-// Concept evaluator.
-// Although concept expressions are parsed just like any other expression,
-// their contents are much more limited:
-// The special case "1" is allowed to represent a dimensionless concept.
-// Other than that, only concept names are allowed to appear (length, voltage, etc.)
-// Concepts may be multiplied or divided, but not added or subtracted.
-// Concepts may be raised to any rational power, but no other power.
-// No functions or macros may appear.
-// The special concept Zero may not appear, because it is not a specific concept.
-
-let rec EvalConcept context expr =
-    match expr with
-    | Amount(PhysicalQuantity(number,concept)) -> 
-        if (IsNumberZero number) || (concept = Zero) then 
-            ExpressionError expr "Concept evaluated to 0."
-        elif number <> Rational(R1) then
-            ExpressionError expr (sprintf "Concept evaluated with non-unity coefficient %s" (FormatNumber number))
-        else
-            concept
-
-    | Solitaire(token) -> 
-        match FindSymbolEntry context token with
-        | ConceptEntry(concept) -> concept
-        | _ -> SyntaxError token "Expected a concept name"
-
-    | Del(vartoken,order) ->
-        SyntaxError vartoken "The @ operator is not allowed to appear in a concept expression."
-
-    | Product(factors) -> 
-        List.map (EvalConcept context) factors 
-        |> List.fold (fun a b -> MultiplyConcepts a b) Dimensionless 
-
-    | Power(a,b) -> 
-        let aConcept = EvalConcept context a
-        if aConcept = Zero then
-            ExpressionError a "Concept 0 is not allowed in a concept expression."
-        else
-            let bsimp = Simplify context b
-            if IsZeroExpression bsimp then
-                Dimensionless        
-            else
-                match bsimp with
-                | Amount(PhysicalQuantity(bNumber,bConcept)) ->
-                    if bConcept = Dimensionless then
-                        match bNumber with
-                        | Rational(bnum,bden) -> ExponentiateConcept aConcept bnum bden
-                        | _ -> ExpressionError b "Cannot raise concept to non-rational power."
-                    else
-                        ExpressionError b "Not allowed to raise to a dimensional power."
-                | _ -> ExpressionError b "Concept must be raised to a dimensionless rational power."
-                        
-    | Functor(funcName,argList) -> SyntaxError funcName "Function or macro not allowed in concept expression."
-    | Sum(terms) -> ExpressionError expr "Addition/subtraction not allowed in concept expression."
-    | Equals(a,b) -> ExpressionError expr "Equality operator not allowed in concept expression."
-    | NumExprRef(t,_) -> ExpressionError expr "Numbered expression reference not allowed in concept expression."
-    | PrevExprRef(t) -> ExpressionError expr "Previous-expression reference not allowed in concept expression."
-
 //-----------------------------------------------------------------------------------------------------
 // Quantity evaluator - forces an expression to reduce to a physical quantity.
 // Fails if the expression cannot be reduced to a quantity.
@@ -1516,3 +1265,256 @@ let rec ExpressionNumericRange context expr =
         NumericRangePairIntersection aRange bRange
     | NumExprRef(t,_) -> FailLingeringMacro t
     | PrevExprRef(t) -> FailLingeringMacro t
+
+//--------------------------------------------------------------------------------
+// Simplifier
+
+let rec SimplifyStep context expr =
+    match expr with
+    | Amount(_) -> expr     // already as simple as possible
+    | Solitaire(_) -> expr  // already as simple as possible
+    | Del(_) -> expr        // already as simple as possible
+
+    | Functor(funcName, argList) ->
+        let simpArgList = List.map (SimplifyStep context) argList
+        let funcHandler = FindFunctionEntry context funcName
+        funcHandler.SimplifyStep context funcName simpArgList
+
+    | Sum(termlist) ->
+        let simpargs = 
+            SimplifySumArgs (List.map (SimplifyStep context) termlist) 
+            |> MergeConstants AddQuantities
+            |> MergeLikeTerms context
+
+        match simpargs with
+        | [] -> ZeroAmount
+        | [term] -> term
+        | _ -> Sum simpargs
+
+    | Product(factorlist) ->
+        let simpfactors = 
+            SimplifyProductArgs (List.map (SimplifyStep context) factorlist) 
+            |> MergeConstants MultiplyQuantities
+            |> MergeLikeFactors context
+
+        if List.exists IsZeroExpression simpfactors then
+            ZeroAmount
+        else
+            match simpfactors with
+            | [] -> UnityAmount
+            | [factor] -> factor
+            | _ -> Product simpfactors
+
+    | Power(x,y) ->
+        let sx = SimplifyStep context x
+        let sy = SimplifyStep context y
+        if IsZeroExpression sy then
+            if IsZeroExpression sx then
+                ExpressionError expr "Cannot evaluate 0^0."
+            else
+                UnityAmount
+        elif IsUnityExpression sy then
+            sx
+        else
+            Power(sx,sy)            
+
+    | Equals(a,b) ->
+        Equals((SimplifyStep context a), (SimplifyStep context b))
+
+    | NumExprRef(t,_) ->
+        FailLingeringMacro t
+
+    | PrevExprRef(t) ->
+        FailLingeringMacro t
+
+// Sum(Sum(A,B,C), Sum(D,E)) = Sum(A,B,C,D,E)
+// We want to "lift" all inner Sum() contents to the top level of a list.
+and SimplifySumArgs simpargs =           
+    match simpargs with
+    | [] -> []
+    | (Sum terms)::rest -> (SimplifySumArgs (RemoveZeroes terms)) @ (SimplifySumArgs rest)
+    | first::rest -> SkipZero first (SimplifySumArgs rest)
+
+and SimplifyProductArgs simpargs =           
+    match simpargs with
+    | [] -> []
+    | (Product factors)::rest -> (SimplifyProductArgs (RemoveUnities factors)) @ (SimplifyProductArgs rest)
+    | first::rest -> SkipUnity first (SimplifyProductArgs rest)
+
+//---------------------------------------------------------------------------
+// Aggressive, iterative simplifier...
+
+let Simplify context expr =
+    // Keep iterating SimplifyStep until the expression stops changing.
+    let mutable prev = expr
+    let mutable simp = SimplifyStep context expr
+    while simp <> prev do
+        prev <- simp
+        simp <- SimplifyStep context simp
+    simp
+
+//-----------------------------------------------------------------------------------------------------
+// Unit determination - verify that units are coherent and determine what they are.
+// For example, sum(3*meter,4*second) should raise an exception because adding distance to time is illegal.
+// However, sum(3*meter,4*meter) should be seen as distance units (expressible in meters).
+// Returns Zero for 0*anything, which has no specific units.
+
+let rec ExpressionConcept context expr =
+    match expr with
+    | Amount(PhysicalQuantity(number,concept)) -> if IsNumberZero number then Zero else concept
+    | Solitaire(vartoken) -> FindSolitaireConcept context vartoken
+    | Del(vartoken,_) -> FindSolitaireConcept context vartoken
+    | Functor(funcName,argList) -> FindFunctorConcept context funcName argList
+    | Sum(terms) -> SumConcept context terms
+    | Product(factors) -> ProductConcept context factors
+    | Power(a,b) -> PowerConcept context a b
+    | Equals(a,b) -> EquationConcept context a b
+    | NumExprRef(t,_) -> FailLingeringMacro t
+    | PrevExprRef(t) -> FailLingeringMacro t
+
+and FindSolitaireConcept context token =
+    match FindSymbolEntry context token with
+    | VariableEntry(_,concept) -> concept
+    | ConceptEntry(concept) -> SyntaxError token "Not allowed to use concept name in an expression."
+    | UnitEntry(PhysicalQuantity(_,concept)) -> concept
+    | AssignmentEntry(expr) -> ExpressionConcept context expr
+    | MacroEntry(_) -> SyntaxError token "Attempt to use macro name without parenthesized argument list."
+    | FunctionEntry(_) -> SyntaxError token "Attempt to use function name without parenthesized argument list."
+
+and FindFunctorConcept context funcNameToken argExprList =
+    match FindSymbolEntry context funcNameToken with
+    | FunctionEntry(handler) -> handler.EvalConcept context funcNameToken argExprList
+    | MacroEntry(_) -> FailLingeringMacro funcNameToken
+    | VariableEntry(_) -> SyntaxError funcNameToken "Attempt to use a variable as a function/macro."
+    | ConceptEntry(_) -> SyntaxError funcNameToken "Attempt to use a concept as a function/macro."
+    | UnitEntry(_) -> SyntaxError funcNameToken "Attempt to use a unit as a function/macro."
+    | AssignmentEntry(_) -> SyntaxError funcNameToken "Attempt to use an assignment target as a function/macro."
+
+and EquationConcept context a b =
+    let aConcept = ExpressionConcept context a
+    let bConcept = ExpressionConcept context b
+    if aConcept = Zero then         // zero is compatible with any concept (use other concept)
+        bConcept
+    elif bConcept = Zero then
+        aConcept
+    elif aConcept <> bConcept then
+        ExpressionError b (sprintf "Incompatible units: cannot equate/compare %s and %s" (FormatConcept aConcept) (FormatConcept bConcept))
+    else
+        aConcept
+
+and SumConcept context terms =
+    match terms with 
+    | [] -> Zero        // sum() = 0, which has no specific units -- see comments above.
+    | first::rest -> 
+        let firstConcept = ExpressionConcept context first
+        let restConcept = SumConcept context rest
+        match (firstConcept, restConcept) with
+        | (Zero,Zero) -> Zero                    // 0+0 = 0, which has no specific units
+        | (Concept(_),Zero) -> firstConcept      // x+0 = x with specific units
+        | (Zero,Concept(_)) -> restConcept       // 0+y = y
+        | (Concept(f),Concept(r)) ->
+            if f <> r then
+                ExpressionError first (sprintf "Incompatible units: cannot add %s and %s" (FormatConcept firstConcept) (FormatConcept restConcept))
+            else
+                firstConcept
+
+and ProductConcept context factors =
+    match factors with 
+    | [] -> Dimensionless     // product() = 1, which has dimensionless units            
+    | first::rest -> MultiplyConcepts (ExpressionConcept context first) (ProductConcept context rest)
+
+and PowerConcept context x y =
+    let xConcept = ExpressionConcept context x
+    let yConcept = ExpressionConcept context y
+    if yConcept = Zero then
+        if xConcept = Zero then
+            ExpressionError y "Cannot raise 0 to 0 power."
+        else
+            Dimensionless
+    elif yConcept = Dimensionless then
+        if IsConceptDimensionless xConcept then     // 0^(-3) is an error, but is dimensionless nontheless
+            // If x is dimensionless, then y may be any dimensionless expression, e.g. 2.7182818^y.
+            // A dimensionless value to a dimensionless power is dimensionless.        
+            Dimensionless
+        else
+            // If x is dimensional, then y must be rational (e.g. x^(-3/4)).
+            // In this case, multiply the exponent list of x's dimensions with the rational value of y.
+            match EvalQuantity context y with
+            | PhysicalQuantity(Rational(ynum,yden),ySimpConcept) ->
+                if ySimpConcept <> Dimensionless then
+                    failwith "IMPOSSIBLE - y concept changed after simplification."
+                else
+                    ExponentiateConcept xConcept ynum yden
+            | _ -> ExpressionError y "Cannot raise a dimensional expression to a non-rational power."
+    else
+        ExpressionError y "Cannot raise an expression to a dimensional power."
+
+and ReciprocalConcept context arg =
+    match ExpressionConcept context arg with
+    | Zero -> Zero
+    | Concept(dimlist) -> 
+        // Take the reciprocal by negating each rational number in the list of dimensional exponents.
+        Concept(List.map (fun (numer,denom) -> MakeRationalPair (-numer) denom) dimlist)
+
+let ValidateExpressionConcept context expr =
+    // Call ExpressionConcept just for the side-effect of looking for errors
+    ExpressionConcept context expr |> ignore
+
+//---------------------------------------------------------------------------------------------
+// Concept evaluator.
+// Although concept expressions are parsed just like any other expression,
+// their contents are much more limited:
+// The special case "1" is allowed to represent a dimensionless concept.
+// Other than that, only concept names are allowed to appear (length, voltage, etc.)
+// Concepts may be multiplied or divided, but not added or subtracted.
+// Concepts may be raised to any rational power, but no other power.
+// No functions or macros may appear.
+// The special concept Zero may not appear, because it is not a specific concept.
+
+let rec EvalConcept context expr =
+    match expr with
+    | Amount(PhysicalQuantity(number,concept)) -> 
+        if (IsNumberZero number) || (concept = Zero) then 
+            ExpressionError expr "Concept evaluated to 0."
+        elif number <> Rational(R1) then
+            ExpressionError expr (sprintf "Concept evaluated with non-unity coefficient %s" (FormatNumber number))
+        else
+            concept
+
+    | Solitaire(token) -> 
+        match FindSymbolEntry context token with
+        | ConceptEntry(concept) -> concept
+        | _ -> SyntaxError token "Expected a concept name"
+
+    | Del(vartoken,order) ->
+        SyntaxError vartoken "The @ operator is not allowed to appear in a concept expression."
+
+    | Product(factors) -> 
+        List.map (EvalConcept context) factors 
+        |> List.fold (fun a b -> MultiplyConcepts a b) Dimensionless 
+
+    | Power(a,b) -> 
+        let aConcept = EvalConcept context a
+        if aConcept = Zero then
+            ExpressionError a "Concept 0 is not allowed in a concept expression."
+        else
+            let bsimp = Simplify context b
+            if IsZeroExpression bsimp then
+                Dimensionless        
+            else
+                match bsimp with
+                | Amount(PhysicalQuantity(bNumber,bConcept)) ->
+                    if bConcept = Dimensionless then
+                        match bNumber with
+                        | Rational(bnum,bden) -> ExponentiateConcept aConcept bnum bden
+                        | _ -> ExpressionError b "Cannot raise concept to non-rational power."
+                    else
+                        ExpressionError b "Not allowed to raise to a dimensional power."
+                | _ -> ExpressionError b "Concept must be raised to a dimensionless rational power."
+                        
+    | Functor(funcName,argList) -> SyntaxError funcName "Function or macro not allowed in concept expression."
+    | Sum(terms) -> ExpressionError expr "Addition/subtraction not allowed in concept expression."
+    | Equals(a,b) -> ExpressionError expr "Equality operator not allowed in concept expression."
+    | NumExprRef(t,_) -> ExpressionError expr "Numbered expression reference not allowed in concept expression."
+    | PrevExprRef(t) -> ExpressionError expr "Previous-expression reference not allowed in concept expression."
+
