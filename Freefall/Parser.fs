@@ -2,7 +2,6 @@
 // Symbolic algebra/physics helper.
 
 module Freefall.Parser
-open System.Numerics
 open Freefall.Scanner
 open Freefall.Expr
 open Freefall.Stmt
@@ -181,7 +180,7 @@ and ParseAtom scan =
         else
             let isValid, imagvalue = System.Double.TryParse(text.Substring(0, text.Length-1))
             if isValid then
-                (Amount(PhysicalQuantity(Complex(new Complex(0.0, imagvalue)), Dimensionless))), rscan
+                (Amount(PhysicalQuantity(Complex(complex(0.0, imagvalue)), Dimensionless))), rscan
             else
                 SyntaxError imagtoken "Imaginary literal is not valid."
 

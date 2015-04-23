@@ -1,6 +1,5 @@
 ﻿module UnitTest
 
-open System.Numerics
 open Freefall.Expr
 open Freefall.Scanner
 open Freefall.Parser

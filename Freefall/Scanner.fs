@@ -1,5 +1,4 @@
 ﻿module Freefall.Scanner
-open System.Numerics
 open System.Text.RegularExpressions
 open Microsoft.FSharp.Collections
 

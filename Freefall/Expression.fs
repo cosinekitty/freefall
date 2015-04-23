@@ -4,8 +4,9 @@
 module Freefall.Expr
 open Checked
 open System.Collections.Generic
-open System.Numerics
 open Scanner
+
+type complex = System.Numerics.Complex
 
 exception FreefallRuntimeException of string
 exception UnexpectedEndException of option<string>       // Some(filename) or None
@@ -17,7 +18,7 @@ let CanConvertBigInteger big = (big >= MinConvertibleBigInteger) && (big <= MaxC
 type Number = 
     | Rational of bigint * bigint
     | Real of float
-    | Complex of Complex
+    | Complex of complex
 
 let IsNumberEqualToInteger n x =
     match x with
@@ -70,10 +71,10 @@ let rec AddNumbers anum bnum =
     match (anum, bnum) with
     | (Rational(a,b), Rational(c,d)) -> MakeRational (a*d + b*c) (b*d)
     | (Rational(a,b), Real(r)) -> Real(r + (float a)/(float b))
-    | (Rational(a,b), Complex(c)) -> Complex(new Complex(c.Real + (float a)/(float b), c.Imaginary))
+    | (Rational(a,b), Complex(c)) -> Complex(complex(c.Real + (float a)/(float b), c.Imaginary))
     | (Real(_), Rational(_,_)) -> AddNumbers bnum anum
     | (Real(x), Real(y)) -> Real(x + y)
-    | (Real(r), Complex(c)) -> Complex(new Complex(r + c.Real, c.Imaginary))
+    | (Real(r), Complex(c)) -> Complex(complex(r + c.Real, c.Imaginary))
     | (Complex(_), Rational(_,_)) -> AddNumbers bnum anum
     | (Complex(_), Real(_)) -> AddNumbers bnum anum
     | (Complex(c), Complex(d)) -> Complex(c+d)
@@ -84,10 +85,10 @@ let rec MultiplyNumbers anum bnum =
     | (Rational(a,b), Real(r)) -> Real(r * (float a)/(float b))
     | (Rational(a,b), Complex(c)) -> 
         let ratio = (float a) / (float b)
-        Complex(new Complex(ratio*c.Real, ratio*c.Imaginary))
+        Complex(complex(ratio*c.Real, ratio*c.Imaginary))
     | (Real(_), Rational(_,_)) -> MultiplyNumbers bnum anum
     | (Real(x), Real(y)) -> Real(x * y)
-    | (Real(r), Complex(c)) -> Complex(new Complex(r*c.Real, r*c.Imaginary))
+    | (Real(r), Complex(c)) -> Complex(complex(r*c.Real, r*c.Imaginary))
     | (Complex(_), Rational(_,_)) -> MultiplyNumbers bnum anum
     | (Complex(_), Real(_)) -> MultiplyNumbers bnum anum
     | (Complex(c), Complex(d)) -> Complex(c*d)
@@ -119,22 +120,22 @@ let PowerNumbers anum bnum =
         let a = (float an) / (float ad)
         Real(System.Math.Pow(a,b))
     | (Rational(an,ad), Complex(b)) ->
-        let a = new Complex((float an) / (float ad), 0.0)
-        Complex(Complex.Pow(a,b))
+        let a = complex((float an) / (float ad), 0.0)
+        Complex(complex.Pow(a,b))
     | (Real(a), Rational(bn,bd)) ->
         let b = (float bn) / (float bd)
         Real(System.Math.Pow(a,b))
     | (Real(a), Real(b)) ->
         Real(System.Math.Pow(a,b))
     | (Real(a), Complex(b)) ->
-        Complex(Complex.Pow(new Complex(a,0.0), b))
+        Complex(complex.Pow(complex(a,0.0), b))
     | (Complex(a), Rational(bn,bd)) ->
-        let b = new Complex((float bn) / (float bd), 0.0)
-        Complex(Complex.Pow(a,b))
+        let b = complex((float bn) / (float bd), 0.0)
+        Complex(complex.Pow(a,b))
     | (Complex(a), Real(b)) ->
-        Complex(Complex.Pow(a, new Complex(b, 0.0)))
+        Complex(complex.Pow(a, complex(b, 0.0)))
     | (Complex(a), Complex(b)) ->
-        Complex(Complex.Pow(a,b))
+        Complex(complex.Pow(a,b))
 
 type PhysicalConcept = 
     | Zero                                // a special case because 0 is considered compatible with any concept: 0*meter = 0*second. Weird but necessary.
@@ -254,7 +255,7 @@ let InvertNumber number =        // calculate the numeric reciprocal
         match number with
         | Rational(a,b) -> Rational(b,a)
         | Real x -> Real(1.0 / x)
-        | Complex(c) -> Complex(Complex.Reciprocal(c))
+        | Complex(c) -> Complex(complex.Reciprocal(c))
 
 let InvertQuantity (PhysicalQuantity(number,concept)) =
     PhysicalQuantity((InvertNumber number),(InvertConcept concept))

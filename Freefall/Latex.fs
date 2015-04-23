@@ -1,5 +1,4 @@
 ﻿module Freefall.Latex
-open System.Numerics
 open System.Text.RegularExpressions
 open Freefall.Scanner
 open Freefall.Expr

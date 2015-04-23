@@ -2,7 +2,6 @@
 // Symbolic algebra/physics helper.
 
 module Freefall.Calculus
-open System.Numerics
 open Freefall.Expr
 open Freefall.Scanner
 
