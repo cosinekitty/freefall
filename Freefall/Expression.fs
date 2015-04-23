@@ -1270,62 +1270,79 @@ let rec ExpressionNumericRange context expr =
 // Simplifier
 
 let rec SimplifyStep context expr =
+    // For the sake of performance, handle obvious leaf cases first.
     match expr with
     | Amount(_) -> expr     // already as simple as possible
-    | Solitaire(_) -> expr  // already as simple as possible
     | Del(_) -> expr        // already as simple as possible
+    | _ ->
+        // Special case: if numeric range analysis can pin down the expression's
+        // range of possible values to a specific dimensonless rational number, then 
+        // replace the expression with that rational number.
+        match ExpressionNumericRange context expr with
+        | IntegerRange(FiniteLimit(lo), FiniteLimit(hi)) when lo = hi ->
+            // Note that ExpressionNumericRange will only return IntegerRange for dimensionless values.
+            Amount(PhysicalQuantity(Rational(lo,1I), Dimensionless))
 
-    | Functor(funcName, argList) ->
-        let simpArgList = List.map (SimplifyStep context) argList
-        let funcHandler = FindFunctionEntry context funcName
-        funcHandler.SimplifyStep context funcName simpArgList
+        | IntegerRange(_,_)
+        | RationalRange
+        | RealRange
+        | ComplexRange ->
+            match expr with
+            | Amount(_) -> expr     // Should never get here - already handled above
+            | Del(_) -> expr        // Should never get here - already handled above
+            | Solitaire(_) -> expr  // already as simple as possible
 
-    | Sum(termlist) ->
-        let simpargs = 
-            SimplifySumArgs (List.map (SimplifyStep context) termlist) 
-            |> MergeConstants AddQuantities
-            |> MergeLikeTerms context
+            | Functor(funcName, argList) ->
+                let simpArgList = List.map (SimplifyStep context) argList
+                let funcHandler = FindFunctionEntry context funcName
+                funcHandler.SimplifyStep context funcName simpArgList
 
-        match simpargs with
-        | [] -> ZeroAmount
-        | [term] -> term
-        | _ -> Sum simpargs
+            | Sum(termlist) ->
+                let simpargs = 
+                    SimplifySumArgs (List.map (SimplifyStep context) termlist) 
+                    |> MergeConstants AddQuantities
+                    |> MergeLikeTerms context
 
-    | Product(factorlist) ->
-        let simpfactors = 
-            SimplifyProductArgs (List.map (SimplifyStep context) factorlist) 
-            |> MergeConstants MultiplyQuantities
-            |> MergeLikeFactors context
+                match simpargs with
+                | [] -> ZeroAmount
+                | [term] -> term
+                | _ -> Sum simpargs
 
-        if List.exists IsZeroExpression simpfactors then
-            ZeroAmount
-        else
-            match simpfactors with
-            | [] -> UnityAmount
-            | [factor] -> factor
-            | _ -> Product simpfactors
+            | Product(factorlist) ->
+                let simpfactors = 
+                    SimplifyProductArgs (List.map (SimplifyStep context) factorlist) 
+                    |> MergeConstants MultiplyQuantities
+                    |> MergeLikeFactors context
 
-    | Power(x,y) ->
-        let sx = SimplifyStep context x
-        let sy = SimplifyStep context y
-        if IsZeroExpression sy then
-            if IsZeroExpression sx then
-                ExpressionError expr "Cannot evaluate 0^0."
-            else
-                UnityAmount
-        elif IsUnityExpression sy then
-            sx
-        else
-            Power(sx,sy)            
+                if List.exists IsZeroExpression simpfactors then
+                    ZeroAmount
+                else
+                    match simpfactors with
+                    | [] -> UnityAmount
+                    | [factor] -> factor
+                    | _ -> Product simpfactors
 
-    | Equals(a,b) ->
-        Equals((SimplifyStep context a), (SimplifyStep context b))
+            | Power(x,y) ->
+                let sx = SimplifyStep context x
+                let sy = SimplifyStep context y
+                if IsZeroExpression sy then
+                    if IsZeroExpression sx then
+                        ExpressionError expr "Cannot evaluate 0^0."
+                    else
+                        UnityAmount
+                elif IsUnityExpression sy then
+                    sx
+                else
+                    Power(sx,sy)            
 
-    | NumExprRef(t,_) ->
-        FailLingeringMacro t
+            | Equals(a,b) ->
+                Equals((SimplifyStep context a), (SimplifyStep context b))
 
-    | PrevExprRef(t) ->
-        FailLingeringMacro t
+            | NumExprRef(t,_) ->
+                FailLingeringMacro t
+
+            | PrevExprRef(t) ->
+                FailLingeringMacro t
 
 // Sum(Sum(A,B,C), Sum(D,E)) = Sum(A,B,C,D,E)
 // We want to "lift" all inner Sum() contents to the top level of a list.
