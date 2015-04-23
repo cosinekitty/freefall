@@ -87,7 +87,9 @@ let Function_Exp = { new IFunctionHandler with
         match rangelist with
         | [range] ->
             match range with
-            | IntegerRange(_,_) -> RealRange    // FIXFIXFIX - could determine integer result range in some cases
+            | IntegerRange(FiniteLimit(lo), FiniteLimit(hi)) when lo.IsZero && hi.IsZero -> 
+                IntegerRange(FiniteLimit(BigInteger.One), FiniteLimit(BigInteger.One))
+            | IntegerRange(_,_) -> RealRange
             | RationalRange -> RealRange
             | RealRange -> RealRange
             | ComplexRange -> ComplexRange
