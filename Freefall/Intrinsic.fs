@@ -363,11 +363,11 @@ let Function_Uroot = { new IFunctionHandler with        // uroot(n) = exp((2*pi*
                     | Rational(a,b) -> 
                         if (not b.IsOne) || (a.Sign <= 0) then
                             SyntaxError funcToken "uroot must have a positive integer argument."
-                        elif a.IsOne then
+                        elif a = 1I then
                             Unity
-                        elif 0 = a.CompareTo(2L) then
+                        elif a = 2I then
                             NegativeOneQuantity
-                        elif 0 = a.CompareTo(4L) then
+                        elif a = 4I then
                             // Not strictly necessary, but without this special case we get "sloppy" result:
                             //    Freefall:3> eval(uroot(4));
                             //    Statement: eval(uroot(4));
@@ -390,15 +390,14 @@ let Function_Uroot = { new IFunctionHandler with        // uroot(n) = exp((2*pi*
             else
                 match number with
                 | Rational(a,b) -> 
-                    if (not b.IsOne) || (a.Sign <= 0) then
+                    if (b <> 1I) || (a.Sign <= 0) then
                         SyntaxError funcToken "uroot must have a positive integer argument."
-                    elif a.IsOne then
+                    elif a = 1I then
                         UnityAmount
-                    elif 0 = a.CompareTo(2L) then
+                    elif a = 2I then
                         NegativeOneAmount
-                    else
-                        // uroot(n) = exp((2*pi*i) / n), so do not simplify
-                        Functor(funcToken, [arg])
+                    else                        
+                        Functor(funcToken, [arg])   // uroot(n) = exp((2*pi*i) / n), so do not simplify
                 | _ ->
                     SyntaxError funcToken "uroot must have a positive integer argument."
         | _ -> FailExactArgCount "Function" 1 argList.Length funcToken
