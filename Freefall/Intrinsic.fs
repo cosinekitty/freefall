@@ -86,14 +86,14 @@ let PowerMacroExpander powerAmount context macroToken argList =
 let IntrinsicMacros =
     [
         ("asserti", AssertIdenticalMacroExpander)
-        ("cbrt",    PowerMacroExpander OneThirdAmount)
+        ("cbrt",    PowerMacroExpander AmountOneThird)
         ("deriv",   DiffDerivMacroExpander Derivative)
         ("diff",    DiffDerivMacroExpander Differential)
         ("eval",    EvalMacroExpander)
         ("float",   FloatMacroExpander)
         ("simp",    SimplifyMacroExpander)
-        ("sqrt",    PowerMacroExpander OneHalfAmount)
-        ("square",  PowerMacroExpander TwoAmount)
+        ("sqrt",    PowerMacroExpander AmountOneHalf)
+        ("square",  PowerMacroExpander AmountTwo)
     ]
 
 //-------------------------------------------------------------------------------------------------
@@ -124,10 +124,10 @@ let Function_Exp = { new IFunctionHandler with
 
     member this.EvalNumeric context funcToken qlist =
         match qlist with
-            | [PhysicalQuantity(number,concept)] -> 
+            | [PhysicalQuantity(number,concept) as quantity] -> 
                 VerifyDimensionlessArgument funcToken concept
-                if (IsNumberZero number) || (concept = Zero) then
-                    Unity
+                if IsQuantityZero quantity then
+                    QuantityOne
                 else
                     match number with
                     | Rational(a,b) -> 
@@ -144,8 +144,8 @@ let Function_Exp = { new IFunctionHandler with
     member this.SimplifyStep context funcToken argList =
         match argList with
         | [arg] -> 
-            if IsZeroExpression arg then
-                UnityAmount
+            if IsExpressionZero arg then
+                AmountOne
             else 
                 Functor(funcToken, [arg])
         | _ -> FailExactArgCount "Function" 1 argList.Length funcToken
@@ -187,8 +187,8 @@ let Function_Ln = { new IFunctionHandler with
 
     member this.EvalNumeric context funcToken qlist =
         match qlist with
-            | [PhysicalQuantity(number,concept)] -> 
-                if (IsNumberZero number) || (concept = Zero) then
+            | [PhysicalQuantity(number,concept) as quantity] -> 
+                if IsQuantityZero quantity then
                     SyntaxError funcToken "Cannot evaluate ln(0)."
                 else
                     VerifyDimensionlessArgument funcToken concept
@@ -201,8 +201,8 @@ let Function_Ln = { new IFunctionHandler with
     member this.SimplifyStep context funcToken argList =
         match argList with
         | [arg] -> 
-            if IsUnityExpression arg then
-                ZeroAmount      // ln(1) = 0
+            if IsExpressionOne arg then
+                AmountZero      // ln(1) = 0
             else 
                 match arg with
                 | Functor({Text="exp"}, [z]) -> z     // ln(exp(z)) ==> z
@@ -244,10 +244,10 @@ let Function_Cos = { new IFunctionHandler with
 
     member this.EvalNumeric context funcToken qlist =
         match qlist with
-            | [PhysicalQuantity(number,concept)] -> 
+            | [PhysicalQuantity(number,concept) as quantity] -> 
                 VerifyDimensionlessArgument funcToken concept
-                if (IsNumberZero number) || (concept = Zero) then
-                    Unity
+                if IsQuantityZero quantity then
+                    QuantityOne
                 else
                     match number with
                     | Rational(a,b) -> 
@@ -262,8 +262,8 @@ let Function_Cos = { new IFunctionHandler with
     member this.SimplifyStep context funcToken argList =
         match argList with
         | [arg] -> 
-            if IsZeroExpression arg then
-                UnityAmount      // cos(0) = 1
+            if IsExpressionZero arg then
+                AmountOne      // cos(0) = 1
             else 
                 Functor(funcToken, [arg])
         | _ -> FailExactArgCount "Function" 1 argList.Length funcToken
@@ -304,10 +304,10 @@ let Function_Sin = { new IFunctionHandler with
 
     member this.EvalNumeric context funcToken qlist =
         match qlist with
-            | [PhysicalQuantity(number,concept)] -> 
+            | [PhysicalQuantity(number,concept) as quantity] -> 
                 VerifyDimensionlessArgument funcToken concept
-                if (IsNumberZero number) || (concept = Zero) then
-                    ZeroQuantity
+                if IsQuantityZero quantity then
+                    QuantityZero
                 else
                     match number with
                     | Rational(a,b) -> 
@@ -322,8 +322,8 @@ let Function_Sin = { new IFunctionHandler with
     member this.SimplifyStep context funcToken argList =
         match argList with
         | [arg] -> 
-            if IsZeroExpression arg then
-                ZeroAmount      // sin(0) = 0
+            if IsExpressionZero arg then
+                AmountZero      // sin(0) = 0
             else 
                 Functor(funcToken, [arg])
         | _ -> FailExactArgCount "Function" 1 argList.Length funcToken
@@ -375,9 +375,9 @@ let Function_Uroot = { new IFunctionHandler with        // uroot(n) = exp((2*pi*
 
     member this.EvalNumeric context funcToken qlist =
         match qlist with
-            | [PhysicalQuantity(number,concept)] -> 
+            | [PhysicalQuantity(number,concept) as quantity] -> 
                 VerifyDimensionlessArgument funcToken concept
-                if (IsNumberZero number) || (concept = Zero) then
+                if IsQuantityZero quantity then
                     SyntaxError funcToken "uroot(0) is not defined."
                 else
                     match number with
@@ -385,9 +385,9 @@ let Function_Uroot = { new IFunctionHandler with        // uroot(n) = exp((2*pi*
                         if (not b.IsOne) || (a.Sign <= 0) then
                             SyntaxError funcToken "uroot must have a positive integer argument."
                         elif a = 1I then
-                            Unity
+                            QuantityOne
                         elif a = 2I then
-                            NegativeOneQuantity
+                            QuantityNegOne
                         elif a = 4I then
                             // Not strictly necessary, but without this special case we get "sloppy" result:
                             //    Freefall:3> eval(uroot(4));
@@ -404,9 +404,9 @@ let Function_Uroot = { new IFunctionHandler with        // uroot(n) = exp((2*pi*
 
     member this.SimplifyStep context funcToken argList =
         match argList with
-        | [Amount(PhysicalQuantity(number, concept)) as arg] ->
+        | [Amount(PhysicalQuantity(number, concept) as quantity) as arg] ->
             VerifyDimensionlessArgument funcToken concept
-            if (IsNumberZero number) || (concept = Zero) then
+            if IsQuantityZero quantity then
                 SyntaxError funcToken "uroot(0) is not defined."
             else
                 match number with
@@ -414,9 +414,9 @@ let Function_Uroot = { new IFunctionHandler with        // uroot(n) = exp((2*pi*
                     if (b <> 1I) || (a.Sign <= 0) then
                         SyntaxError funcToken "uroot must have a positive integer argument."
                     elif a = 1I then
-                        UnityAmount
+                        AmountOne
                     elif a = 2I then
-                        NegativeOneAmount
+                        AmountNegOne
                     else                        
                         Functor(funcToken, [arg])   // uroot(n) = exp((2*pi*i) / n), so do not simplify
                 | _ ->
@@ -426,7 +426,7 @@ let Function_Uroot = { new IFunctionHandler with        // uroot(n) = exp((2*pi*
     member this.Differential derivKind context varNameList funcToken argList =
         // uroot(n) is a constant, so the derivative is always 0.
         match argList with
-        | [_] -> ZeroAmount
+        | [_] -> AmountZero
         | _ -> FailExactArgCount "Function" 1 argList.Length funcToken
             
     member this.DistributeAcrossEquation context funcToken leftList rightList =

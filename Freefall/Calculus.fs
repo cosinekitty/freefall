@@ -17,7 +17,7 @@ let IsInVariableList token varNameList =
 let rec TakeDifferential derivKind context varNameList expr =
     let primaryVarName = List.head varNameList
     match expr with
-    | Amount(_) -> ZeroAmount       // diff(constant) = 0
+    | Amount(_) -> AmountZero       // diff(constant) = 0
     | Solitaire(token) ->
         match FindSymbolEntry context token with
         | VariableEntry(range,concept) ->
@@ -26,14 +26,14 @@ let rec TakeDifferential derivKind context varNameList expr =
                 | Differential -> Del(token, 1)
                 | Derivative -> 
                     if token.Text = (List.head varNameList) then
-                        UnityAmount     // d/dx (x) = 1
+                        AmountOne     // d/dx (x) = 1
                     else
                         // d/dx (y) = dy / dx
                         Divide (Del(token,1)) (Del(MakeVariableToken primaryVarName,1))
             else
-                ZeroAmount
+                AmountZero
         | ConceptEntry(concept) -> SyntaxError token "Concept not allowed in differential expression."
-        | UnitEntry(quantity) -> ZeroAmount
+        | UnitEntry(quantity) -> AmountZero
         | AssignmentEntry(_) -> SyntaxError token "Lingering assignment entry in differential."
         | MacroEntry(_) -> SyntaxError token "Lingering macro in differential."
         | FunctionEntry(_) -> SyntaxError token "Function name cannot be used as a variable."
@@ -64,7 +64,7 @@ let rec TakeDifferential derivKind context varNameList expr =
             | Differential -> Del(vartoken,1+order)
             | Derivative -> Product[Del(vartoken,1+order); MakeReciprocal (Del(MakeVariableToken primaryVarName,1))]
         else
-            ZeroAmount
+            AmountZero
 
 and ProductDifferentialTerms derivKind context varNameList factorList =
     // Given the list of N factors in a product, we return a list of

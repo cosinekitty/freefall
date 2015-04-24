@@ -138,15 +138,15 @@ let PowerNumbers anum bnum =
         Complex(complex.Pow(a,b))
 
 type PhysicalConcept = 
-    | Zero                                // a special case because 0 is considered compatible with any concept: 0*meter = 0*second. Weird but necessary.
+    | ConceptZero                         // a special case because 0 is considered compatible with any concept: 0*meter = 0*second. Weird but necessary.
     | Concept of list<bigint * bigint>    // list must have NumDimensions elements, each representing a rational number for the exponent of that dimension
 
 // Functions to help build concepts from other concepts...
 
 let AddConcepts a b =
     match (a,b) with
-    | (_,Zero) -> a
-    | (Zero,_) -> b
+    | (_,ConceptZero) -> a
+    | (ConceptZero,_) -> b
     | (Concept(alist),Concept(blist)) ->
         if alist = blist then
             a
@@ -155,31 +155,31 @@ let AddConcepts a b =
 
 let MultiplyConcepts a b =
     match (a,b) with
-    | (_,Zero) -> Zero
-    | (Zero,_) -> Zero
+    | (_,ConceptZero) -> ConceptZero
+    | (ConceptZero,_) -> ConceptZero
     | (Concept(alist),Concept(blist)) -> Concept(AddExponentLists alist blist)
 
 let DivideConcepts a b =
     match (a,b) with
-    | (_,Zero) -> raise (FreefallRuntimeException("Cannot divide concept by 0."))
-    | (Zero,_) -> Zero
+    | (_,ConceptZero) -> raise (FreefallRuntimeException("Cannot divide concept by 0."))
+    | (ConceptZero,_) -> ConceptZero
     | (Concept(alist),Concept(blist)) -> Concept(SubtractExponentLists alist blist)
 
 let InvertConcept c =
     match c with
-    | Zero -> raise (FreefallRuntimeException("Cannot take reciprocal of 0 concept."))
+    | ConceptZero -> raise (FreefallRuntimeException("Cannot take reciprocal of 0 concept."))
     | Concept(clist) -> Concept(NegateExponentList clist)
 
 let ExponentiateConcept xconcept ynum yden =
     match xconcept with
     | Concept(xlist) -> Concept(List.map (fun (xnum,xden) -> MakeRationalPair (xnum*ynum) (xden*yden)) xlist)
-    | Zero ->
+    | ConceptZero ->
         if ynum.IsZero then
             raise (FreefallRuntimeException("Cannot raise 0 to the 0 power."))
         elif ynum.Sign < 0 then
             raise (FreefallRuntimeException("Cannot raise 0 to a negative power."))
         else
-            Zero    // 0^x = 0 for all positive rational x
+            ConceptZero    // 0^x = 0 for all positive rational x
 
 let R0 = (0I, 1I)      // Represents the integer 0 = 0/1
 let R1 = (1I, 1I)      // Represents the integer 1 = 1/1
@@ -192,9 +192,9 @@ let RaiseConceptToNumberPower concept number =
     | Rational(a,b) -> 
         ExponentiateConcept concept a b
     | Real(x) ->
-        if concept = Zero then
+        if concept = ConceptZero then
             if x > 0.0 then
-                Zero
+                ConceptZero
             else
                 failwith "Cannot raise 0 concept to a non-positive power."
         elif concept = Dimensionless then
@@ -202,7 +202,7 @@ let RaiseConceptToNumberPower concept number =
         else
             failwith "Cannot raise dimensional concept to non-rational power."
     | Complex(_) ->
-        if concept = Zero then
+        if concept = ConceptZero then
             failwith "Cannot raise 0 concept to a complex power."
         elif concept = Dimensionless then
             Dimensionless
@@ -234,21 +234,12 @@ let ConceptNames  = List.map (fun {ConceptName=name}  -> name) BaseConcepts
 // A physical quantity is a numeric scalar attached to a physical concept.
 type PhysicalQuantity = PhysicalQuantity of Number * PhysicalConcept
 
-let Number0 = Rational(R0)
-let Number1 = Rational(R1)
-
-let ZeroQuantity = PhysicalQuantity(Number0, Zero)
-let Unity = PhysicalQuantity(Number1, Dimensionless)
-let NegativeOneQuantity = PhysicalQuantity(Rational(-1I, 1I), Dimensionless)
-let OneHalfQuantity     = PhysicalQuantity(Rational( 1I, 2I), Dimensionless)
-let OneThirdQuantity    = PhysicalQuantity(Rational( 1I, 3I), Dimensionless)
-let TwoQuantity         = PhysicalQuantity(Rational( 2I, 1I), Dimensionless)
-
-let IntegerQuantity (n:bigint) = 
-    if n.IsZero then
-        ZeroQuantity    // We want concept to be Zero, not Dimensionless, in this special case
-    else
-        PhysicalQuantity(Rational(n, 1I), Dimensionless)
+let QuantityZero        = PhysicalQuantity(Rational( 0I, 1I), ConceptZero)
+let QuantityOne         = PhysicalQuantity(Rational( 1I, 1I), Dimensionless)
+let QuantityNegOne      = PhysicalQuantity(Rational(-1I, 1I), Dimensionless)
+let QuantityOneHalf     = PhysicalQuantity(Rational( 1I, 2I), Dimensionless)
+let QuantityOneThird    = PhysicalQuantity(Rational( 1I, 3I), Dimensionless)
+let QuantityTwo         = PhysicalQuantity(Rational( 2I, 1I), Dimensionless)
 
 let InvertNumber number =        // calculate the numeric reciprocal
     if IsNumberZero number then
@@ -267,14 +258,14 @@ let NegateQuantity (PhysicalQuantity(number,concept)) =
 
 let rec AddQuantityList qlist =
     match qlist with
-    | [] -> ZeroQuantity
+    | [] -> QuantityZero
     | PhysicalQuantity(fnumber,fconcept) :: rest -> 
         let (PhysicalQuantity(rnumber,rconcept)) = AddQuantityList rest
         PhysicalQuantity((AddNumbers fnumber rnumber), (AddConcepts fconcept rconcept))
 
 let rec MultiplyQuantityList qlist =
     match qlist with
-    | [] -> Unity
+    | [] -> QuantityOne
     | PhysicalQuantity(fnumber,fconcept) :: rest ->
         let (PhysicalQuantity(rnumber,rconcept)) = MultiplyQuantityList rest
         PhysicalQuantity((MultiplyNumbers fnumber rnumber), (MultiplyConcepts fconcept rconcept))
@@ -312,35 +303,35 @@ exception ExpressionException of Expression * string
 let ExpressionError expr message =
     raise (ExpressionException(expr,message))
  
-let ZeroAmount = Amount(ZeroQuantity)
-let UnityAmount = Amount(Unity)
-let NegativeOneAmount = Amount(NegativeOneQuantity)
-let OneHalfAmount = Amount(OneHalfQuantity)
-let OneThirdAmount = Amount(OneThirdQuantity)
-let TwoAmount = Amount(TwoQuantity)
+let AmountZero      = Amount(QuantityZero)
+let AmountOne       = Amount(QuantityOne)
+let AmountNegOne    = Amount(QuantityNegOne)
+let AmountOneHalf   = Amount(QuantityOneHalf)
+let AmountOneThird  = Amount(QuantityOneThird)
+let AmountTwo       = Amount(QuantityTwo)
 
-let IsZeroQuantity (PhysicalQuantity(number,concept)) =
-    (concept = Zero) || (IsNumberZero number)
+let IsQuantityZero (PhysicalQuantity(number,concept)) =
+    (concept = ConceptZero) || (IsNumberZero number)
 
-let IsUnityQuantity (PhysicalQuantity(number,concept)) =
+let IsQuantityOne (PhysicalQuantity(number,concept)) =
     (concept = Dimensionless) && (IsNumberEqualToInteger 1I number)
 
-let IsNegativeUnityQuantity (PhysicalQuantity(number,concept)) =
+let IsQuantityNegOne (PhysicalQuantity(number,concept)) =
     (concept = Dimensionless) && (IsNumberEqualToInteger (-1I) number)
 
-let IsZeroExpression expr =
+let IsExpressionZero expr =
     match expr with
-    | Amount(quantity) -> IsZeroQuantity quantity
+    | Amount(quantity) -> IsQuantityZero quantity
     | _ -> false
 
-let IsUnityExpression expr =
+let IsExpressionOne expr =
     match expr with
-    | Amount(quantity) -> IsUnityQuantity quantity
+    | Amount(quantity) -> IsQuantityOne quantity
     | _ -> false
 
-let IsNegativeUnityExpression expr =
+let IsExpressionNegOne expr =
     match expr with
-    | Amount(quantity) -> IsNegativeUnityQuantity quantity
+    | Amount(quantity) -> IsQuantityNegOne quantity
     | _ -> false
 
 let MakeNegative expr = 
@@ -348,17 +339,17 @@ let MakeNegative expr =
     | Amount(quantity) -> Amount(NegateQuantity quantity)
     | Product (Amount(quantity) :: rfactors) -> 
         let negQuantity = NegateQuantity quantity
-        if IsUnityQuantity negQuantity then
+        if IsQuantityOne negQuantity then
             match rfactors with
-            | [] -> UnityAmount
+            | [] -> AmountOne
             | [single] -> single
             | _ -> Product(rfactors)
-        elif IsZeroQuantity negQuantity then
-            ZeroAmount
+        elif IsQuantityZero negQuantity then
+            AmountZero
         else
             Product (Amount(negQuantity) :: rfactors)
-    | Product factors -> Product (NegativeOneAmount :: factors)
-    | _ -> Product[NegativeOneAmount; expr]
+    | Product factors -> Product (AmountNegOne :: factors)
+    | _ -> Product[AmountNegOne; expr]
 
 let MakeReciprocal expr = 
     match expr with
@@ -367,24 +358,24 @@ let MakeReciprocal expr =
     | Power(a,b) -> 
         Power(a, MakeNegative b)
     | _ -> 
-        Power(expr, NegativeOneAmount)
+        Power(expr, AmountNegOne)
 
 let Divide a b = Product[a; MakeReciprocal b]
 
 let IsConceptDimensionless concept =
-    (concept = Zero) || (concept = Dimensionless)
+    (concept = ConceptZero) || (concept = Dimensionless)
 
 let RemoveZeroes terms = 
-    List.filter (fun t -> not (IsZeroExpression t)) terms
+    List.filter (fun t -> not (IsExpressionZero t)) terms
 
 let RemoveUnities factors =
-    List.filter (fun f -> not (IsUnityExpression f)) factors
+    List.filter (fun f -> not (IsExpressionOne f)) factors
 
 let SkipUnity first rest =
-    if IsUnityExpression first then rest else first :: rest
+    if IsExpressionOne first then rest else first :: rest
 
 let SkipZero first rest =
-    if IsZeroExpression first then rest else first :: rest
+    if IsExpressionZero first then rest else first :: rest
 
 //-----------------------------------------------------------------------------------------------------
 // Formatting - conversion of expressions to human-readable strings.
@@ -458,7 +449,7 @@ let AccumDimension prefix name (numer,denom) =
 
 let FormatDimensions namelist concept =
     match concept with
-    | Zero -> "0"
+    | ConceptZero -> "0"
     | Concept(powlist) -> List.fold2 AccumDimension "" namelist powlist
 
 let DimensionsPrecedence concept =
@@ -500,7 +491,7 @@ let QuantityPrecedence (PhysicalQuantity(scalar,concept)) =
         let scalarPrec = NumberPrecedence scalar
         if concept = Dimensionless then
             scalarPrec
-        elif concept = Zero then
+        elif concept = ConceptZero then
             Precedence_Atom
         else
             let conceptPrec = DimensionsPrecedence concept
@@ -575,7 +566,7 @@ and FormatExpressionPrec expr parentPrecedence =
             match factors with
             | [] -> "1"
             | [single] -> FormatExpression single
-            | Amount(quantity) :: rest when quantity = NegativeOneQuantity -> "-" + (FormatExpressionPrec (Product rest) Precedence_Neg)
+            | Amount(quantity) :: rest when quantity = QuantityNegOne -> "-" + (FormatExpressionPrec (Product rest) Precedence_Neg)
             | first :: rest -> FormatExpressionPrec first Precedence_Mul + JoinRemainingFactors rest
         | Power(a,b) -> FormatExpressionPrec a Precedence_Pow + "^" + FormatExpressionPrec b Precedence_Pow
         | Equals(a,b) -> FormatExpressionPrec a Precedence_Rel + " = " + FormatExpressionPrec b Precedence_Rel
@@ -734,7 +725,7 @@ let FindSymbolEntry {SymbolTable=symtable;} ({Text=symbol; Kind=kind} as symtoke
 // For example, sum(a,b,c) looks different from sum(b,c,a), but are identical.
 
 let IsZeroNumberConceptPair number concept =
-    (concept = Zero) || (IsNumberZero number)
+    (concept = ConceptZero) || (IsNumberZero number)
 
 let IsDeterministicFunctionName funcName =
     true        // FIXFIXFIX - adjust this in case we have something like random() in the future (I hope not!)
@@ -873,23 +864,23 @@ type TermPattern = TermPattern of PhysicalQuantity * Expression        // repres
 let rec MakeTermPattern context term =
     // Transform a term expression into the form c*x
     match term with
-    | Amount(x) -> TermPattern(x, UnityAmount)     // coeff ==> ceoff*1
+    | Amount(x) -> TermPattern(x, AmountOne)     // coeff ==> ceoff*1
     | Solitaire(token) -> 
         match FindSymbolEntry context token with
-        | VariableEntry(_,_) -> TermPattern(Unity, term)      // var ==> 1*var
+        | VariableEntry(_,_) -> TermPattern(QuantityOne, term)      // var ==> 1*var
         | ConceptEntry(_) -> SyntaxError token "Cannot use concept in sum()"
-        | UnitEntry(amount) -> TermPattern(amount, UnityAmount)            // unit ==> unit*1
+        | UnitEntry(amount) -> TermPattern(amount, AmountOne)            // unit ==> unit*1
         | AssignmentEntry(_) -> FailLingeringMacro token
         | MacroEntry(_) -> FailLingeringMacro token
         | FunctionEntry(fe) -> SyntaxError token "Cannot use function name as a variable."
     | Functor(funcName, argList) -> 
-        TermPattern(Unity, term)     // func(_) => 1*func(_)
+        TermPattern(QuantityOne, term)     // func(_) => 1*func(_)
     | Sum terms ->
         // This shouldn't happen because flattener should have already folded this into the higher sum.
         failwith "Flattener failure: found sum() term inside a sum()."
     | Product factors ->
         match factors with
-        | [] -> TermPattern(Unity, UnityAmount)       // prod() ==> 1*1
+        | [] -> TermPattern(QuantityOne, AmountOne)       // prod() ==> 1*1
         | [arg] -> MakeTermPattern context arg
         | first :: rest ->
             match first with
@@ -897,19 +888,19 @@ let rec MakeTermPattern context term =
                 match rest with
                 | [second] -> TermPattern(quantity, second)
                 | _ -> TermPattern(quantity, (Product rest))
-            | _ -> TermPattern(Unity, term)
-    | Power(x,y) -> TermPattern(Unity, term)
+            | _ -> TermPattern(QuantityOne, term)
+    | Power(x,y) -> TermPattern(QuantityOne, term)
     | Equals(_,_) -> ExpressionError term "Equality should not appear in a term."
     | NumExprRef(t,i) -> FailLingeringMacro t
     | PrevExprRef(t) -> FailLingeringMacro t
-    | Del(token,order) -> TermPattern(Unity, term)
+    | Del(token,order) -> TermPattern(QuantityOne, term)
 
 let UnmakeTermPattern (TermPattern(coeff,var)) =
-    if (IsZeroQuantity coeff) || (IsZeroExpression var) then
-        ZeroAmount
-    elif IsUnityQuantity coeff then
+    if (IsQuantityZero coeff) || (IsExpressionZero var) then
+        AmountZero
+    elif IsQuantityOne coeff then
         var
-    elif IsUnityExpression var then
+    elif IsExpressionOne var then
         Amount(coeff)
     else
         Product[Amount(coeff); var]
@@ -959,32 +950,32 @@ type FactorPattern = FactorPattern of Expression * Expression    // represents x
 let rec MakeFactorPattern context factor =
     // Transform a factor expression into the form x^y.
     match factor with
-    | Amount(_) -> FactorPattern(factor, UnityAmount)     // coeff ==> ceoff^1
+    | Amount(_) -> FactorPattern(factor, AmountOne)     // coeff ==> ceoff^1
     | Solitaire(token) -> 
         match FindSymbolEntry context token with
-        | VariableEntry(_,_) -> FactorPattern(factor, UnityAmount)      // var ==> var^1
+        | VariableEntry(_,_) -> FactorPattern(factor, AmountOne)      // var ==> var^1
         | ConceptEntry(_) -> SyntaxError token "Cannot use concept in prod()"
-        | UnitEntry(amount) -> FactorPattern(factor, UnityAmount)            // unit ==> unit*1
+        | UnitEntry(amount) -> FactorPattern(factor, AmountOne)            // unit ==> unit*1
         | AssignmentEntry(_) -> FailLingeringMacro token
         | MacroEntry(_) -> FailLingeringMacro token
         | FunctionEntry(fe) -> SyntaxError token "Cannot use function name as a variable."
-    | Functor(funcName, argList) -> FactorPattern(factor, UnityAmount)
-    | Sum terms -> FactorPattern(factor, UnityAmount)
+    | Functor(funcName, argList) -> FactorPattern(factor, AmountOne)
+    | Sum terms -> FactorPattern(factor, AmountOne)
     | Product factors -> failwith "Flattener failure: prod() should have been marged into parent."
     | Power(x,y) -> FactorPattern(x,y)
     | Equals(_,_) -> ExpressionError factor "Equality should not appear in a factor."
     | NumExprRef(t,i) -> FailLingeringMacro t
     | PrevExprRef(t) -> FailLingeringMacro t
-    | Del(token,order) -> FactorPattern(factor, UnityAmount)
+    | Del(token,order) -> FactorPattern(factor, AmountOne)
 
 let UnmakeFactorPattern (FactorPattern(x,y)) =
-    if IsUnityExpression y then
+    if IsExpressionOne y then
         x
-    elif IsZeroExpression y then
-        if IsZeroExpression x then
+    elif IsExpressionZero y then
+        if IsExpressionZero x then
             ExpressionError x "Cannot raise 0 to the 0 power."
         else
-            UnityAmount
+            AmountOne
     else
         Power(x,y)
 
@@ -1038,12 +1029,12 @@ let FindVariableEntry context vartoken =
 // Quantity evaluator - forces an expression to reduce to a physical quantity.
 // Fails if the expression cannot be reduced to a quantity.
 
-let PowerQuantities expr (PhysicalQuantity(aNumber,aConcept)) (PhysicalQuantity(bNumber,bConcept)) =
-    if (IsNumberZero bNumber) || (bConcept = Zero) then
-        if (IsNumberZero aNumber) || (aConcept = Zero) then
+let PowerQuantities expr (PhysicalQuantity(aNumber,aConcept) as aQuantity) (PhysicalQuantity(bNumber,bConcept) as bQuantity) =
+    if IsQuantityZero bQuantity then
+        if IsQuantityZero aQuantity then
             ExpressionError expr "Cannot evaluate 0^0."
         else
-            Unity
+            QuantityOne
     elif bConcept <> Dimensionless then
         ExpressionError expr "Cannot raise a number to a dimensional power."
     else
@@ -1329,7 +1320,7 @@ let rec SimplifyStep context expr =
                     |> MergeLikeTerms context
 
                 match simpargs with
-                | [] -> ZeroAmount
+                | [] -> AmountZero
                 | [term] -> term
                 | _ -> Sum simpargs
 
@@ -1339,23 +1330,23 @@ let rec SimplifyStep context expr =
                     |> MergeConstants MultiplyQuantities
                     |> MergeLikeFactors context
 
-                if List.exists IsZeroExpression simpfactors then
-                    ZeroAmount
+                if List.exists IsExpressionZero simpfactors then
+                    AmountZero
                 else
                     match simpfactors with
-                    | [] -> UnityAmount
+                    | [] -> AmountOne
                     | [factor] -> factor
                     | _ -> Product simpfactors
 
             | Power(x,y) ->
                 let sx = SimplifyStep context x
                 let sy = SimplifyStep context y
-                if IsZeroExpression sy then
-                    if IsZeroExpression sx then
+                if IsExpressionZero sy then
+                    if IsExpressionZero sx then
                         ExpressionError expr "Cannot evaluate 0^0."
                     else
-                        UnityAmount
-                elif IsUnityExpression sy then
+                        AmountOne
+                elif IsExpressionOne sy then
                     sx
                 else
                     Power(sx,sy)            
@@ -1403,7 +1394,7 @@ let Simplify context expr =
 
 let rec ExpressionConcept context expr =
     match expr with
-    | Amount(PhysicalQuantity(number,concept)) -> if IsNumberZero number then Zero else concept
+    | Amount(PhysicalQuantity(number,concept)) -> if IsNumberZero number then ConceptZero else concept
     | Solitaire(vartoken) -> FindSolitaireConcept context vartoken
     | Del(vartoken,_) -> FindSolitaireConcept context vartoken
     | Functor(funcName,argList) -> FindFunctorConcept context funcName argList
@@ -1435,9 +1426,9 @@ and FindFunctorConcept context funcNameToken argExprList =
 and EquationConcept context a b =
     let aConcept = ExpressionConcept context a
     let bConcept = ExpressionConcept context b
-    if aConcept = Zero then         // zero is compatible with any concept (use other concept)
+    if aConcept = ConceptZero then         // zero is compatible with any concept (use other concept)
         bConcept
-    elif bConcept = Zero then
+    elif bConcept = ConceptZero then
         aConcept
     elif aConcept <> bConcept then
         ExpressionError b (sprintf "Incompatible units: cannot equate/compare %s and %s" (FormatConcept aConcept) (FormatConcept bConcept))
@@ -1446,14 +1437,14 @@ and EquationConcept context a b =
 
 and SumConcept context terms =
     match terms with 
-    | [] -> Zero        // sum() = 0, which has no specific units -- see comments above.
+    | [] -> ConceptZero        // sum() = 0, which has no specific units -- see comments above.
     | first::rest -> 
         let firstConcept = ExpressionConcept context first
         let restConcept = SumConcept context rest
         match (firstConcept, restConcept) with
-        | (Zero,Zero) -> Zero                    // 0+0 = 0, which has no specific units
-        | (Concept(_),Zero) -> firstConcept      // x+0 = x with specific units
-        | (Zero,Concept(_)) -> restConcept       // 0+y = y
+        | (ConceptZero,ConceptZero) -> ConceptZero                    // 0+0 = 0, which has no specific units
+        | (Concept(_),ConceptZero) -> firstConcept      // x+0 = x with specific units
+        | (ConceptZero,Concept(_)) -> restConcept       // 0+y = y
         | (Concept(f),Concept(r)) ->
             if f <> r then
                 ExpressionError first (sprintf "Incompatible units: cannot add %s and %s" (FormatConcept firstConcept) (FormatConcept restConcept))
@@ -1468,8 +1459,8 @@ and ProductConcept context factors =
 and PowerConcept context x y =
     let xConcept = ExpressionConcept context x
     let yConcept = ExpressionConcept context y
-    if yConcept = Zero then
-        if xConcept = Zero then
+    if yConcept = ConceptZero then
+        if xConcept = ConceptZero then
             ExpressionError y "Cannot raise 0 to 0 power."
         else
             Dimensionless
@@ -1493,7 +1484,7 @@ and PowerConcept context x y =
 
 and ReciprocalConcept context arg =
     match ExpressionConcept context arg with
-    | Zero -> Zero
+    | ConceptZero -> ConceptZero
     | Concept(dimlist) -> 
         // Take the reciprocal by negating each rational number in the list of dimensional exponents.
         Concept(List.map (fun (numer,denom) -> MakeRationalPair (-numer) denom) dimlist)
@@ -1515,8 +1506,8 @@ let ValidateExpressionConcept context expr =
 
 let rec EvalConcept context expr =
     match expr with
-    | Amount(PhysicalQuantity(number,concept)) -> 
-        if (IsNumberZero number) || (concept = Zero) then 
+    | Amount(PhysicalQuantity(number,concept) as quantity) -> 
+        if IsQuantityZero quantity then 
             ExpressionError expr "Concept evaluated to 0."
         elif number <> Rational(R1) then
             ExpressionError expr (sprintf "Concept evaluated with non-unity coefficient %s" (FormatNumber number))
@@ -1537,11 +1528,11 @@ let rec EvalConcept context expr =
 
     | Power(a,b) -> 
         let aConcept = EvalConcept context a
-        if aConcept = Zero then
+        if aConcept = ConceptZero then
             ExpressionError a "Concept 0 is not allowed in a concept expression."
         else
             let bsimp = Simplify context b
-            if IsZeroExpression bsimp then
+            if IsExpressionZero bsimp then
                 Dimensionless        
             else
                 match bsimp with

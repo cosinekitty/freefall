@@ -288,16 +288,16 @@ let ParseTypeAndSemicolon scan =
     match RequireToken scan with 
 
     | {Kind=TokenKind.NumericRangeName; Text=text} :: {Text=";"} :: scan2 ->
-        UnboundedRange text, UnityAmount, scan2   // range present but concept absent means concept defaults to dimensionless unity
+        UnboundedRange text, AmountOne, scan2   // range present but concept absent means concept defaults to dimensionless unity
 
     | {Kind=TokenKind.NumericRangeName; Text=text} :: {Text="["} :: {Text=","} :: {Text="]"} :: scan2 ->
-        UnboundedRange text, UnityAmount, (ExpectSemicolon scan2)
+        UnboundedRange text, AmountOne, (ExpectSemicolon scan2)
 
     | ({Text="integer"} as token) :: {Text="["} :: {Text=","} :: scan2 ->       // omitted lower bound = negative infinity
         let upperLimit, scan3 = ParseIntegerValuedExpression scan2
         let scan4 = scan3 |> ExpectToken "]" |> ExpectSemicolon
         let range = MakeIntegerRange token NegInf (FiniteLimit(upperLimit))
-        range, UnityAmount, scan4
+        range, AmountOne, scan4
 
     | ({Text="integer"} as token) :: {Text="["} :: scan2 ->                     // explicit lower bound
         let lowerLimit, scan3 = ParseIntegerValuedExpression scan2
@@ -306,13 +306,13 @@ let ParseTypeAndSemicolon scan =
         | {Text="]"} :: scan5 -> 
             // lower limit only
             let range = MakeIntegerRange token (FiniteLimit(lowerLimit)) PosInf
-            range, UnityAmount, (ExpectSemicolon scan5)
+            range, AmountOne, (ExpectSemicolon scan5)
         | _ ->
             // lower and upper limits must both be there
             let upperLimit, scan5 = ParseIntegerValuedExpression scan4
             let scan6 = scan5 |> ExpectToken "]" |> ExpectSemicolon
             let range = MakeIntegerRange token (FiniteLimit(lowerLimit)) (FiniteLimit(upperLimit))
-            range, UnityAmount, scan6
+            range, AmountOne, scan6
 
     | {Kind=TokenKind.NumericRangeName; Text=text} :: scan2 ->
         let conceptExpr, scan3 = ParseExpression scan2

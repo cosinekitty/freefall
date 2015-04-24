@@ -62,7 +62,7 @@ let LatexAccumDimension prefix name (numer,denom) =
 
 let LatexFormatDimensions namelist concept =
     match concept with
-    | Zero -> "0"
+    | ConceptZero -> "0"
     | Concept(powlist) -> List.fold2 LatexAccumDimension "" namelist powlist
 
 let LatexFormatQuantity context (PhysicalQuantity(scalar,concept)) =
@@ -99,7 +99,7 @@ let rec SplitNumerDenom factorList =
 
         | Power(x, Amount(PhysicalQuantity(Rational(a,b),concept) as quantity)) when concept = Dimensionless && a.Sign < 0 ->
             let recip =
-                if IsNegativeUnityQuantity quantity then
+                if IsQuantityNegOne quantity then
                     x
                 else
                     Power(x, Amount(PhysicalQuantity(Rational(-a,b), Dimensionless)))
@@ -243,7 +243,7 @@ and LatexFormatFactorList context factorList index =
         // prod(longname,x,y) ==> longname \cdot x y
         // prod(alpha,beta) ==> \alpha \beta
 
-        if (index = 0) && (IsNegativeUnityExpression first) then
+        if (index = 0) && (IsExpressionNegOne first) then
             // Format prod(-1, ...) as -(...)
             let rtext, rsep = LatexFormatFactorList context rest index
             "-" + rtext, LatexFactorSeparator.Space
