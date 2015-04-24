@@ -108,9 +108,9 @@ let PowerNumbers anum bnum =
             // (an/ad)^b = (ad)^(-b) / (an)^(-b)    if b = -1, -2, ...
             let intpow = int bn
             if intpow < 0 then
-                Rational(bigint.Pow(ad, -intpow), bigint.Pow(an, -intpow))
+                MakeRational (bigint.Pow(ad, -intpow)) (bigint.Pow(an, -intpow))
             else
-                Rational(bigint.Pow(an, intpow), bigint.Pow(ad, intpow))                
+                MakeRational (bigint.Pow(an, intpow)) (bigint.Pow(ad, intpow))
         else
             // Any nonrational (or very large) power requires numerical approximation.
             let a = (float an) / (float ad)
@@ -246,7 +246,7 @@ let InvertNumber number =        // calculate the numeric reciprocal
         raise (FreefallRuntimeException("Cannot take reciprocal of 0."))
     else
         match number with
-        | Rational(a,b) -> Rational(b,a)
+        | Rational(a,b) -> MakeRational b a
         | Real x -> Real(1.0 / x)
         | Complex(c) -> Complex(complex.Reciprocal(c))
 

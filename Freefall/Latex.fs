@@ -95,14 +95,14 @@ let rec SplitNumerDenom factorList =
         let rNumerList, rDenomList = SplitNumerDenom rest
         match first with
         | Amount(PhysicalQuantity(Rational(a,b),concept)) when concept = Dimensionless && a.IsOne && (not b.IsOne) ->
-            rNumerList, (Amount(PhysicalQuantity(Rational(b,a),concept)) :: rDenomList)
+            rNumerList, (Amount(PhysicalQuantity((MakeRational b a),concept)) :: rDenomList)
 
         | Power(x, Amount(PhysicalQuantity(Rational(a,b),concept) as quantity)) when concept = Dimensionless && a.Sign < 0 ->
             let recip =
                 if IsQuantityNegOne quantity then
                     x
                 else
-                    Power(x, Amount(PhysicalQuantity(Rational(-a,b), Dimensionless)))
+                    Power(x, Amount(PhysicalQuantity((MakeRational -a b), Dimensionless)))
             rNumerList, (recip :: rDenomList)
 
         | _ -> (first :: rNumerList), rDenomList
