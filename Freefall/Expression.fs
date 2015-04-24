@@ -20,13 +20,29 @@ type Number =
     | Real of float
     | Complex of complex
 
+let IsInvalidReal x =
+    System.Double.IsNaN(x) || System.Double.IsInfinity(x)
+
 let CheckReal x =
-    if System.Double.IsNaN(x) || System.Double.IsInfinity(x) then
+    if IsInvalidReal x then
         raise (FreefallRuntimeException(sprintf "Invalid real result '%O'" x))
     else
         x
 
 let MakeReal x = Real(CheckReal x)
+
+let IsInvalidComplex (z:complex) =
+    IsInvalidReal(z.Real) || IsInvalidReal(z.Imaginary)
+
+let CheckComplex z =
+    if IsInvalidComplex z then
+        raise (FreefallRuntimeException(sprintf "Invalid complex result '%O'" z))
+    else
+        z
+
+let MakeComplex z = Complex(CheckComplex z)
+
+let MakePairComplex (a,b) = MakeComplex(complex(a, b))
 
 let IsNumberEqualToInteger n x =
     match x with
@@ -44,7 +60,7 @@ let NegateNumber number =
     match number with
     | Rational(numer,denom) -> Rational(-numer,denom)
     | Real(x) -> MakeReal(-x)
-    | Complex(c) -> Complex(-c)
+    | Complex(c) -> MakeComplex(-c)
 
 let rec GreatestCommonDivisor (a:bigint) (b:bigint) =         // caller must ensure that a and b are both non-negative
     if b.IsZero then
@@ -79,13 +95,13 @@ let rec AddNumbers anum bnum =
     match (anum, bnum) with
     | (Rational(a,b), Rational(c,d)) -> MakeRational (a*d + b*c) (b*d)
     | (Rational(a,b), Real(r)) -> MakeReal(r + (float a)/(float b))
-    | (Rational(a,b), Complex(c)) -> Complex(complex(c.Real + (float a)/(float b), c.Imaginary))
+    | (Rational(a,b), Complex(c)) -> MakePairComplex(c.Real + (float a)/(float b), c.Imaginary)
     | (Real(_), Rational(_,_)) -> AddNumbers bnum anum
     | (Real(x), Real(y)) -> MakeReal(x + y)
-    | (Real(r), Complex(c)) -> Complex(complex(r + c.Real, c.Imaginary))
+    | (Real(r), Complex(c)) -> MakePairComplex(r + c.Real, c.Imaginary)
     | (Complex(_), Rational(_,_)) -> AddNumbers bnum anum
     | (Complex(_), Real(_)) -> AddNumbers bnum anum
-    | (Complex(c), Complex(d)) -> Complex(c+d)
+    | (Complex(c), Complex(d)) -> MakeComplex(c+d)
 
 let rec MultiplyNumbers anum bnum =
     match (anum, bnum) with
@@ -93,13 +109,13 @@ let rec MultiplyNumbers anum bnum =
     | (Rational(a,b), Real(r)) -> MakeReal(r * (float a)/(float b))
     | (Rational(a,b), Complex(c)) -> 
         let ratio = (float a) / (float b)
-        Complex(complex(ratio*c.Real, ratio*c.Imaginary))
+        MakePairComplex(ratio*c.Real, ratio*c.Imaginary)
     | (Real(_), Rational(_,_)) -> MultiplyNumbers bnum anum
     | (Real(x), Real(y)) -> MakeReal(x * y)
-    | (Real(r), Complex(c)) -> Complex(complex(r*c.Real, r*c.Imaginary))
+    | (Real(r), Complex(c)) -> MakePairComplex(r*c.Real, r*c.Imaginary)
     | (Complex(_), Rational(_,_)) -> MultiplyNumbers bnum anum
     | (Complex(_), Real(_)) -> MultiplyNumbers bnum anum
-    | (Complex(c), Complex(d)) -> Complex(c*d)
+    | (Complex(c), Complex(d)) -> MakeComplex(c*d)
 
 let PowerFloats (a:float) (b:float) =
     if a = 0.0 then
@@ -113,7 +129,7 @@ let PowerFloats (a:float) (b:float) =
         if b = 0.0 then
             Rational(1I, 1I)
         else
-            Complex(complex.Pow(complex(a, 0.0), complex(b, 0.0)))
+            MakeComplex(complex.Pow(complex(a, 0.0), complex(b, 0.0)))
     else
         MakeReal(System.Math.Pow(a,b))
 
@@ -172,7 +188,7 @@ let PowerNumbers anum bnum =
         PowerFloats a b
     | (Rational(an,ad), Complex(b)) ->
         let a = complex((float an) / (float ad), 0.0)
-        Complex(complex.Pow(a,b))
+        MakeComplex(complex.Pow(a,b))
     | (Real(a), Rational(bn,bd)) ->
         if bd.IsOne then
             MakeReal(PowerFloatInt a bn)
@@ -182,14 +198,14 @@ let PowerNumbers anum bnum =
     | (Real(a), Real(b)) ->
         PowerFloats a b
     | (Real(a), Complex(b)) ->
-        Complex(complex.Pow(complex(a,0.0), b))
+        MakeComplex(complex.Pow(complex(a,0.0), b))
     | (Complex(a), Rational(bn,bd)) ->
         let b = complex((float bn) / (float bd), 0.0)
-        Complex(complex.Pow(a,b))
+        MakeComplex(complex.Pow(a,b))
     | (Complex(a), Real(b)) ->
-        Complex(complex.Pow(a, complex(b, 0.0)))
+        MakeComplex(complex.Pow(a, complex(b, 0.0)))
     | (Complex(a), Complex(b)) ->
-        Complex(complex.Pow(a,b))
+        MakeComplex(complex.Pow(a,b))
 
 type PhysicalConcept = 
     | ConceptZero                         // a special case because 0 is considered compatible with any concept: 0*meter = 0*second. Weird but necessary.
@@ -302,7 +318,7 @@ let InvertNumber number =        // calculate the numeric reciprocal
         match number with
         | Rational(a,b) -> MakeRational b a
         | Real x -> MakeReal(1.0 / x)
-        | Complex(c) -> Complex(complex.Reciprocal(c))
+        | Complex(c) -> MakeComplex(complex.Reciprocal(c))
 
 let InvertQuantity (PhysicalQuantity(number,concept)) =
     PhysicalQuantity((InvertNumber number),(InvertConcept concept))

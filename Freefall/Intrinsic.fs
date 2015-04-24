@@ -138,7 +138,7 @@ let Function_Exp = { new IFunctionHandler with
                         PhysicalQuantity(MakeReal(System.Math.Exp(x)), Dimensionless)
 
                     | Complex(z) ->
-                        PhysicalQuantity(Complex(complex.Exp(z)), Dimensionless)
+                        PhysicalQuantity(MakeComplex(complex.Exp(z)), Dimensionless)
             | _ -> FailExactArgCount "Function" 1 qlist.Length funcToken
 
     member this.SimplifyStep context funcToken argList =
@@ -167,7 +167,7 @@ let Function_Exp = { new IFunctionHandler with
 
 let LnReal x =
     if x < 0.0 then
-        PhysicalQuantity(Complex(complex.Log(complex(x, 0.0))), Dimensionless)
+        PhysicalQuantity(MakeComplex(complex.Log(complex(x, 0.0))), Dimensionless)
     else
         PhysicalQuantity(MakeReal(System.Math.Log(x)), Dimensionless)
 
@@ -195,7 +195,7 @@ let Function_Ln = { new IFunctionHandler with
                     match number with
                     | Rational(a,b) -> LnReal ((float a) / (float b))
                     | Real(x) -> LnReal x
-                    | Complex(z) -> PhysicalQuantity(Complex(complex.Log(z)), Dimensionless)
+                    | Complex(z) -> PhysicalQuantity(MakeComplex(complex.Log(z)), Dimensionless)
             | _ -> FailExactArgCount "Function" 1 qlist.Length funcToken
 
     member this.SimplifyStep context funcToken argList =
@@ -256,7 +256,7 @@ let Function_Cos = { new IFunctionHandler with
                     | Real(x) -> 
                         PhysicalQuantity(MakeReal(System.Math.Cos(x)), Dimensionless)
                     | Complex(z) -> 
-                        PhysicalQuantity(Complex(complex.Cos(z)), Dimensionless)
+                        PhysicalQuantity(MakeComplex(complex.Cos(z)), Dimensionless)
             | _ -> FailExactArgCount "Function" 1 qlist.Length funcToken
 
     member this.SimplifyStep context funcToken argList =
@@ -316,7 +316,7 @@ let Function_Sin = { new IFunctionHandler with
                     | Real(x) -> 
                         PhysicalQuantity(MakeReal(System.Math.Sin(x)), Dimensionless)
                     | Complex(z) -> 
-                        PhysicalQuantity(Complex(complex.Sin(z)), Dimensionless)
+                        PhysicalQuantity(MakeComplex(complex.Sin(z)), Dimensionless)
             | _ -> FailExactArgCount "Function" 1 qlist.Length funcToken
 
     member this.SimplifyStep context funcToken argList =
@@ -397,7 +397,7 @@ let Function_Uroot = { new IFunctionHandler with        // uroot(n) = exp((2*pi*
                         else
                             // uroot(n) = exp((2*pi*i) / n)
                             let z = complex(0.0, 2.0 * System.Math.PI / (float a))
-                            PhysicalQuantity(Complex(complex.Exp(z)), Dimensionless)
+                            PhysicalQuantity(MakeComplex(complex.Exp(z)), Dimensionless)
                     | _ ->
                         SyntaxError funcToken "uroot must have a positive integer argument."
             | _ -> FailExactArgCount "Function" 1 qlist.Length funcToken
