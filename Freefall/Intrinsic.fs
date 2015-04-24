@@ -71,14 +71,29 @@ let AssertIdenticalMacroExpander context macroToken argList =
             SyntaxError macroToken (sprintf "Expressions are not identical:\n%s\n%s" (FormatExpression expr1) (FormatExpression expr2))
     | _ -> SyntaxError macroToken (sprintf "%s requires exactly 2 expression arguments." macroToken.Text)
 
+let PowerMacroExpander powerAmount context macroToken argList =
+    // sqrt(x) ==> (x)^(1/2)
+    // sqrt(x,y,z) ==> prod(x,y,z)^(1/2)
+    // cbrt(x) ==> (x)^(1/3)
+    // square(x) ==> x^2
+    let arg =
+        match argList with
+        | [] -> SyntaxError macroToken (sprintf "%s requires 1 or more arguments." macroToken.Text)
+        | [single] -> single
+        | _ -> Product(argList)
+    Power(arg, powerAmount)
+
 let IntrinsicMacros =
     [
         ("asserti", AssertIdenticalMacroExpander)
+        ("cbrt",    PowerMacroExpander OneThirdAmount)
         ("deriv",   DiffDerivMacroExpander Derivative)
         ("diff",    DiffDerivMacroExpander Differential)
         ("eval",    EvalMacroExpander)
         ("float",   FloatMacroExpander)
         ("simp",    SimplifyMacroExpander)
+        ("sqrt",    PowerMacroExpander OneHalfAmount)
+        ("square",  PowerMacroExpander TwoAmount)
     ]
 
 //-------------------------------------------------------------------------------------------------

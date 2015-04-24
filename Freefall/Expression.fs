@@ -239,14 +239,16 @@ let Number1 = Rational(R1)
 
 let ZeroQuantity = PhysicalQuantity(Number0, Zero)
 let Unity = PhysicalQuantity(Number1, Dimensionless)
+let NegativeOneQuantity = PhysicalQuantity(Rational(-1I, 1I), Dimensionless)
+let OneHalfQuantity     = PhysicalQuantity(Rational( 1I, 2I), Dimensionless)
+let OneThirdQuantity    = PhysicalQuantity(Rational( 1I, 3I), Dimensionless)
+let TwoQuantity         = PhysicalQuantity(Rational( 2I, 1I), Dimensionless)
 
 let IntegerQuantity (n:bigint) = 
     if n.IsZero then
         ZeroQuantity    // We want concept to be Zero, not Dimensionless, in this special case
     else
         PhysicalQuantity(Rational(n, 1I), Dimensionless)
-
-let NegativeOneQuantity = PhysicalQuantity(Rational(-1I, 1I), Dimensionless)
 
 let InvertNumber number =        // calculate the numeric reciprocal
     if IsNumberZero number then
@@ -289,7 +291,7 @@ type Expression =
     | PrevExprRef of Token                          // a reference to the previous expression
     | Del of Token * int      // calculus 'd' or 'del' operator applied to a variable, n times, where n = 1, 2, ...
 
-let PrimaryToken expr =     // FIXFIXFIX - rework Expression so that this function can always return a primary token
+let PrimaryToken expr =     // FIXFIXFIX (Issue #3) - rework Expression so that this function can always return a primary token
     match expr with
     | Amount(_) -> None
     | Solitaire(t) -> Some(t)
@@ -312,7 +314,10 @@ let ExpressionError expr message =
  
 let ZeroAmount = Amount(ZeroQuantity)
 let UnityAmount = Amount(Unity)
-let NegativeOneAmount = Amount(IntegerQuantity (-1I))
+let NegativeOneAmount = Amount(NegativeOneQuantity)
+let OneHalfAmount = Amount(OneHalfQuantity)
+let OneThirdAmount = Amount(OneThirdQuantity)
+let TwoAmount = Amount(TwoQuantity)
 
 let IsZeroQuantity (PhysicalQuantity(number,concept)) =
     (concept = Zero) || (IsNumberZero number)
