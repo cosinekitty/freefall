@@ -65,6 +65,11 @@ let ExecuteFile context filename =
         let mutable lineNumber = 1
         let mutable line = PromptLine lineNumber
         while line <> null do
+            // In console session, semicolons are optional to terminate a one-line statement.
+            // It is a lot easier to hack here by putting a semicolon on when missing than
+            // it is to rework the parser.
+            if not (line.TrimEnd().EndsWith(";")) then      // FIXFIXFIX : does not handle comments in line
+                line <- line + ";"
             ExecuteLine context line lineNumber
             lineNumber <- 1 + lineNumber
             line <- PromptLine lineNumber
