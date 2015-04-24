@@ -731,24 +731,25 @@ and Context = {
     ProbeHook: Context -> Expression -> NumericRange -> PhysicalConcept -> unit
     SaveToFile: Context -> string -> unit
     NextConstantSubscript: ref<int>
+    FirstTokenInExecutingStatement: ref<Token>
 }
 
-let AppendNumberedExpression {NumberedExpressionList=numExprList;} expr =
+let AppendNumberedExpression {NumberedExpressionList = numExprList} expr =
     numExprList.Add(expr)
 
-let FindNumberedExpression {NumberedExpressionList=numExprList;} token index =
+let FindNumberedExpression {NumberedExpressionList = numExprList} token index =
     if (index >= 1) && (index <= numExprList.Count) then
         numExprList.[index-1]
     else
         SyntaxError token (sprintf "Invalid expression index: expected 1..%d" numExprList.Count)
 
-let FindPreviousExpression {NumberedExpressionList=numExprList;} token =
+let FindPreviousExpression {NumberedExpressionList = numExprList} token =
     if numExprList.Count > 0 then
         numExprList.[numExprList.Count - 1]
     else
         SyntaxError token "Cannot refer to previous expression because expression list is empty."
 
-let DefineIntrinsicSymbol {SymbolTable=symtable;} symbol entry =
+let DefineIntrinsicSymbol {SymbolTable = symtable} symbol entry =
     if symtable.ContainsKey(symbol) then
         failwith (sprintf "Symbol '%s' is already defined" symbol)
     else

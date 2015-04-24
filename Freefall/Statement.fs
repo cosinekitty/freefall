@@ -237,7 +237,11 @@ and TransformEquations context expr =
 
 let PrepareExpression context rawexpr = rawexpr |> ExpandMacros context |> TransformEquations context
 
-let ExecuteStatement context statement shouldReportAssignments =
+let ExecuteStatement context firstTokenInStatement statement shouldReportAssignments =
+    // Before excecuting the statement, record the first token in that statement.
+    // This is our last line of defense for diagnosing exceptions.
+    context.FirstTokenInExecutingStatement := firstTokenInStatement
+
     match statement with
 
     | AssertFormat {AssertToken=token; ExpectedFormat=expected; Expr=rawexpr} ->
@@ -291,3 +295,9 @@ let ExecuteStatement context statement shouldReportAssignments =
         let concept = EvalConcept context conceptExpr
         for vname in vlist do
             DefineSymbol context vname (VariableEntry(range,concept))
+
+    // Getting here means we did not encounter any exceptions executing this statement.
+    // Erase the error tracking token.
+    // NOTE: Will have to rework this if we allow nested statement exeuction
+    // (statements that execute other statements, e.g. blocks or running a file).
+    context.FirstTokenInExecutingStatement := EndOfFileToken None

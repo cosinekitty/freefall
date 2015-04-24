@@ -465,8 +465,8 @@ let RunStandardScript context filename =
         let filepath = System.IO.Path.Combine(path, filename)
         let mutable scan = TokenizeFile filepath
         while MoreTokensIn scan do
-            let statement, scan2 = ParseStatement scan
-            ExecuteStatement context statement false
+            let firstTokenInStatement, statement, scan2 = ParseStatement scan
+            ExecuteStatement context firstTokenInStatement statement false
             scan <- scan2
 
 //-------------------------------------------------------------------------------------------------
@@ -481,6 +481,7 @@ let MakeContext assignmentHook probeHook saveHook =
         ProbeHook = probeHook
         SaveToFile = saveHook
         NextConstantSubscript = ref 0
+        FirstTokenInExecutingStatement = ref (EndOfFileToken None)
     }
 
     for {ConceptName=conceptName; BaseUnitName=baseUnitName; ConceptValue=concept} in BaseConcepts do
@@ -493,9 +494,10 @@ let MakeContext assignmentHook probeHook saveHook =
     for funcName, handler in IntrinsicFunctions do
         DefineIntrinsicSymbol context funcName (FunctionEntry(handler))
 
+    context
+
+let InitContext context =
     // Execute standard library's initialization script init.ff.
     // Use environment variable to figure out where the standard scripts are.
     RunStandardScript context "init.ff"
-
     context
-

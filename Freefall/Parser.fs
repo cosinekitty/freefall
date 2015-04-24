@@ -324,10 +324,11 @@ let ParseTypeAndSemicolon scan =
 
 
 let ParseStatement scan =
-    match RequireToken scan with 
+    let firstTokenInStatement = List.head (RequireToken scan)
 
+    match scan with
     | {Text=";"} :: rscan -> 
-        DoNothing, rscan
+        firstTokenInStatement, DoNothing, rscan
 
     | ({Text="assertf"} as atoken) :: scan2 ->
         // assertf ::= "assertf" "(" str "," expr ")" ";"
@@ -337,7 +338,7 @@ let ParseStatement scan =
         let expr, scan6 = ParseExpression scan5
         let scan7 = ExpectToken ")" scan6
         let scan8 = ExpectToken ";" scan7
-        AssertFormat {AssertToken=atoken; ExpectedFormat=literal; Expr=expr}, scan8
+        firstTokenInStatement, AssertFormat {AssertToken=atoken; ExpectedFormat=literal; Expr=expr}, scan8
 
     | ({Text="concept"} as conceptKeywordToken) :: scan2 ->
         // concept ::= "concept" ident "=" expr ";"
@@ -345,7 +346,7 @@ let ParseStatement scan =
         | ({Kind=TokenKind.Identifier} as idtoken) :: {Text="="} :: scan3 ->
             let expr, scan4 = ParseExpression scan3
             let scan5 = ExpectSemicolon scan4
-            ConceptDef{ConceptName=idtoken; Expr=expr}, scan5
+            firstTokenInStatement, ConceptDef{ConceptName=idtoken; Expr=expr}, scan5
         | _ -> SyntaxError conceptKeywordToken "Expected 'ident = expr;' after 'concept'."
 
     | ({Text="forget"} as forgetToken) :: scan2 ->
@@ -353,21 +354,21 @@ let ParseStatement scan =
         // idspec ::= "*" | ident { "," ident }
         match RequireToken scan2 with
         | {Text="*"} :: {Text=";"} :: scan3 -> 
-            ForgetAllNumberedExpressions, scan3
+            firstTokenInStatement, ForgetAllNumberedExpressions, scan3
         | _ -> 
             let idlist, scan3 = ParseIdentList scan2 ";"
-            ForgetNamedExpressions(idlist), scan3
+            firstTokenInStatement, ForgetNamedExpressions(idlist), scan3
 
     | {Text="probe"} :: scan2 ->
         // "probe" expr ";"
         let expr, scan3 = ParseExpression scan2
         let scan4 = ExpectSemicolon scan3
-        Probe(expr), scan4
+        firstTokenInStatement, Probe(expr), scan4
 
     | {Text="save"} :: scan2 ->
         let filename, scan3 = ExpectStringLiteral scan2
         let scan4 = ExpectSemicolon scan3
-        Save(filename), scan4
+        firstTokenInStatement, Save(filename), scan4
 
     | ({Text="unit"} as unitKeywordToken) :: scan2 ->
         // unit ::= "unit" ident "=" expr ";"
@@ -375,19 +376,19 @@ let ParseStatement scan =
         | ({Kind=TokenKind.Identifier} as idtoken) :: {Text="="} :: scan3 ->
             let expr, scan4 = ParseExpression scan3
             let scan5 = ExpectSemicolon scan4
-            UnitDef{UnitName=idtoken; Expr=expr}, scan5
+            firstTokenInStatement, UnitDef{UnitName=idtoken; Expr=expr}, scan5
         | _ -> SyntaxError unitKeywordToken "Expected 'ident = expr;' after 'unit'."
 
     | {Text="var"} :: scan2 ->
         // vardecl ::= "var" ident { "," ident } ":" type ";"
         let identList, scan3 = ParseIdentList scan2 ":"
         let range, conceptExpr, scan4 = ParseTypeAndSemicolon scan3
-        VarDecl{VarNameList=identList; Range=range; ConceptExpr=conceptExpr}, scan4
+        firstTokenInStatement, VarDecl{VarNameList=identList; Range=range; ConceptExpr=conceptExpr}, scan4
 
     | ({Kind=TokenKind.Identifier} as target) :: {Text=":="} :: rscan ->
         let expr, xscan = ParseExpression rscan
-        Assignment{TargetName=Some(target); Expr=expr}, (ExpectSemicolon xscan)
+        firstTokenInStatement, Assignment{TargetName=Some(target); Expr=expr}, (ExpectSemicolon xscan)
 
     | _ ->
         let expr, xscan = ParseExpression scan
-        Assignment{TargetName=None; Expr=expr}, (ExpectSemicolon xscan)
+        firstTokenInStatement, Assignment{TargetName=None; Expr=expr}, (ExpectSemicolon xscan)

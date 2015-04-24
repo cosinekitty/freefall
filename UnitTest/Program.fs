@@ -24,7 +24,7 @@ let MyProbeHook (context:Context) (expr:Expression) (range:NumericRange) (concep
 let MySaveHook context fileNameToken =
     printfn "File saver not implemented."
 
-let MyContext = MakeContext MyAssignmentHook MyProbeHook MySaveHook
+let MyContext = MakeContext MyAssignmentHook MyProbeHook MySaveHook |> InitContext
 
 let VarTokenX = MakeIdentifierToken "x"
 DefineSymbol MyContext VarTokenX (VariableEntry(RealRange,Dimensionless))
@@ -77,7 +77,7 @@ let ParseStatementsTest filename =
     let tokenlist = TokenizeFile filepath
     let mutable scan = tokenlist
     while MoreTokensIn scan do
-        let statement, scan2 = ParseStatement scan
+        let firstTokenInStatement, statement, scan2 = ParseStatement scan
         printfn "Statement: %A" statement
         scan <- scan2
 

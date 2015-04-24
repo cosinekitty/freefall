@@ -14,6 +14,13 @@ let PrintTokenDiagnostic token =
     | None -> ()
     | Some({Filename=fn; LineNumber=ln;}) -> printfn "File %s [line %d]" fn ln
 
+let PrintExecutionContext {FirstTokenInExecutingStatement = firstTokenRef} =
+    let firstToken = !firstTokenRef
+    if firstToken.Kind <> TokenKind.EndOfFile then
+        printfn ""
+        printfn "Executing statement diagnostic:"
+        PrintTokenDiagnostic firstToken
+
 let PrintLineDiagnostic line token =
     let prefix = "===>  "
     printfn "%s%s" prefix line
@@ -25,9 +32,9 @@ let PrintLineDiagnostic line token =
 let ExecuteStatements context tokenlist =
     let mutable scan = tokenlist
     while MoreTokensIn scan do
-        let statement, scan2 = ParseStatement scan
+        let firstTokenInStatement, statement, scan2 = ParseStatement scan
         printfn "Statement: %s" (FormatStatement statement)
-        ExecuteStatement context statement true
+        ExecuteStatement context firstTokenInStatement statement true
         scan <- scan2
 
 let PromptLine (lineNumber:int) =
@@ -43,15 +50,18 @@ let ExecuteLine context line lineNumber =
         | SyntaxException(token,message) ->
             printfn "SYNTAX ERROR : %s" message
             PrintLineDiagnostic line token
+            PrintExecutionContext context
 
         | ExpressionException(expr,message) ->
             printfn "Error in subexpression '%s': %s" (FormatExpression expr) message
             match PrimaryToken expr with
             | None -> ()
             | Some(token) -> PrintLineDiagnostic line token
+            PrintExecutionContext context
 
         | FreefallRuntimeException(message) ->
             printfn "Runtime error: %s" message
+            PrintExecutionContext context
 
         | UnexpectedEndException(None) ->
             printfn "Syntax error: unexpected end of input"
@@ -95,14 +105,16 @@ let MyProbeHook context expr range concept =
 
 [<EntryPoint>]
 let main argv = 
+    let context = MakeContext MyAssignmentHook MyProbeHook HtmlSave
     try
-        let context = MakeContext MyAssignmentHook MyProbeHook HtmlSave
+        InitContext context |> ignore
         Array.map (ExecuteFile context) argv |> ignore
         0
     with 
         | SyntaxException(token,message) ->
             printfn "EXCEPTION : %s" message
             PrintTokenDiagnostic token
+            PrintExecutionContext context
             1
 
         | ExpressionException(expr,message) ->
@@ -110,16 +122,25 @@ let main argv =
             match PrimaryToken expr with
             | None -> ()
             | Some(token) -> PrintTokenDiagnostic token
+            PrintExecutionContext context
+            1
+
+        | FreefallRuntimeException(message) ->
+            printfn "Runtime error: %s" message
+            PrintExecutionContext context
             1
 
         | UnexpectedEndException(None) ->
             printfn "Syntax error: unexpected end of input"
+            PrintExecutionContext context
             1
 
         | UnexpectedEndException(Some(filename)) ->
             printfn "Syntax error: unexpected end of file '%s'" filename
+            PrintExecutionContext context
             1
 
         | :? System.IO.FileNotFoundException as ex ->
             printfn "ERROR: %s" ex.Message
+            PrintExecutionContext context
             1
