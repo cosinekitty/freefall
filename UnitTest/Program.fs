@@ -89,7 +89,7 @@ let main argv =
         printfn "WeightSquared = %s" (FormatExpression WeightSquared)
         printfn "concept(WeightSquared) = %s" (FormatConcept (ExpressionConcept MyContext WeightSquared))
 
-        let MyScalar = Amount(PhysicalQuantity(Real(7.28), Dimensionless))
+        let MyScalar = Amount(PhysicalQuantity(MakeReal(7.28), Dimensionless))
         let WeirdValue = Power(Solitaire(VarTokenF),AlmostPi)
         printfn "WeirdValue = %s, concept = %s" 
             (FormatExpression WeirdValue) 

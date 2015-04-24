@@ -132,10 +132,10 @@ let Function_Exp = { new IFunctionHandler with
                     match number with
                     | Rational(a,b) -> 
                         let x = (float a) / (float b)
-                        PhysicalQuantity(Real(System.Math.Exp(x)), Dimensionless)
+                        PhysicalQuantity(MakeReal(System.Math.Exp(x)), Dimensionless)
 
                     | Real(x) -> 
-                        PhysicalQuantity(Real(System.Math.Exp(x)), Dimensionless)
+                        PhysicalQuantity(MakeReal(System.Math.Exp(x)), Dimensionless)
 
                     | Complex(z) ->
                         PhysicalQuantity(Complex(complex.Exp(z)), Dimensionless)
@@ -169,7 +169,7 @@ let LnReal x =
     if x < 0.0 then
         PhysicalQuantity(Complex(complex.Log(complex(x, 0.0))), Dimensionless)
     else
-        PhysicalQuantity(Real(System.Math.Log(x)), Dimensionless)
+        PhysicalQuantity(MakeReal(System.Math.Log(x)), Dimensionless)
 
 let Function_Ln = { new IFunctionHandler with
 
@@ -252,9 +252,9 @@ let Function_Cos = { new IFunctionHandler with
                     match number with
                     | Rational(a,b) -> 
                         let x = (float a) / (float b)
-                        PhysicalQuantity(Real(System.Math.Cos(x)), Dimensionless)
+                        PhysicalQuantity(MakeReal(System.Math.Cos(x)), Dimensionless)
                     | Real(x) -> 
-                        PhysicalQuantity(Real(System.Math.Cos(x)), Dimensionless)
+                        PhysicalQuantity(MakeReal(System.Math.Cos(x)), Dimensionless)
                     | Complex(z) -> 
                         PhysicalQuantity(Complex(complex.Cos(z)), Dimensionless)
             | _ -> FailExactArgCount "Function" 1 qlist.Length funcToken
@@ -312,9 +312,9 @@ let Function_Sin = { new IFunctionHandler with
                     match number with
                     | Rational(a,b) -> 
                         let x = (float a) / (float b)
-                        PhysicalQuantity(Real(System.Math.Sin(x)), Dimensionless)
+                        PhysicalQuantity(MakeReal(System.Math.Sin(x)), Dimensionless)
                     | Real(x) -> 
-                        PhysicalQuantity(Real(System.Math.Sin(x)), Dimensionless)
+                        PhysicalQuantity(MakeReal(System.Math.Sin(x)), Dimensionless)
                     | Complex(z) -> 
                         PhysicalQuantity(Complex(complex.Sin(z)), Dimensionless)
             | _ -> FailExactArgCount "Function" 1 qlist.Length funcToken

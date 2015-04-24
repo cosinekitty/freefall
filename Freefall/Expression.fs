@@ -20,6 +20,14 @@ type Number =
     | Real of float
     | Complex of complex
 
+let CheckReal x =
+    if System.Double.IsNaN(x) || System.Double.IsInfinity(x) then
+        raise (FreefallRuntimeException(sprintf "Invalid real result '%O'" x))
+    else
+        x
+
+let MakeReal x = Real(CheckReal x)
+
 let IsNumberEqualToInteger n x =
     match x with
     | Rational(numer,denom) -> (numer = n) && (denom.IsOne)      // assumes rational was created using MakeRational to normalize
@@ -35,7 +43,7 @@ let IsNumberZero x =        // could use (IsNumberEqualToInteger 0 x), but this 
 let NegateNumber number =
     match number with
     | Rational(numer,denom) -> Rational(-numer,denom)
-    | Real(x) -> Real(-x)
+    | Real(x) -> MakeReal(-x)
     | Complex(c) -> Complex(-c)
 
 let rec GreatestCommonDivisor (a:bigint) (b:bigint) =         // caller must ensure that a and b are both non-negative
@@ -70,10 +78,10 @@ let NegateExponentList (clist:list<bigint * bigint>) =
 let rec AddNumbers anum bnum =
     match (anum, bnum) with
     | (Rational(a,b), Rational(c,d)) -> MakeRational (a*d + b*c) (b*d)
-    | (Rational(a,b), Real(r)) -> Real(r + (float a)/(float b))
+    | (Rational(a,b), Real(r)) -> MakeReal(r + (float a)/(float b))
     | (Rational(a,b), Complex(c)) -> Complex(complex(c.Real + (float a)/(float b), c.Imaginary))
     | (Real(_), Rational(_,_)) -> AddNumbers bnum anum
-    | (Real(x), Real(y)) -> Real(x + y)
+    | (Real(x), Real(y)) -> MakeReal(x + y)
     | (Real(r), Complex(c)) -> Complex(complex(r + c.Real, c.Imaginary))
     | (Complex(_), Rational(_,_)) -> AddNumbers bnum anum
     | (Complex(_), Real(_)) -> AddNumbers bnum anum
@@ -82,12 +90,12 @@ let rec AddNumbers anum bnum =
 let rec MultiplyNumbers anum bnum =
     match (anum, bnum) with
     | (Rational(a,b), Rational(c,d)) -> MakeRational (a*c) (b*d)
-    | (Rational(a,b), Real(r)) -> Real(r * (float a)/(float b))
+    | (Rational(a,b), Real(r)) -> MakeReal(r * (float a)/(float b))
     | (Rational(a,b), Complex(c)) -> 
         let ratio = (float a) / (float b)
         Complex(complex(ratio*c.Real, ratio*c.Imaginary))
     | (Real(_), Rational(_,_)) -> MultiplyNumbers bnum anum
-    | (Real(x), Real(y)) -> Real(x * y)
+    | (Real(x), Real(y)) -> MakeReal(x * y)
     | (Real(r), Complex(c)) -> Complex(complex(r*c.Real, r*c.Imaginary))
     | (Complex(_), Rational(_,_)) -> MultiplyNumbers bnum anum
     | (Complex(_), Real(_)) -> MultiplyNumbers bnum anum
@@ -107,7 +115,7 @@ let PowerFloats (a:float) (b:float) =
         else
             Complex(complex.Pow(complex(a, 0.0), complex(b, 0.0)))
     else
-        Real(System.Math.Pow(a,b))
+        MakeReal(System.Math.Pow(a,b))
 
 let rec PowerFloatInt (a:float) (b:bigint) =
     if b.Sign < 0 then
@@ -167,7 +175,7 @@ let PowerNumbers anum bnum =
         Complex(complex.Pow(a,b))
     | (Real(a), Rational(bn,bd)) ->
         if bd.IsOne then
-            Real(PowerFloatInt a bn)
+            MakeReal(PowerFloatInt a bn)
         else
             let b = (float bn) / (float bd)
             PowerFloats a b
@@ -293,7 +301,7 @@ let InvertNumber number =        // calculate the numeric reciprocal
     else
         match number with
         | Rational(a,b) -> MakeRational b a
-        | Real x -> Real(1.0 / x)
+        | Real x -> MakeReal(1.0 / x)
         | Complex(c) -> Complex(complex.Reciprocal(c))
 
 let InvertQuantity (PhysicalQuantity(number,concept)) =
@@ -780,7 +788,7 @@ let rec AreIdenticalNumbers a b =
     match (a,b) with
     | (Rational(anum,aden),Rational(bnum,bden)) -> anum*bden = bnum*aden
     | (Rational(anum,aden),Real(br)) -> (float anum) = br*(float aden)
-    | (Rational(anum,aden),Complex(b)) -> (b.Imaginary = 0.0) && (AreIdenticalNumbers a (Real(b.Real)))
+    | (Rational(anum,aden),Complex(b)) -> (b.Imaginary = 0.0) && (AreIdenticalNumbers a (MakeReal(b.Real)))
     | (Real(ar),Rational(_,_)) -> AreIdenticalNumbers b a
     | (Real(ar),Real(br)) -> ar = br
     | (Real(ar),Complex(b)) -> (b.Imaginary = 0.0) && (ar = b.Real)
@@ -1120,7 +1128,7 @@ let ApproxQuantity context expr =
     let (PhysicalQuantity(number,concept) as quantity) = EvalQuantity context expr
     match number with
     | Rational(a,b) when b <> 1I -> 
-        PhysicalQuantity(Real((float a) / (float b)), concept)
+        PhysicalQuantity(MakeReal((float a) / (float b)), concept)
 
     | Rational(_,_)
     | Real(_)
