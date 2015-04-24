@@ -93,6 +93,49 @@ let rec MultiplyNumbers anum bnum =
     | (Complex(_), Real(_)) -> MultiplyNumbers bnum anum
     | (Complex(c), Complex(d)) -> Complex(c*d)
 
+let PowerFloats (a:float) (b:float) =
+    if a = 0.0 then
+        if b = 0.0 then
+            raise (FreefallRuntimeException "Cannot evaluate 0.0 ^ 0.0.")
+        elif b < 0.0 then
+            raise (FreefallRuntimeException "Cannot raise 0.0 to negative power.")
+        else
+            Rational(0I, 1I)
+    elif a < 0.0 then
+        if b = 0.0 then
+            Rational(1I, 1I)
+        else
+            Complex(complex.Pow(complex(a, 0.0), complex(b, 0.0)))
+    else
+        Real(System.Math.Pow(a,b))
+
+let rec PowerFloatInt (a:float) (b:bigint) =
+    if b.Sign < 0 then
+        if a = 0.0 then
+            raise (FreefallRuntimeException "Cannot raise 0.0 to negative integer power.")
+        else
+            1.0 / (PowerFloatInt a (-b))
+    elif b.Sign = 0 then
+        if a = 0.0 then
+            raise (FreefallRuntimeException "Cannot raise 0.0 to 0 power.")
+        else
+            1.0
+    else
+        // Raising real to positive integer power.
+        // Consider the binary representation of b.
+        // Keep squaring a, and if the corresponding bit in b is set, include that factor in the result.
+        let mutable power = a
+        let mutable product = 1.0
+        let mutable residue = b
+        while residue > 0I do
+            let nextres, bit = bigint.DivRem(residue, 2I)
+            if bit.IsOne then
+                product <- product * power
+            residue <- nextres
+            power <- power * power
+
+        product
+
 let PowerNumbers anum bnum =
     // Get this nasty special case out of the way first.
     if (IsNumberZero anum) && (IsNumberZero bnum) then
@@ -115,18 +158,21 @@ let PowerNumbers anum bnum =
             // Any nonrational (or very large) power requires numerical approximation.
             let a = (float an) / (float ad)
             let b = (float bn) / (float bd)
-            Real(System.Math.Pow(a,b))
+            PowerFloats a b
     | (Rational(an,ad), Real(b)) ->
         let a = (float an) / (float ad)
-        Real(System.Math.Pow(a,b))
+        PowerFloats a b
     | (Rational(an,ad), Complex(b)) ->
         let a = complex((float an) / (float ad), 0.0)
         Complex(complex.Pow(a,b))
     | (Real(a), Rational(bn,bd)) ->
-        let b = (float bn) / (float bd)
-        Real(System.Math.Pow(a,b))
+        if bd.IsOne then
+            Real(PowerFloatInt a bn)
+        else
+            let b = (float bn) / (float bd)
+            PowerFloats a b
     | (Real(a), Real(b)) ->
-        Real(System.Math.Pow(a,b))
+        PowerFloats a b
     | (Real(a), Complex(b)) ->
         Complex(complex.Pow(complex(a,0.0), b))
     | (Complex(a), Rational(bn,bd)) ->
