@@ -1,6 +1,6 @@
 ﻿module Freefall.Stmt
-open Scanner
-open Expr
+open Freefall.Scanner
+open Freefall.Expr
 
 //--------------------------------------------------------------------------------------------------
 

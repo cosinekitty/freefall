@@ -4,7 +4,7 @@
 module Freefall.Expr
 open Checked
 open System.Collections.Generic
-open Scanner
+open Freefall.Scanner
 
 type complex = System.Numerics.Complex
 
@@ -44,11 +44,17 @@ let MakeComplex z = Complex(CheckComplex z)
 
 let MakePairComplex (a,b) = MakeComplex(complex(a, b))
 
-let IsNumberEqualToInteger n x =
-    match x with
-    | Rational(numer,denom) -> (numer = n) && (denom.IsOne)      // assumes rational was created using MakeRational to normalize
-    | Real re -> re = (float n)
-    | Complex(c) -> (c.Imaginary = 0.0) && (c.Real = (float n))
+let IsNumberEqualToRational yNumer yDenom x =
+    if yDenom = 0I then
+        failwith "yDenom is not allowed to be zero"
+    else
+        match x with
+        | Rational(xNumer,xDenom) -> xNumer * yDenom = yNumer * xDenom
+        | Real re -> re = CheckReal((float yNumer) / (float yDenom))
+        | Complex(c) -> (c.Imaginary = 0.0) && (c.Real = CheckReal((float yNumer) / (float yDenom)))
+
+let IsNumberEqualToInteger n x = 
+    IsNumberEqualToRational n 1I x
 
 let IsNumberZero x =        // could use (IsNumberEqualToInteger 0 x), but this is a little more efficient
     match x with
@@ -352,7 +358,7 @@ type Expression =
     | PrevExprRef of Token                          // a reference to the previous expression
     | Del of Token * int      // calculus 'd' or 'del' operator applied to a variable, n times, where n = 1, 2, ...
 
-let PrimaryToken expr =     // FIXFIXFIX (Issue #3) - rework Expression so that this function can always return a primary token
+let PrimaryToken expr =
     match expr with
     | Amount(_) -> None
     | Solitaire(t) -> Some(t)
@@ -389,6 +395,14 @@ let IsQuantityOne (PhysicalQuantity(number,concept)) =
 let IsQuantityNegOne (PhysicalQuantity(number,concept)) =
     (concept = Dimensionless) && (IsNumberEqualToInteger (-1I) number)
 
+let IsQuantityEqualToRational (PhysicalQuantity(number,concept) as quantity) yNumer yDenom =
+    if yDenom = 0I then
+        failwith "yDenom is not allowed to be 0"
+    elif yNumer = 0I then
+        IsQuantityZero quantity
+    else
+        (concept = Dimensionless) && (IsNumberEqualToRational yNumer yDenom number)
+
 let IsExpressionZero expr =
     match expr with
     | Amount(quantity) -> IsQuantityZero quantity
@@ -402,6 +416,11 @@ let IsExpressionOne expr =
 let IsExpressionNegOne expr =
     match expr with
     | Amount(quantity) -> IsQuantityNegOne quantity
+    | _ -> false
+
+let IsExpressionEqualToRational expr yNumer yDenom =
+    match expr with
+    | Amount(quantity) -> IsQuantityEqualToRational quantity yNumer yDenom
     | _ -> false
 
 let MakeNegative expr = 
@@ -600,7 +619,7 @@ and FormatExprListRaw exprlist =
 let rec FormatExpression expr =
     FormatExpressionPrec expr Precedence_Or
 
-and ExpressionPrecedence expr =
+and ExpressionPrecedence expr =     // FIXFIXFIX #15 - precedence and text should be calculated in tandem (DRY)
     match expr with
     | Amount(quantity) -> QuantityPrecedence quantity
     | Solitaire(_) -> Precedence_Atom
@@ -615,7 +634,11 @@ and ExpressionPrecedence expr =
         | [] -> Precedence_Atom                         // formatted as "1"
         | [single] -> ExpressionPrecedence single       // single is rendered by itself
         | _ -> Precedence_Mul                           // a*b*c*...
-    | Power(_,_) -> Precedence_Pow
+    | Power(_,b) -> 
+        if IsExpressionEqualToRational b 1I 2I then
+            Precedence_Atom     // sqrt(a)
+        else
+            Precedence_Pow      // a^b
     | Equals(_,_) -> Precedence_Rel
     | NumExprRef(_,_) -> Precedence_Atom
     | PrevExprRef(_) -> Precedence_Atom
@@ -638,7 +661,11 @@ and FormatExpressionPrec expr parentPrecedence =
             | [single] -> FormatExpression single
             | Amount(quantity) :: rest when quantity = QuantityNegOne -> "-" + (FormatExpressionPrec (Product rest) Precedence_Neg)
             | first :: rest -> FormatExpressionPrec first Precedence_Mul + JoinRemainingFactors rest
-        | Power(a,b) -> FormatExpressionPrec a Precedence_Pow + "^" + FormatExpressionPrec b Precedence_Pow
+        | Power(a,b) -> 
+            if IsExpressionEqualToRational b 1I 2I then
+                "sqrt(" + FormatExpression a + ")"
+            else
+                FormatExpressionPrec a Precedence_Pow + "^" + FormatExpressionPrec b Precedence_Pow
         | Equals(a,b) -> FormatExpressionPrec a Precedence_Rel + " = " + FormatExpressionPrec b Precedence_Rel
         | NumExprRef(_,i) -> "#" + i.ToString()
         | PrevExprRef(_) -> "#"

@@ -187,9 +187,13 @@ and FormatLatexPrec context expr parentPrecedence : (string * LatexFactorSeparat
                 "\\frac{" + numerText + "}{" + denomText + "}", sep
 
         | Power(a,b) ->
-            let atext, sep = FormatLatexPrec context a Precedence_Pow
-            let btext, _ = FormatLatexPrec context b Precedence_Pow
-            atext + "^{" + btext + "}", sep
+            if IsExpressionEqualToRational b 1I 2I then
+                let atext = FormatLatex context a
+                "\\sqrt{" + atext + "}", LatexFactorSeparator.Space
+            else
+                let atext, sep = FormatLatexPrec context a Precedence_Pow
+                let btext, _ = FormatLatexPrec context b Precedence_Pow
+                atext + "^{" + btext + "}", sep
 
         | Equals(a,b) ->
             let atext, _ = FormatLatexPrec context a Precedence_Rel
