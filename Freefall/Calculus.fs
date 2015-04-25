@@ -6,10 +6,7 @@ open Freefall.Expr
 open Freefall.Scanner
 
 let MakeFunction name arglist =
-    Functor({Text=name; Precedence=Precedence_Atom; Kind=TokenKind.Identifier; Origin=None; ColumnNumber = -1}, arglist)
-
-let MakeVariableToken name =
-    {Text=name; Precedence=Precedence_Atom; Kind=TokenKind.Identifier; Origin=None; ColumnNumber = -1}
+    Functor(SynthToken name, arglist)
 
 let IsInVariableList token varNameList =
     List.exists (fun v -> v = token.Text) varNameList
@@ -29,7 +26,7 @@ let rec TakeDifferential derivKind context varNameList expr =
                         AmountOne     // d/dx (x) = 1
                     else
                         // d/dx (y) = dy / dx
-                        Divide (Del(token,1)) (Del(MakeVariableToken primaryVarName,1))
+                        Divide (Del(token,1)) (Del(SynthToken primaryVarName,1))
             else
                 AmountZero
         | ConceptEntry(concept) -> SyntaxError token "Concept not allowed in differential expression."
@@ -62,7 +59,7 @@ let rec TakeDifferential derivKind context varNameList expr =
         if IsInVariableList vartoken varNameList then
             match derivKind with
             | Differential -> Del(vartoken,1+order)
-            | Derivative -> Product[Del(vartoken,1+order); MakeReciprocal (Del(MakeVariableToken primaryVarName,1))]
+            | Derivative -> Product[Del(vartoken,1+order); MakeReciprocal (Del(SynthToken primaryVarName,1))]
         else
             AmountZero
 

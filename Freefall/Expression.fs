@@ -764,8 +764,7 @@ let DefineSymbol {SymbolTable=symtable} ({Text=symbol; Kind=kind} as symtoken) s
 
 let CreateVariable ({SymbolTable=symtable; NextConstantSubscript=subscript} as context) prefix range concept =
     incr subscript
-    let varName = sprintf "%s_%d" prefix !subscript
-    let varToken = {Text=varName; Kind=TokenKind.Identifier; Precedence=Precedence_Atom; Origin=None; ColumnNumber = -1}
+    let varToken = (SynthToken (sprintf "%s_%d" prefix !subscript))
     DefineSymbol context varToken (VariableEntry(range, concept))
     varToken
 

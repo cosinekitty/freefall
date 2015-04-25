@@ -213,7 +213,7 @@ and TransformEquations context expr =
                             // This requires a scary side-effect!
                             // We create a brand new variable K_n: integer[0, bd-1].
                             let varExpr = Solitaire(CreateVariable context "K" (IntegerRange(FiniteLimit(0I), FiniteLimit(bDen-1I))) Dimensionless)
-                            let urootToken = {Text="uroot"; Kind=TokenKind.Identifier; Origin=None; ColumnNumber = -1; Precedence=Precedence_Atom}
+                            let urootToken = SynthToken "uroot"
                             let bDenAmount = Amount(PhysicalQuantity(Rational(bDen,1I),Dimensionless))
                             let uroot = Functor(urootToken, [bDenAmount])
                             Equals(Power(ax, bSimp), Product[Power(uroot, varExpr); Power(ay, bSimp)])
