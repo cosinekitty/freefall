@@ -1414,7 +1414,12 @@ let rec SimplifyStep context expr =
                 elif IsExpressionOne sy then
                     sx
                 else
-                    Power(sx,sy)            
+                    match sx, sy with
+                    | Amount(xq), Amount(PhysicalQuantity(Rational(_,yb),_) as yq) when yb = 1I -> 
+                        // Simplify pow(numeric,integer) by numerical evaluation.
+                        Amount(PowerQuantities expr xq yq)
+                    | _, _ -> 
+                        Power(sx,sy)            
 
             | Equals(a,b) ->
                 Equals((SimplifyStep context a), (SimplifyStep context b))
