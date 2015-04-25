@@ -498,7 +498,7 @@ let FormatNumber x =
                 RealString c.Imaginary
         "(" + rtext + itext + "i)"
 
-let NumberPrecedence x =
+let NumberPrecedence x =        // FIXFIXFIX #15 - merge with FormatNumber
     match x with
     | Rational(numer,denom) ->
         if denom.IsOne then
@@ -541,7 +541,7 @@ let FormatDimensions namelist concept =
     | ConceptZero -> "0"
     | Concept(powlist) -> List.fold2 AccumDimension "" namelist powlist
 
-let DimensionsPrecedence concept =
+let DimensionsPrecedence concept =      // FIXFIXFIX #15 - merge with FormatDimensions
     // Cheat: convert to string, then inspect the string.
     let text = FormatDimensions BaseUnitNames concept
     if text.Contains("*") then
@@ -558,45 +558,32 @@ let FormatConcept concept =
     else
         text
 
-let FormatQuantity (PhysicalQuantity(scalar,concept)) =
+let PrecFormatQuantity (PhysicalQuantity(scalar,concept)) =
     if IsNumberZero scalar then
-        "0"     // special case because zero makes all units irrelevant
+        Precedence_Atom, "0"     // special case because zero makes all units irrelevant
     else
         let scalarText = FormatNumber scalar
         let conceptText = FormatDimensions BaseUnitNames concept
         if conceptText = "" then
-            scalarText
+            NumberPrecedence scalar, scalarText
         elif conceptText = "0" then
-            "0"
+            Precedence_Atom, "0"
         elif scalarText = "1" then
-            conceptText
+            DimensionsPrecedence concept, conceptText
         else
-            scalarText + "*" + conceptText
-
-let QuantityPrecedence (PhysicalQuantity(scalar,concept)) =     // FIXFIXFIX #15 - merge with FormatQuantity
-    if IsNumberZero scalar then
-        Precedence_Atom
-    else
-        let scalarPrec = NumberPrecedence scalar
-        if concept = Dimensionless then
-            scalarPrec
-        elif concept = ConceptZero then
-            Precedence_Atom
-        else
+            let scalarPrec = NumberPrecedence scalar
             let conceptPrec = DimensionsPrecedence concept
-            if Precedence_Mul < scalarPrec && Precedence_Mul < conceptPrec then
-                Precedence_Mul
-            elif scalarPrec < conceptPrec then
-                scalarPrec
-            else
-                conceptPrec
+            let prec = System.Math.Min(Precedence_Mul, System.Math.Min(scalarPrec, conceptPrec))
+            prec, scalarText + "*" + conceptText
 
 //-----------------------------------------------------------------------------------------------------
 // The "raw" expression formatter displays an expression showing its actual representation.
 
 let rec FormatExpressionRaw expr =
     match expr with
-    | Amount quantity -> FormatQuantity quantity
+    | Amount quantity -> 
+        let _, text = PrecFormatQuantity quantity
+        text
     | Solitaire(token) -> token.Text
     | Functor(funcName, argList) -> funcName.Text + "(" + FormatExprListRaw argList + ")"
     | Sum terms -> "sum(" + FormatExprListRaw terms + ")"
@@ -627,7 +614,7 @@ and ExpressionPrecedence expr =
 and FormatExpressionPrec expr parentPrecedence =
     let precedence, innerText =
         match expr with
-        | Amount quantity -> QuantityPrecedence quantity, FormatQuantity quantity
+        | Amount quantity -> PrecFormatQuantity quantity
         | Solitaire(token) -> Precedence_Atom, token.Text
         | Functor(funcName, argList) -> Precedence_Atom, funcName.Text + "(" + FormatExprList argList + ")"
         | Sum terms ->
