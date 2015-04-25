@@ -99,7 +99,15 @@ and ParseDivMul scan =
         if op.Text = "*" then 
             factorlist.Add(right)
         elif op.Text = "/" then
-            factorlist.Add(MakeReciprocal right)
+            // Special case: parser directly converts consecutive integers surrounded by "/"
+            // into a single rational number.  That way, "3/4" is Rational(3,4) instead of
+            // Rational(3,1) * Rational(1,4).
+            match factorlist.[factorlist.Count-1], right with
+            | Amount(PhysicalQuantity(Rational(lnumer,ldenom),lconcept)) as left, Amount(PhysicalQuantity(Rational(rnumer,rdenom),rconcept))
+                when ldenom = 1I && lconcept = Dimensionless && rdenom = 1I && rconcept = Dimensionless ->
+                    factorlist.[factorlist.Count-1] <- Amount(PhysicalQuantity((MakeRational lnumer rnumer), Dimensionless))
+            | _, _ -> 
+                factorlist.Add(MakeReciprocal right)
         else
             SyntaxError op "Unsupported multop"
 
