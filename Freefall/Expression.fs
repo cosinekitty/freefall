@@ -528,15 +528,16 @@ let FormatDimensions namelist concept =
     | ConceptZero -> "0"
     | Concept(powlist) -> List.fold2 AccumDimension "" namelist powlist
 
-let DimensionsPrecedence concept =      // FIXFIXFIX #15 - merge with FormatDimensions
-    // Cheat: convert to string, then inspect the string.
+let PrecFormatUnits concept =
     let text = FormatDimensions BaseUnitNames concept
+
+    // Cheat: inspect string to determine precedence.
     if text.Contains("*") then
-        Precedence_Mul
+        Precedence_Mul, text
     elif text.Contains("^") then
-        Precedence_Pow
+        Precedence_Pow, text
     else
-        Precedence_Atom
+        Precedence_Atom, text
 
 let FormatConcept concept = 
     let text = FormatDimensions ConceptNames concept
@@ -550,17 +551,17 @@ let PrecFormatQuantity (PhysicalQuantity(scalar,concept)) =
         Precedence_Atom, "0"     // special case because zero makes all units irrelevant
     else
         let scalarPrec, scalarText = PrecFormatNumber scalar
-        let conceptText = FormatDimensions BaseUnitNames concept
-        if conceptText = "" then
+        let unitsPrec, unitsText = PrecFormatUnits concept
+        if unitsText = "" then
             scalarPrec, scalarText
-        elif conceptText = "0" then
+        elif unitsText = "0" then
             Precedence_Atom, "0"
         elif scalarText = "1" then
-            DimensionsPrecedence concept, conceptText
+            unitsPrec, unitsText
         else
-            let conceptPrec = DimensionsPrecedence concept
-            let prec = System.Math.Min(Precedence_Mul, System.Math.Min(scalarPrec, conceptPrec))
-            prec, scalarText + "*" + conceptText
+            let stext = if scalarPrec < Precedence_Mul then sprintf "(%s)" scalarText else scalarText
+            let utext = if unitsPrec  < Precedence_Mul then sprintf "(%s)" unitsText  else unitsText
+            Precedence_Mul, sprintf "%s*%s" stext utext
 
 //-----------------------------------------------------------------------------------------------------
 // The "raw" expression formatter displays an expression showing its actual representation.
