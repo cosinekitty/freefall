@@ -509,8 +509,7 @@ let Function_Acos = { new IFunctionHandler with
         | [z] ->
             // d acos(z) = -dz * (1 - z^2) ^ (-1/2)
             let dz = TakeDifferential derivKind context varNameList z
-            let radical = Power(Sum[AmountOne; MakeNegative (Power(z,AmountTwo))], AmountNegOneHalf)
-            Product [MakeNegative dz; radical]
+            Product [MakeNegative dz; RecipSqrt (Sum[AmountOne; MakeNegative (Square z)])]
 
         | _ -> FailExactArgCount "Function" 1 argList.Length funcToken
 

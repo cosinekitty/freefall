@@ -455,6 +455,9 @@ let MakeReciprocal expr =
         Power(expr, AmountNegOne)
 
 let Divide a b = Product[a; MakeReciprocal b]
+let Square a = Power(a, AmountTwo)
+let Sqrt a = Power(a, AmountOneHalf)
+let RecipSqrt a = Power(a, AmountNegOneHalf)
 
 let IsConceptDimensionless concept =
     (concept = ConceptZero) || (concept = Dimensionless)
