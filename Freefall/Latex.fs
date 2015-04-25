@@ -50,7 +50,7 @@ let LatexFormatDimension name (numer:bigint, denom:bigint) =
             elif denom.IsOne then
                 "^{" + numer.ToString() + "}"
             else
-                "^{\\frac{" + numer.ToString() + "}{" + denom.ToString() + "}"
+                "^{\\frac{" + numer.ToString() + "}{" + denom.ToString() + "}}"
 
 let LatexAccumDimension prefix name (numer,denom) =
     let text = LatexFormatDimension name (numer,denom)
