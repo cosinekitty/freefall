@@ -573,7 +573,7 @@ let FormatQuantity (PhysicalQuantity(scalar,concept)) =
         else
             scalarText + "*" + conceptText
 
-let QuantityPrecedence (PhysicalQuantity(scalar,concept)) =
+let QuantityPrecedence (PhysicalQuantity(scalar,concept)) =     // FIXFIXFIX #15 - merge with FormatQuantity
     if IsNumberZero scalar then
         Precedence_Atom
     else
@@ -617,64 +617,56 @@ and FormatExprListRaw exprlist =
 // The normal expression formatter displays a more conventional notation.
 
 let rec FormatExpression expr =
-    FormatExpressionPrec expr Precedence_Or
+    let _, text = FormatExpressionPrec expr Precedence_Lowest
+    text
 
-and ExpressionPrecedence expr =     // FIXFIXFIX #15 - precedence and text should be calculated in tandem (DRY)
-    match expr with
-    | Amount(quantity) -> QuantityPrecedence quantity
-    | Solitaire(_) -> Precedence_Atom
-    | Functor(_,_) -> Precedence_Atom
-    | Sum(terms) -> 
-        match terms with
-        | [] -> Precedence_Atom                        // formatted as "0"
-        | [single] -> ExpressionPrecedence single      // single is rendered by itself
-        | _ -> Precedence_Add                          // a+b+c+...
-    | Product(factors) -> 
-        match factors with
-        | [] -> Precedence_Atom                         // formatted as "1"
-        | [single] -> ExpressionPrecedence single       // single is rendered by itself
-        | _ -> Precedence_Mul                           // a*b*c*...
-    | Power(_,b) -> 
-        if IsExpressionEqualToRational b 1I 2I then
-            Precedence_Atom     // sqrt(a)
-        else
-            Precedence_Pow      // a^b
-    | Equals(_,_) -> Precedence_Rel
-    | NumExprRef(_,_) -> Precedence_Atom
-    | PrevExprRef(_) -> Precedence_Atom
-    | Del(_,_) -> Precedence_Atom
+and ExpressionPrecedence expr =
+    let precedence, _ = FormatExpressionPrec expr Precedence_Lowest
+    precedence
 
 and FormatExpressionPrec expr parentPrecedence =
-    let innerText =
+    let precedence, innerText =
         match expr with
-        | Amount quantity -> FormatQuantity quantity
-        | Solitaire(token) -> token.Text
-        | Functor(funcName, argList) -> funcName.Text + "(" + FormatExprList argList + ")"
+        | Amount quantity -> QuantityPrecedence quantity, FormatQuantity quantity
+        | Solitaire(token) -> Precedence_Atom, token.Text
+        | Functor(funcName, argList) -> Precedence_Atom, funcName.Text + "(" + FormatExprList argList + ")"
         | Sum terms ->
             match terms with
-            | [] -> "0"
-            | [single] -> FormatExpression single
-            | first :: rest -> FormatExpressionPrec first Precedence_Add + JoinRemainingTerms rest
+            | [] -> Precedence_Atom, "0"
+            | [single] -> FormatExpressionPrec single Precedence_Lowest
+            | first :: rest -> 
+                let _, firstText = FormatExpressionPrec first Precedence_Add 
+                Precedence_Add, firstText + JoinRemainingTerms rest
         | Product factors ->
             match factors with
-            | [] -> "1"
-            | [single] -> FormatExpression single
-            | Amount(quantity) :: rest when quantity = QuantityNegOne -> "-" + (FormatExpressionPrec (Product rest) Precedence_Neg)
-            | first :: rest -> FormatExpressionPrec first Precedence_Mul + JoinRemainingFactors rest
+            | [] -> Precedence_Atom, "1"
+            | [single] -> FormatExpressionPrec single Precedence_Lowest
+            | Amount(quantity) :: rest when quantity = QuantityNegOne -> 
+                let _, restText = FormatExpressionPrec (Product rest) Precedence_Neg
+                Precedence_Neg, "-" + restText
+            | first :: rest -> 
+                let _, firstText = FormatExpressionPrec first Precedence_Mul 
+                Precedence_Mul, firstText + JoinRemainingFactors rest
         | Power(a,b) -> 
             if IsExpressionEqualToRational b 1I 2I then
-                "sqrt(" + FormatExpression a + ")"
+                let _, aText = FormatExpressionPrec a Precedence_Lowest
+                Precedence_Atom, "sqrt(" + aText + ")"
             else
-                FormatExpressionPrec a Precedence_Pow + "^" + FormatExpressionPrec b Precedence_Pow
-        | Equals(a,b) -> FormatExpressionPrec a Precedence_Rel + " = " + FormatExpressionPrec b Precedence_Rel
-        | NumExprRef(_,i) -> "#" + i.ToString()
-        | PrevExprRef(_) -> "#"
-        | Del(token,order) -> (String.replicate order "@") + token.Text
+                let _, aText = FormatExpressionPrec a Precedence_Pow
+                let _, bText = FormatExpressionPrec b Precedence_Pow
+                Precedence_Pow, aText + "^" + bText
+        | Equals(a,b) -> 
+            let _, aText = FormatExpressionPrec a Precedence_Rel
+            let _, bText = FormatExpressionPrec b Precedence_Rel
+            Precedence_Rel, aText + " = " + bText
+        | NumExprRef(_,i) -> Precedence_Atom, "#" + i.ToString()
+        | PrevExprRef(_) -> Precedence_Atom, "#"
+        | Del(token,order) -> Precedence_Atom, (String.replicate order "@") + token.Text
 
-    if parentPrecedence < ExpressionPrecedence expr then
-        innerText
+    if parentPrecedence < precedence then
+        precedence, innerText
     else
-        "(" + innerText + ")"
+        Precedence_Atom, "(" + innerText + ")"
 
 and FormatExprList exprlist =
     match exprlist with
@@ -690,7 +682,7 @@ and JoinRemainingTerms exprlist =
     | first :: rest -> RemainingTermText first + JoinRemainingTerms rest
 
 and RemainingTermText expr =
-    let rtext = FormatExpressionPrec expr Precedence_Add
+    let _, rtext = FormatExpressionPrec expr Precedence_Add
     if rtext.StartsWith("-") then       // FIXFIXFIX : seems risky - what about -1^2?
         rtext
     else
@@ -705,7 +697,7 @@ and RemainingFactorText expr =
     match expr with
     | Power(x, Amount(PhysicalQuantity(Rational(a,b),concept))) when (concept = Dimensionless) && (a.Sign < 0) -> 
         let abs_a_text = bigint.Negate(a).ToString();
-        let xtext = FormatExpressionPrec x Precedence_Mul
+        let _, xtext = FormatExpressionPrec x Precedence_Mul
         if b.IsOne then
             if abs_a_text = "1" then
                 "/" + xtext
@@ -720,7 +712,8 @@ and RemainingFactorText expr =
         else
             "/" + b.ToString()
     | _ -> 
-        "*" + FormatExpressionPrec expr Precedence_Mul
+        let _, text = FormatExpressionPrec expr Precedence_Mul
+        "*" + text
     
 //-----------------------------------------------------------------------------------------------------
 //  Context provides mutable state needed to execute a series of Freefall statements.

@@ -55,6 +55,7 @@ exception SyntaxException of Token * string
 let SyntaxError token message =
     raise (SyntaxException(token,message))
 
+let Precedence_Lowest = 0
 let Precedence_Or   = 2
 let Precedence_And  = 3
 let Precedence_Rel  = 4

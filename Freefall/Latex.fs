@@ -142,7 +142,7 @@ let LatexFixName (name:string) =
     UFixName (Regex.Replace(Regex.Replace(name, @"^_*", ""), @"_+", "_"))
 
 let rec FormatLatex context expr =
-    let text, sep = FormatLatexPrec context expr Precedence_Or
+    let text, sep = FormatLatexPrec context expr Precedence_Lowest
     text
 
 and ListFormatLatex context argList =
@@ -167,7 +167,7 @@ and FormatLatexPrec context expr parentPrecedence : (string * LatexFactorSeparat
         | Sum(termList) ->
             match termList with
             | [] -> "0", LatexFactorSeparator.LeftDot
-            | [single] -> FormatLatexPrec context single Precedence_Or
+            | [single] -> FormatLatexPrec context single Precedence_Lowest
             | first::rest -> 
                 let t, s = FormatLatexPrec context first Precedence_Add
                 t + (LatexJoinRemainingTerms context rest), s
