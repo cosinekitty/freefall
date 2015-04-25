@@ -82,7 +82,7 @@ let LatexFormatQuantity context (PhysicalQuantity(scalar,concept)) =
                 scalarText + " " + conceptText
     text, LatexFactorSeparator.LeftDot
 
-let LatexExpressionPrecedence expr =
+let LatexExpressionPrecedence expr =    // FIXFIXFIX #15 - merge precedence into FormatLatexPrec
     // Special case: numbers are formatted with scientific notation as multiplication.
     match expr with
     | Amount(PhysicalQuantity(Real(x),_)) when (RealString x).Contains("e") -> Precedence_Mul
