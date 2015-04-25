@@ -476,17 +476,21 @@ let RealString (r:float) =
     else
         t
 
-let FormatNumber x =
+let PrecFormatNumber x =
     match x with
     | Rational(numer,denom) ->
         if denom.IsZero then
             raise (FreefallRuntimeException("Rational number had zero denominator."))
         elif denom.IsOne then
-            numer.ToString()
+            let prec = if numer.Sign < 0 then Precedence_Neg else Precedence_Atom
+            prec, numer.ToString()
         else
-            numer.ToString() + "/" + denom.ToString()
-    | Real re -> 
-        RealString re
+            Precedence_Mul, numer.ToString() + "/" + denom.ToString()
+
+    | Real(x) -> 
+        let prec = if x < 0.0 then Precedence_Neg else Precedence_Atom
+        prec, RealString x
+
     | Complex(c) -> 
         // (-3.4-5.6i)
         // (-3.4+5.6i)
@@ -496,24 +500,7 @@ let FormatNumber x =
                 "+" + (RealString c.Imaginary)
             else
                 RealString c.Imaginary
-        "(" + rtext + itext + "i)"
-
-let NumberPrecedence x =        // FIXFIXFIX #15 - merge with FormatNumber
-    match x with
-    | Rational(numer,denom) ->
-        if denom.IsOne then
-            if numer.Sign < 0 then
-                Precedence_Neg
-            else
-                Precedence_Atom
-        else
-            Precedence_Mul
-    | Real(x) ->
-        if x < 0.0 then
-            Precedence_Neg
-        else
-            Precedence_Atom
-    | Complex(c) -> Precedence_Atom    // complex numbers are always rendered inside parentheses
+        Precedence_Atom, "(" + rtext + itext + "i)"
 
 let FormatDimension name (numer:bigint,denom:bigint) =
     if numer.IsZero then
@@ -562,16 +549,15 @@ let PrecFormatQuantity (PhysicalQuantity(scalar,concept)) =
     if IsNumberZero scalar then
         Precedence_Atom, "0"     // special case because zero makes all units irrelevant
     else
-        let scalarText = FormatNumber scalar
+        let scalarPrec, scalarText = PrecFormatNumber scalar
         let conceptText = FormatDimensions BaseUnitNames concept
         if conceptText = "" then
-            NumberPrecedence scalar, scalarText
+            scalarPrec, scalarText
         elif conceptText = "0" then
             Precedence_Atom, "0"
         elif scalarText = "1" then
             DimensionsPrecedence concept, conceptText
         else
-            let scalarPrec = NumberPrecedence scalar
             let conceptPrec = DimensionsPrecedence concept
             let prec = System.Math.Min(Precedence_Mul, System.Math.Min(scalarPrec, conceptPrec))
             prec, scalarText + "*" + conceptText
@@ -1588,7 +1574,8 @@ let rec EvalConcept context expr =
         if IsQuantityZero quantity then 
             ExpressionError expr "Concept evaluated to 0."
         elif number <> Rational(R1) then
-            ExpressionError expr (sprintf "Concept evaluated with non-unity coefficient %s" (FormatNumber number))
+            let _, ntext = PrecFormatNumber number
+            ExpressionError expr (sprintf "Concept evaluated with non-unity coefficient %s" ntext)
         else
             concept
 
