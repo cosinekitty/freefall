@@ -30,24 +30,24 @@ type TokenKind =
     | EndOfFile         // sentinel value that lets us report which file we found unexpected EOF in
 
 type TokenOrigin = {
-    Filename: string;
-    LineNumber: int;
+    Filename: string
+    LineNumber: int
 }
 
 type Token = { 
-    Text: string;
-    Precedence: int;
-    Kind: TokenKind;
-    Origin: option<TokenOrigin>;
-    ColumnNumber: int;
+    Text: string
+    Precedence: int
+    Kind: TokenKind
+    Origin: option<TokenOrigin>
+    ColumnNumber: int
 }
 
 let EndOfFileToken origin = {
-    Text = "";
-    Precedence = -1;
-    Kind = EndOfFile;
-    Origin = origin;
-    ColumnNumber = -1;
+    Text = ""
+    Precedence = -1
+    Kind = EndOfFile
+    Origin = origin
+    ColumnNumber = -1
 }
 
 exception SyntaxException of Token * string
@@ -238,3 +238,8 @@ let NextTokenHasPrecedence (precedence:int) (scan:list<Token>) =
     match scan with
     | {Precedence=p} :: _ -> p = precedence
     | _ -> false
+
+let SynthToken text =
+    let precedence = OperatorPrecedence text
+    let kind = ClassifyToken text precedence
+    { Text = text; Precedence = precedence; Kind = kind; Origin = None; ColumnNumber = -1 }

@@ -58,8 +58,6 @@ unit yocto = milli * zepto;
 //--------------------------------------------------------------------------------------
 // Useful mathematical constants/units.
 
-unit pi = 3.14159265358979323846;
-unit e  = exp(1);
 unit radian = 1;
 unit degree = (pi/180) * radian;
 unit arcmin = degree / 60;

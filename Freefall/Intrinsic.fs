@@ -435,8 +435,94 @@ let Function_Uroot = { new IFunctionHandler with        // uroot(n) = exp((2*pi*
     member this.LatexName = "\\mathrm{uroot}"
 }
 
+(*
+let Function_Template = { new IFunctionHandler with
+    member this.EvalRange funcToken rangelist = failwith "not implemented"
+    member this.EvalConcept context funcToken argList = failwith "not implemented"
+    member this.EvalNumeric context funcToken qlist = failwith "not implemented"
+    member this.SimplifyStep context funcToken argList = failwith "not implemented"
+    member this.Differential derivKind context varNameList funcToken argList = failwith "not implemented"
+    member this.DistributeAcrossEquation context funcToken leftList rightList = failwith "not implemented"
+    member this.LatexName = @"\name"
+}
+*)
+
+let AcosReal x =
+    if -1.0 <= x && x <= +1.0 then
+        PhysicalQuantity(MakeReal(System.Math.Acos(x)), Dimensionless)
+    else
+        PhysicalQuantity(MakeComplex(complex.Acos(complex(x,0.0))), Dimensionless)
+
+let Function_Acos = { new IFunctionHandler with
+    member this.EvalRange funcToken rangelist = 
+        match rangelist with
+        | [argRange] ->
+            match argRange with
+            | IntegerRange(FiniteLimit(lo), FiniteLimit(hi)) when lo = 1I && hi = 1I -> 
+                IntegerRange(FiniteLimit(0I), FiniteLimit(0I))      // acos(1) = 0
+
+            | IntegerRange(FiniteLimit(lo), FiniteLimit(hi)) when -1I <= lo && lo <= hi && hi <= 1I -> 
+                RealRange       // acos(x) is real when x is real and -1 <= x <= +1
+
+            | IntegerRange(_, _)
+            | RationalRange
+            | RealRange
+            | ComplexRange ->
+                ComplexRange
+        | _ -> FailExactArgCount "Function" 1 rangelist.Length funcToken
+
+    member this.EvalConcept context funcToken argList =
+        match argList with
+        | [arg] -> 
+            ExpressionConcept context arg |> VerifyDimensionlessArgument funcToken
+            Dimensionless
+        | _ -> FailExactArgCount "Function" 1 argList.Length funcToken
+
+    member this.EvalNumeric context funcToken qlist =
+        match qlist with
+        | [PhysicalQuantity(number,concept)] ->
+            VerifyDimensionlessArgument funcToken concept
+            match number with
+            | Rational(a,b) -> AcosReal ((float a) / (float b))
+            | Real(x) -> AcosReal x
+            | Complex(z) -> PhysicalQuantity(MakeComplex(complex.Acos(z)), Dimensionless)
+        | _ -> FailExactArgCount "Function" 1 qlist.Length funcToken
+
+    member this.SimplifyStep context funcToken argList = 
+        match argList with
+        | [Amount(PhysicalQuantity(number,concept))] ->
+            VerifyDimensionlessArgument funcToken concept
+            if IsNumberEqualToInteger -1I number then
+                SymbolPi                                // acos(-1) = pi
+            elif IsNumberZero number then
+                Product [AmountOneHalf; SymbolPi]       // acos(0)  = pi/2
+            elif IsNumberEqualToInteger 1I number then
+                AmountZero                              // acos(+1) = 0
+            else
+                Functor(funcToken, argList)
+
+        | _ -> FailExactArgCount "Function" 1 argList.Length funcToken
+
+
+    member this.Differential derivKind context varNameList funcToken argList =
+        match argList with
+        | [z] ->
+            // d acos(z) = -dz * (1 - z^2) ^ (-1/2)
+            let dz = TakeDifferential derivKind context varNameList z
+            let radical = Power(Sum[AmountOne; MakeNegative (Power(z,AmountTwo))], AmountNegOneHalf)
+            Product [MakeNegative dz; radical]
+
+        | _ -> FailExactArgCount "Function" 1 argList.Length funcToken
+
+    member this.DistributeAcrossEquation context funcToken leftList rightList =
+        SimpleEquationDistributor funcToken leftList rightList
+
+    member this.LatexName = @"\cos^{-1}"
+}
+
 let IntrinsicFunctions = 
     [
+        ("acos",    Function_Acos)
         ("cos",     Function_Cos)
         ("exp",     Function_Exp)
         ("ln",      Function_Ln)
@@ -483,6 +569,10 @@ let MakeContext assignmentHook probeHook saveHook =
         NextConstantSubscript = ref 0
         FirstTokenInExecutingStatement = ref (EndOfFileToken None)
     }
+
+    // e and pi must be built-in because they are needed for certain built-in simplifiers.
+    DefineIntrinsicSymbol context "pi" (UnitEntry(PhysicalQuantity(Real(System.Math.PI), Dimensionless)))
+    DefineIntrinsicSymbol context "e"  (UnitEntry(PhysicalQuantity(Real(System.Math.E),  Dimensionless)))
 
     for {ConceptName=conceptName; BaseUnitName=baseUnitName; ConceptValue=concept} in BaseConcepts do
         DefineIntrinsicSymbol context conceptName (ConceptEntry(concept))

@@ -314,6 +314,7 @@ let QuantityZero        = PhysicalQuantity(Rational( 0I, 1I), ConceptZero)
 let QuantityOne         = PhysicalQuantity(Rational( 1I, 1I), Dimensionless)
 let QuantityNegOne      = PhysicalQuantity(Rational(-1I, 1I), Dimensionless)
 let QuantityOneHalf     = PhysicalQuantity(Rational( 1I, 2I), Dimensionless)
+let QuantityNegOneHalf  = PhysicalQuantity(Rational(-1I, 2I), Dimensionless)
 let QuantityOneThird    = PhysicalQuantity(Rational( 1I, 3I), Dimensionless)
 let QuantityTwo         = PhysicalQuantity(Rational( 2I, 1I), Dimensionless)
 
@@ -379,12 +380,13 @@ exception ExpressionException of Expression * string
 let ExpressionError expr message =
     raise (ExpressionException(expr,message))
  
-let AmountZero      = Amount(QuantityZero)
-let AmountOne       = Amount(QuantityOne)
-let AmountNegOne    = Amount(QuantityNegOne)
-let AmountOneHalf   = Amount(QuantityOneHalf)
-let AmountOneThird  = Amount(QuantityOneThird)
-let AmountTwo       = Amount(QuantityTwo)
+let AmountZero          = Amount(QuantityZero)
+let AmountOne           = Amount(QuantityOne)
+let AmountNegOne        = Amount(QuantityNegOne)
+let AmountOneHalf       = Amount(QuantityOneHalf)
+let AmountNegOneHalf    = Amount(QuantityNegOneHalf)
+let AmountOneThird      = Amount(QuantityOneThird)
+let AmountTwo           = Amount(QuantityTwo)
 
 let IsQuantityZero (PhysicalQuantity(number,concept)) =
     (concept = ConceptZero) || (IsNumberZero number)
@@ -422,6 +424,9 @@ let IsExpressionEqualToRational expr yNumer yDenom =
     match expr with
     | Amount(quantity) -> IsQuantityEqualToRational quantity yNumer yDenom
     | _ -> false
+
+let SymbolPi = Solitaire(SynthToken "pi")
+let SymbolE  = Solitaire(SynthToken "e")
 
 let MakeNegative expr = 
     match expr with
