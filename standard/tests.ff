@@ -20,6 +20,8 @@ asserti(simp((x+y+z)^1), x+y+z);
 asserti(simp((x+y)-y), x);
 asserti(simp((3+4)^2), 49);
 asserti(simp(pow(-3,7)), -2187);
+asserti(deriv(asin(z) + acos(z), z), 0);
+asserti(deriv(asin(a), a), deriv(-acos(a), a));
 
 // Expression formatter tests.
 assertf("123", simp(122+1));

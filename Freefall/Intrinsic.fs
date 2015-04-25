@@ -501,13 +501,15 @@ let Function_Acos = { new IFunctionHandler with
             else
                 Functor(funcToken, argList)
 
-        | _ -> FailExactArgCount "Function" 1 argList.Length funcToken
+        | [arg] ->
+            Functor(funcToken, argList)
 
+        | _ -> FailExactArgCount "Function" 1 argList.Length funcToken
 
     member this.Differential derivKind context varNameList funcToken argList =
         match argList with
         | [z] ->
-            // d acos(z) = -dz * (1 - z^2) ^ (-1/2)
+            // d acos(z) = -dz / sqrt(1 - z^2)
             let dz = TakeDifferential derivKind context varNameList z
             Product [MakeNegative dz; RecipSqrt (Sum[AmountOne; MakeNegative (Square z)])]
 
@@ -519,9 +521,84 @@ let Function_Acos = { new IFunctionHandler with
     member this.LatexName = @"\cos^{-1}"
 }
 
+let AsinReal x =
+    if -1.0 <= x && x <= +1.0 then
+        PhysicalQuantity(MakeReal(System.Math.Asin(x)), Dimensionless)
+    else
+        PhysicalQuantity(MakeComplex(complex.Asin(complex(x,0.0))), Dimensionless)
+
+let Function_Asin = { new IFunctionHandler with
+    member this.EvalRange funcToken rangelist = 
+        match rangelist with
+        | [argRange] ->
+            match argRange with
+            | IntegerRange(FiniteLimit(lo), FiniteLimit(hi)) when lo = 0I && hi = 0I -> 
+                IntegerRange(FiniteLimit(0I), FiniteLimit(0I))      // asin(0) = 0
+
+            | IntegerRange(FiniteLimit(lo), FiniteLimit(hi)) when -1I <= lo && lo <= hi && hi <= 1I -> 
+                RealRange       // asin(x) is real when x is real and -1 <= x <= +1
+
+            | IntegerRange(_, _)
+            | RationalRange
+            | RealRange
+            | ComplexRange ->
+                ComplexRange
+        | _ -> FailExactArgCount "Function" 1 rangelist.Length funcToken
+
+    member this.EvalConcept context funcToken argList =
+        match argList with
+        | [arg] -> 
+            ExpressionConcept context arg |> VerifyDimensionlessArgument funcToken
+            Dimensionless
+        | _ -> FailExactArgCount "Function" 1 argList.Length funcToken
+
+    member this.EvalNumeric context funcToken qlist =
+        match qlist with
+        | [PhysicalQuantity(number,concept)] ->
+            VerifyDimensionlessArgument funcToken concept
+            match number with
+            | Rational(a,b) -> AsinReal ((float a) / (float b))
+            | Real(x) -> AsinReal x
+            | Complex(z) -> PhysicalQuantity(MakeComplex(complex.Asin(z)), Dimensionless)
+        | _ -> FailExactArgCount "Function" 1 qlist.Length funcToken
+
+    member this.SimplifyStep context funcToken argList = 
+        match argList with
+        | [Amount(PhysicalQuantity(number,concept))] ->
+            VerifyDimensionlessArgument funcToken concept
+            if IsNumberEqualToInteger -1I number then
+                Product [AmountNegOneHalf; SymbolPi]    // asin(-1) = -pi/2
+            elif IsNumberZero number then
+                AmountZero                              // asin(0)  = 0
+            elif IsNumberEqualToInteger 1I number then
+                Product [AmountOneHalf; SymbolPi]       // asin(+1) = pi/2
+            else
+                Functor(funcToken, argList)
+
+        | [arg] ->
+            Functor(funcToken, argList)
+
+        | _ -> FailExactArgCount "Function" 1 argList.Length funcToken
+
+    member this.Differential derivKind context varNameList funcToken argList =
+        match argList with
+        | [z] ->
+            // d asin(z) = dz / sqrt(1 - z^2)
+            let dz = TakeDifferential derivKind context varNameList z
+            Product [dz; RecipSqrt (Sum[AmountOne; MakeNegative (Square z)])]
+
+        | _ -> FailExactArgCount "Function" 1 argList.Length funcToken
+
+    member this.DistributeAcrossEquation context funcToken leftList rightList =
+        SimpleEquationDistributor funcToken leftList rightList
+
+    member this.LatexName = @"\sin^{-1}"
+}
+
 let IntrinsicFunctions = 
     [
         ("acos",    Function_Acos)
+        ("asin",    Function_Asin)
         ("cos",     Function_Cos)
         ("exp",     Function_Exp)
         ("ln",      Function_Ln)
