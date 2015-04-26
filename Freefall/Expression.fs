@@ -417,6 +417,7 @@ let IsExpressionZero expr =
 let IsExpressionOne expr =
     match expr with
     | Amount(quantity) -> IsQuantityOne quantity
+//    | Product[] -> true     // 	might instante this some day, but seems excessive
     | _ -> false
 
 let IsExpressionNegOne expr =
@@ -489,6 +490,12 @@ let OptimizeMultiply a b =
 
         | _, _ -> 
             Product [a; b]
+
+let OptimizeProductList factors =
+    match factors with
+    | [] -> AmountOne
+    | [single] -> single
+    | _ -> Product(factors)
 
 let IsConceptDimensionless concept =
     (concept = ConceptZero) || (concept = Dimensionless)
@@ -1102,9 +1109,9 @@ let rec CoefTrigPatternList factorList =
 
         match firstFactor with
         | Power(Functor({Text="cos"}, [angle]), two) when IsExpressionEqualToInteger two 2I ->
-            CoefCosineSquared(Product(restFactorList), angle) :: patternList
+            CoefCosineSquared(OptimizeProductList restFactorList, angle) :: patternList
         | Power(Functor({Text="sin"}, [angle]), two) when IsExpressionEqualToInteger two 2I ->
-            CoefSineSquared(Product(restFactorList), angle) :: patternList
+            CoefSineSquared  (OptimizeProductList restFactorList, angle) :: patternList
         | _ -> patternList
 
 let MakeTrigIdentityPatternList context term : list<TrigIdentityPattern> =
@@ -1123,6 +1130,7 @@ let MakeTrigIdentityPatternList context term : list<TrigIdentityPattern> =
         CoefTrigPatternList factorList
 
     | _ -> []       // no pattern matches
+
 
 let MergeTrigPatterns context a b =
     match a, b with
