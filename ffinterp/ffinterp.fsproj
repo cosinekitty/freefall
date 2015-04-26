@@ -14,12 +14,13 @@
     <OutputPath>bin\Debug</OutputPath>
     <ErrorReport>prompt</ErrorReport>
     <Externalconsole>true</Externalconsole>
-    <Commandlineparameters>-t -</Commandlineparameters>
+    <Commandlineparameters>-</Commandlineparameters>
     <EnvironmentVariables>
       <EnvironmentVariables>
         <Variable name="FREEFALL_STANDARD_PATH" value="/home/don/freefall/standard" />
       </EnvironmentVariables>
     </EnvironmentVariables>
+    <ConsolePause>false</ConsolePause>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <OutputPath>bin\Release</OutputPath>

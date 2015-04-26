@@ -1021,10 +1021,37 @@ let MergeLikeTerms context termlist =
 //-----------------------------------------------------------------------------------------------
 
 type TrigIdentityPattern =
-    | CosineSquared of Expression                       // cos(expr)^2
-    | SineSquared of Expression                         // sin(expr)^2
-    | CoefCosineSquared of Expression * Expression      // expr*cos(expr)^2
-    | CoefSineSquared of Expression * Expression        // expr*sin(expr)^2
+    | CosineSquared of Expression                       // cos(angle)^2
+    | SineSquared of Expression                         // sin(angle)^2
+    | CoefCosineSquared of Expression * Expression      // coef*cos(angle)^2
+    | CoefSineSquared of Expression * Expression        // coef*sin(angle)^2
+
+let FormatTrigIdentityPattern tip =
+    match tip with
+    | CosineSquared(angle) -> sprintf "CosineSquared(%s)" (FormatExpression angle)
+    | SineSquared(angle) -> sprintf "SineSquared(%s)" (FormatExpression angle)
+    | CoefCosineSquared(coef,angle) -> sprintf "CoefCosineSquared(%s, %s)" (FormatExpression coef) (FormatExpression angle)
+    | CoefSineSquared(coef,angle) -> sprintf "CoefSineSquared(%s, %s)" (FormatExpression coef) (FormatExpression angle)
+
+let FormatTrigListItem (expr:Expression, patlist:list<TrigIdentityPattern>) : string =
+    let joiner accum pat =
+        let text = FormatTrigIdentityPattern pat
+        if accum = "" then
+            text
+        else
+            accum + ", " + text
+
+    (FormatExpression expr) + ":[" + (List.fold joiner "" patlist) + "]"
+
+let FormatTrigSum tlist =
+    let joiner accum item =
+        let text = FormatTrigListItem item
+        if accum = "" then
+            text
+        else
+            accum + ", " + text
+
+    "sum(" + (List.fold joiner "" tlist) + ")"
 
 let MakeTrigIdentityPatternList context term : list<TrigIdentityPattern> =
     // In general, a given term can be converted into a TrigIdentityPattern in 
@@ -1055,8 +1082,11 @@ let MergeTrigPatterns context a b =
 let rec FindTrigMergeList context pat simp =
     match simp with
     | [] -> []
-    | (rOriginal, rPatterns) :: rsimp ->
-        let mutable mergelist = []
+    | ((rOriginal, rPatterns) as rfirst) :: rsimp ->
+        let mutable mergelist = 
+            FindTrigMergeList context pat rsimp 
+            |> List.map (fun x -> rfirst :: x)
+
         for rpat in rPatterns do
             match MergeTrigPatterns context pat rpat with
             | None -> ()
@@ -1079,11 +1109,8 @@ let rec AllTrigSimplifications context (plist : list<Expression * list<TrigIdent
             slist <- ((original, patterns) :: r) :: slist
 
             // See if any of this term's patterns can be merged with any of the patterns in r.
-            // If so, we need to have a list of all previous r elements and list of all following r elements handy.
-            // [r1; r2; r3; r4; r5]
-            //          ^^
-            // [r1; r2; merge(pat,); r4; r5]
             for pat in patterns do
+                //printfn "**** pat = %s, r = %s" (FormatTrigIdentityPattern pat) (FormatTrigSum r)
                 slist <- slist @ (FindTrigMergeList context pat r)
         slist
 
@@ -1100,6 +1127,9 @@ let MergeTrigIdentities context termlist =
         List.map (fun term -> term, MakeTrigIdentityPatternList context term) termlist
 
     let slist : list<list<Expression * list<TrigIdentityPattern>>> = AllTrigSimplifications context plist
+
+    //for s in slist do
+    //    printfn "!!! %s" (FormatTrigSum s)
 
     // If slist is empty (there were no simplifications), we return termlist.
     // Otherwise, return the shortest simplifiction we can find.
