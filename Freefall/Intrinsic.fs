@@ -162,7 +162,7 @@ let Function_Exp = { new IFunctionHandler with
     member this.DistributeAcrossEquation context funcToken leftList rightList =
         SimpleEquationDistributor funcToken leftList rightList
 
-    member this.LatexName = "\\exp"
+    member this.LatexName = @"\exp"
 }
 
 let LnReal x =
@@ -220,7 +220,7 @@ let Function_Ln = { new IFunctionHandler with
     member this.DistributeAcrossEquation context funcToken leftList rightList =
         SimpleEquationDistributor funcToken leftList rightList
 
-    member this.LatexName = "\\ln"
+    member this.LatexName = @"\ln"
 }
 
 let Function_Cos = { new IFunctionHandler with
@@ -280,7 +280,7 @@ let Function_Cos = { new IFunctionHandler with
     member this.DistributeAcrossEquation context funcToken leftList rightList =
         SimpleEquationDistributor funcToken leftList rightList
 
-    member this.LatexName = "\\cos"
+    member this.LatexName = @"\cos"
 }
 
 let Function_Sin = { new IFunctionHandler with
@@ -340,7 +340,7 @@ let Function_Sin = { new IFunctionHandler with
     member this.DistributeAcrossEquation context funcToken leftList rightList =
         SimpleEquationDistributor funcToken leftList rightList
 
-    member this.LatexName = "\\sin"
+    member this.LatexName = @"\sin"
 }
 
 let Function_Uroot = { new IFunctionHandler with        // uroot(n) = exp((2*pi*i) / n), where n = 1, 2, 3, ...
@@ -432,7 +432,7 @@ let Function_Uroot = { new IFunctionHandler with        // uroot(n) = exp((2*pi*
     member this.DistributeAcrossEquation context funcToken leftList rightList =
         SyntaxError funcToken "uroot does not distribute across equations."
 
-    member this.LatexName = "\\mathrm{uroot}"
+    member this.LatexName = @"\mathrm{uroot}"
 }
 
 (*

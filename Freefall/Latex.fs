@@ -50,13 +50,13 @@ let LatexFormatDimension name (numer:bigint, denom:bigint) =
     if numer.IsZero then
         ""      // this dimension does not contribute to formatting, e.g. meter^0
     else
-        "\\mathrm{" + name + "}" +
+        sprintf @"\mathrm{%s}" name +
             if numer.IsOne && denom.IsOne then
                 ""    // meter^(1/1) is written as "meter"
             elif denom.IsOne then
-                "^{" + numer.ToString() + "}"
+                sprintf "^{%O}" numer
             else
-                "^{\\frac{" + numer.ToString() + "}{" + denom.ToString() + "}}"
+                sprintf @"^{\frac{%O}{%O}}" numer denom
 
 let LatexAccumDimension prefix name (numer,denom) =
     let text = LatexFormatDimension name (numer,denom)
@@ -278,9 +278,9 @@ and LatexFormatFactorList context factorList index parentPrecedence =
                 let septext =
                     match fsep, rsep with
                     | _, LatexFactorSeparator.Empty -> failwith "Impossible rsep"
-                    | LatexFactorSeparator.SurroundDots, _ -> " \\cdot "
-                    | _, LatexFactorSeparator.LeftDot -> " \\cdot "
-                    | _, LatexFactorSeparator.SurroundDots -> " \\cdot "
+                    | LatexFactorSeparator.SurroundDots, _ -> @" \cdot "
+                    | _, LatexFactorSeparator.LeftDot -> @" \cdot "
+                    | _, LatexFactorSeparator.SurroundDots -> @" \cdot "
                     | _, LatexFactorSeparator.Space -> " "
 
                 if fprec < Precedence_Mul then

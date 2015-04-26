@@ -26,7 +26,7 @@ let HtmlSave (context:Context) filename =
     use output = File.CreateText(filename)
     output.WriteLine(HtmlPrefix)
     for equation in context.NumberedExpressionList do
-        output.WriteLine("\\begin{equation}")
+        output.WriteLine(@"\begin{equation}")
         output.WriteLine(FormatLatex context equation)
-        output.WriteLine("\\end{equation}")
+        output.WriteLine(@"\end{equation}")
     output.WriteLine("</body></html>")
