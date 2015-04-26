@@ -30,6 +30,10 @@ asserti(simp(sin(v)^2 + w + cos(v)^2), w+1);
 asserti(simp(sin(v)^2 + cos(v)^2 + w), w+1);
 asserti(simp(cos(v+3)^2 + 17 + sin(3+v)*sin(1+v+2)), 18);
 asserti(simp(cos(v+3)^2 + w + sin(3+v)*sin(1+v+2)), 1+w);
+asserti(simp(w*cos(v)^2 + sin(v)^2*w), w);
+asserti(simp(w*cos(u)^2*v + v*sin(u)^2*w), w*v);
+asserti(simp(cos(w)^2*cos(u)^2 + cos(w)^2*sin(u)^2), cos(w)^2);
+asserti(simp(2*cos(w)^2*cos(u)^2 + 2*cos(w)^2*sin(u)^2), 2*cos(w)^2);
 
 // Expression formatter tests.
 assertf("123", simp(122+1));

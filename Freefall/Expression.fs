@@ -462,6 +462,27 @@ let Square a = Power(a, AmountTwo)
 let Sqrt a = Power(a, AmountOneHalf)
 let RecipSqrt a = Power(a, AmountNegOneHalf)
 
+let OptimizeMultiply a b =
+    match a, b with
+    | Product(afactors), Product(bfactors) -> 
+        Product(afactors @ bfactors)
+
+    | Product(afactors), _ -> 
+        Product(afactors @ [b])
+
+    | _, Product(bfactors) -> 
+        Product(a :: bfactors)
+
+    | _, _ -> 
+        if IsExpressionZero a || IsExpressionZero b then
+            AmountZero
+        elif IsExpressionOne a then
+            b
+        elif IsExpressionOne b then
+            a
+        else
+            Product [a; b]
+
 let IsConceptDimensionless concept =
     (concept = ConceptZero) || (concept = Dimensionless)
 
@@ -1053,6 +1074,40 @@ let FormatTrigSum tlist =
 
     "sum(" + (List.fold joiner "" tlist) + ")"
 
+let rec CoefTrigPatternList factorList =
+    // [cos(a)^2 ; cos(b)^2 ; z]  -->  [CoefCosineSquared(Product[cos(a)^2; z], b) ; CoefCosineSquared(Product[cos(b)^2; z], a)]
+    // For each factor in factorList, if it can be represented as a cosine-squared or sine-squred term, form a product
+    // of the remaining terms as a coefficient and add Coef...Squared(coef, angle) to the list.
+    // If there are no pattern matches, return an empty list.
+    match factorList with
+    | [] -> []
+
+    | firstFactor :: restFactorList ->
+        // There are 2 cases: 
+        //
+        // 1. We find patterns in restFactorList that we can merge with:
+        //    firstFactor=cos(a)^2, restFactorList=[cos(b)^2; sin(a)^2] 
+        //    ==> restPatternList = [CoefCosineSquared(sin(a)^2, b); CoefSineSquared(cos(b)^2, a)]
+        //    ==> include firstFactor in each of their coefficients:
+        //        [CoefCosineSquared(firstFactor*sin(a)^2, b); CoefSineSquared(firstFactor*cos(b)^2, a)]
+        //
+        // 2. firstFactor is itself a squared-sine or squared-cosine and restFactorList is not empty.
+        //    Include the following in the list:  Coef...Pattern(restFactorList, firstAngle)
+
+        let patternList = 
+            [ for rp in CoefTrigPatternList restFactorList do
+                  yield match rp with
+                        | CoefCosineSquared(rcoef, rangle) -> CoefCosineSquared(OptimizeMultiply firstFactor rcoef, rangle)
+                        | CoefSineSquared(rcoef, rangle) -> CoefSineSquared(OptimizeMultiply firstFactor rcoef, rangle)
+                        | _ -> failwith (sprintf "Unsupported pattern %s" (FormatTrigIdentityPattern rp)) ]
+
+        match firstFactor with
+        | Power(Functor({Text="cos"}, [angle]), two) when IsExpressionEqualToInteger two 2I ->
+            CoefCosineSquared(Product(restFactorList), angle) :: patternList
+        | Power(Functor({Text="sin"}, [angle]), two) when IsExpressionEqualToInteger two 2I ->
+            CoefSineSquared(Product(restFactorList), angle) :: patternList
+        | _ -> patternList
+
 let MakeTrigIdentityPatternList context term : list<TrigIdentityPattern> =
     // In general, a given term can be converted into a TrigIdentityPattern in 
     // more than one way.  This is crucial for simplifying expressions like the following:
@@ -1065,7 +1120,8 @@ let MakeTrigIdentityPatternList context term : list<TrigIdentityPattern> =
     | Power(Functor({Text="sin"}, [angle]), two) when IsExpressionEqualToInteger two 2I ->
         [SineSquared(angle)]
 
-    // FIXFIXFIX - add recognizers for CoefCosineSquared, CoefSineSquared
+    | Product(factorList) ->
+        CoefTrigPatternList factorList
 
     | _ -> []       // no pattern matches
 
@@ -1075,7 +1131,9 @@ let MergeTrigPatterns context a b =
     | SineSquared(y), CosineSquared(x) 
         when AreIdentical context x y -> Some(AmountOne)
 
-    // FIXFIXFIX - add mergers for CoefCosineSquared, CoefSineSquared
+    | CoefCosineSquared(xcoef,xangle), CoefSineSquared(ycoef,yangle)
+    | CoefSineSquared(ycoef,yangle), CoefCosineSquared(xcoef,xangle)
+        when AreIdentical context xcoef ycoef && AreIdentical context xangle yangle -> Some(xcoef)
 
     | _ -> None
 
