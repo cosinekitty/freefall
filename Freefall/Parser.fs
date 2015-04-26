@@ -75,15 +75,32 @@ and ParseAddSub scan =
         let op = List.head xscan
         let right, yscan = ParseDivMul (List.tail xscan)
         xscan <- yscan
-        if op.Text = "+" then
-            termlist.Add(right)
-        elif op.Text = "-" then
-            termlist.Add(MakeNegative right)
-        else
-            SyntaxError op "Unsupported addop."
+        let rterm =
+            if op.Text = "+" then
+                right
+            elif op.Text = "-" then
+                MakeNegative right
+            else
+                SyntaxError op "Unsupported addop."
+
+        // Look for lterm=real(x) | integer(x), rterm=complex(0,y) --> complex(x,y)
+        let lterm = termlist.[termlist.Count - 1]
+        match lterm, rterm with
+        | Amount(PhysicalQuantity(Real(x),xconcept)), Amount(PhysicalQuantity(Complex(y),yconcept))
+        | Amount(PhysicalQuantity(Complex(y),yconcept)), Amount(PhysicalQuantity(Real(x),xconcept))
+            when xconcept = Dimensionless && yconcept = Dimensionless && y.Real = 0.0 ->
+                termlist.[termlist.Count - 1] <- Amount(PhysicalQuantity(MakePairComplex(x, y.Imaginary), Dimensionless))
+
+        | Amount(PhysicalQuantity(Rational(xnumer,xdenom),xconcept)), Amount(PhysicalQuantity(Complex(y),yconcept))
+        | Amount(PhysicalQuantity(Complex(y),yconcept)), Amount(PhysicalQuantity(Rational(xnumer,xdenom),xconcept))
+            when xconcept = Dimensionless && yconcept = Dimensionless && xdenom.IsOne && y.Real = 0.0 ->
+                termlist.[termlist.Count - 1] <- Amount(PhysicalQuantity(MakePairComplex(float xnumer, y.Imaginary), Dimensionless))
+
+        | _, _ -> 
+            termlist.Add(rterm)
 
     if termlist.Count = 1 then
-        expr, xscan
+        termlist.[0], xscan
     else
         Sum(List.ofSeq termlist), xscan
 
