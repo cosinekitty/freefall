@@ -417,7 +417,6 @@ let IsExpressionZero expr =
 let IsExpressionOne expr =
     match expr with
     | Amount(quantity) -> IsQuantityOne quantity
-//    | Product[] -> true     // 	might instante this some day, but seems excessive
     | _ -> false
 
 let IsExpressionNegOne expr =

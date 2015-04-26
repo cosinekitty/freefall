@@ -103,31 +103,39 @@ let FailNonFuncMacro token expected =
     SyntaxError token (sprintf "This symbol is %s, but is used as if it were a function or macro." expected)
 
 let rec ExpandMacros context rawexpr =
-    match rawexpr with
-    | Amount(_) -> rawexpr
-    | Del(_,_) -> rawexpr
-    | Solitaire(nameToken) -> 
-        match FindSymbolEntry context nameToken with
-        | VariableEntry(_) -> rawexpr
-        | ConceptEntry(_) -> rawexpr
-        | UnitEntry(_) -> rawexpr
-        | AssignmentEntry(expr) -> expr
-        | MacroEntry(_) -> SyntaxError nameToken "Cannot use macro name as solitary symbol."
-        | FunctionEntry(_) -> SyntaxError nameToken "Cannot use function name as solitary symbol."
-    | Functor(funcName,argList) -> 
-        match FindSymbolEntry context funcName with
-        | MacroEntry({Expander=expander;}) -> expander funcName (List.map (ExpandMacros context) argList)
-        | FunctionEntry(_) -> Functor(funcName, (List.map (ExpandMacros context) argList))
-        | VariableEntry(_) -> FailNonFuncMacro funcName "a variable"
-        | ConceptEntry(_) -> FailNonFuncMacro funcName "a concept"
-        | UnitEntry(_) -> FailNonFuncMacro funcName "a unit"
-        | AssignmentEntry(_) -> FailNonFuncMacro funcName "an assignment target"
-    | Sum(terms) -> Sum(List.map (ExpandMacros context) terms)
-    | Product(factors) -> Product(List.map (ExpandMacros context) factors)
-    | Power(a,b) -> Power((ExpandMacros context a), (ExpandMacros context b))
-    | Equals(a,b) -> Equals((ExpandMacros context a), (ExpandMacros context b))
-    | NumExprRef(token,index) -> FindNumberedExpression context token index
-    | PrevExprRef(token) -> FindPreviousExpression context token
+    let expr =
+        match rawexpr with
+        | Amount(_) -> rawexpr
+        | Del(_,_) -> rawexpr
+        | Solitaire(nameToken) -> 
+            match FindSymbolEntry context nameToken with
+            | VariableEntry(_) -> rawexpr
+            | ConceptEntry(_) -> rawexpr
+            | UnitEntry(_) -> rawexpr
+            | AssignmentEntry(expr) -> expr
+            | MacroEntry(_) -> SyntaxError nameToken "Cannot use macro name as solitary symbol."
+            | FunctionEntry(_) -> SyntaxError nameToken "Cannot use function name as solitary symbol."
+        | Functor(funcName,argList) -> 
+            match FindSymbolEntry context funcName with
+            | MacroEntry({Expander=expander;}) -> expander funcName (List.map (ExpandMacros context) argList)
+            | FunctionEntry(_) -> Functor(funcName, (List.map (ExpandMacros context) argList))
+            | VariableEntry(_) -> FailNonFuncMacro funcName "a variable"
+            | ConceptEntry(_) -> FailNonFuncMacro funcName "a concept"
+            | UnitEntry(_) -> FailNonFuncMacro funcName "a unit"
+            | AssignmentEntry(_) -> FailNonFuncMacro funcName "an assignment target"
+        | Sum(terms) -> Sum(List.map (ExpandMacros context) terms)
+        | Product(factors) -> Product(List.map (ExpandMacros context) factors)
+        | Power(a,b) -> Power((ExpandMacros context a), (ExpandMacros context b))
+        | Equals(a,b) -> Equals((ExpandMacros context a), (ExpandMacros context b))
+        | NumExprRef(token,index) -> FindNumberedExpression context token index
+        | PrevExprRef(token) -> FindPreviousExpression context token
+
+    // Before handing back the expanded expression, validate its units.
+    // We do this at every level of recursion to make sure we don't miss any problems,
+    // because macro expanders should not have to worry about this.
+    ValidateExpressionConcept context expr    
+
+    expr
 
 //--------------------------------------------------------------------------------------------------
 // Equation transformer: this is an important part of Freefall as an algebra helper.
@@ -161,77 +169,84 @@ let rec TransformAndPartition context exprlist =
     |> PartitionEquationsAndValues
 
 and TransformEquations context expr =
-    match expr with
-    | Amount(_) -> expr
-    | Solitaire(_) -> expr
-    | Del(_,_) -> expr
-    | Functor(name,argList) -> 
-        let numEquations, leftList, rightList = TransformAndPartition context argList
-        if numEquations = 0 then
-            Functor(name,leftList)
-        else
-            let handler = FindFunctionEntry context name
-            handler.DistributeAcrossEquation context name leftList rightList
+    let xform =
+        match expr with
+        | Amount(_) -> expr
+        | Solitaire(_) -> expr
+        | Del(_,_) -> expr
+        | Functor(name,argList) -> 
+            let numEquations, leftList, rightList = TransformAndPartition context argList
+            if numEquations = 0 then
+                Functor(name,leftList)
+            else
+                let handler = FindFunctionEntry context name
+                handler.DistributeAcrossEquation context name leftList rightList
 
-    | Sum(terms) -> 
-        let numEquations, leftList, rightList = TransformAndPartition context terms
-        if numEquations = 0 then
-            // There were no equations to bubble up above the sum, and we know leftList = rightList.
-            Sum(leftList)
-        else
-            // Flip the sum(a=b, u, c=d, v) ==> sum(a+u+c+v) = Sum(b,u,d,v).
-            Equals(Sum(leftList), Sum(rightList))
+        | Sum(terms) -> 
+            let numEquations, leftList, rightList = TransformAndPartition context terms
+            if numEquations = 0 then
+                // There were no equations to bubble up above the sum, and we know leftList = rightList.
+                Sum(leftList)
+            else
+                // Flip the sum(a=b, u, c=d, v) ==> sum(a+u+c+v) = Sum(b,u,d,v).
+                Equals(Sum(leftList), Sum(rightList))
 
-    | Product(factors) ->
-        let numEquations, leftList, rightList = TransformAndPartition context factors
-        if numEquations = 0 then
-            Product(leftList)
-        else
-            // Flip the prod(a=b, u, c=d, v) ==> prod(a+u+c+v) = prod(b,u,d,v).
-            Equals(Product(leftList), Product(rightList))
+        | Product(factors) ->
+            let numEquations, leftList, rightList = TransformAndPartition context factors
+            if numEquations = 0 then
+                Product(leftList)
+            else
+                // Flip the prod(a=b, u, c=d, v) ==> prod(a+u+c+v) = prod(b,u,d,v).
+                Equals(Product(leftList), Product(rightList))
 
-    | Power(a,b) -> 
-        let aTrans = TransformEquations context a
-        let bTrans = TransformEquations context b
+        | Power(a,b) -> 
+            let aTrans = TransformEquations context a
+            let bTrans = TransformEquations context b
 
-        match aTrans, bTrans with
-        | Equals(_,_), Equals(_,_) ->
-            ExpressionError expr "Unsupported equation transformation"
+            match aTrans, bTrans with
+            | Equals(_,_), Equals(_,_) ->
+                ExpressionError expr "Unsupported equation transformation"
 
-        | Equals(ax,ay), bRaw ->
-            let bSimp = Simplify context bRaw       // boil down to a rational number if possible
-            match bSimp with
-            | Amount(PhysicalQuantity(bNumber,bConcept)) ->
-                if bConcept = Dimensionless then
-                    match bNumber with
-                    | Rational(bNum,bDen) ->
-                        if bDen = 1I then
-                            // (ax=ay)^b ==> (ax^b) = (ay^b) if b is a dimensionless integer.
-                            Equals(Power(ax,bSimp), Power(ay,bSimp))
-                        else
-                            // (ax=ay)^(bn/bd) ==> ax^b = pow(uroot(bd), [0..(bd-1)]) * ay^b  where b = bn/bd
-                            // This requires a scary side-effect!
-                            // We create a brand new variable K_n: integer[0, bd-1].
-                            let varExpr = Solitaire(CreateVariable context "K" (IntegerRange(FiniteLimit(0I), FiniteLimit(bDen-1I))) Dimensionless)
-                            let urootToken = SynthToken "uroot"
-                            let bDenAmount = Amount(PhysicalQuantity(Rational(bDen,1I),Dimensionless))
-                            let uroot = Functor(urootToken, [bDenAmount])
-                            Equals(Power(ax, bSimp), Product[Power(uroot, varExpr); Power(ay, bSimp)])
-                    | _ ->
-                        ExpressionError expr "Cannot raise both sides of an equation to a non-rational power."
-                else
-                    ExpressionError expr "Cannot raise both sides of an equation to a dimensional power."
-            | _ ->
-                ExpressionError expr "Unsupported equation transformation."
+            | Equals(ax,ay), bRaw ->
+                let bSimp = Simplify context bRaw       // boil down to a rational number if possible
+                match bSimp with
+                | Amount(PhysicalQuantity(bNumber,bConcept)) ->
+                    if bConcept = Dimensionless then
+                        match bNumber with
+                        | Rational(bNum,bDen) ->
+                            if bDen = 1I then
+                                // (ax=ay)^b ==> (ax^b) = (ay^b) if b is a dimensionless integer.
+                                Equals(Power(ax,bSimp), Power(ay,bSimp))
+                            else
+                                // (ax=ay)^(bn/bd) ==> ax^b = pow(uroot(bd), [0..(bd-1)]) * ay^b  where b = bn/bd
+                                // This requires a scary side-effect!
+                                // We create a brand new variable K_n: integer[0, bd-1].
+                                let varExpr = Solitaire(CreateVariable context "K" (IntegerRange(FiniteLimit(0I), FiniteLimit(bDen-1I))) Dimensionless)
+                                let urootToken = SynthToken "uroot"
+                                let bDenAmount = Amount(PhysicalQuantity(Rational(bDen,1I),Dimensionless))
+                                let uroot = Functor(urootToken, [bDenAmount])
+                                Equals(Power(ax, bSimp), Product[Power(uroot, varExpr); Power(ay, bSimp)])
+                        | _ ->
+                            ExpressionError expr "Cannot raise both sides of an equation to a non-rational power."
+                    else
+                        ExpressionError expr "Cannot raise both sides of an equation to a dimensional power."
+                | _ ->
+                    ExpressionError expr "Unsupported equation transformation."
 
-        | _, Equals(bx,by) ->
-            Equals(Power(aTrans,bx), Power(aTrans,by))      // FIXFIXFIX - is this correct?
-            
-        | _ -> Power(aTrans, bTrans)
+            | _, Equals(bx,by) ->
+                Equals(Power(aTrans,bx), Power(aTrans,by))      // FIXFIXFIX - is this correct?
+                
+            | _ -> Power(aTrans, bTrans)
 
-    | Equals(a,b) -> Equals((TransformEquations context a), (TransformEquations context b))
-    | NumExprRef(token,index) -> FailLingeringMacro token
-    | PrevExprRef(token) -> FailLingeringMacro token
+        | Equals(a,b) -> Equals((TransformEquations context a), (TransformEquations context b))
+        | NumExprRef(token,index) -> FailLingeringMacro token
+        | PrevExprRef(token) -> FailLingeringMacro token
+
+    // Make sure units are OK at each recursive level of transformation.
+    // This takes the burden off each of the transformation rules and helps prevent bugs from creeping in.
+    ValidateExpressionConcept context xform
+
+    xform
 
 //--------------------------------------------------------------------------------------------------
 

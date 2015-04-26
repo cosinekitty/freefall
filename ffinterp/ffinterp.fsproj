@@ -14,7 +14,7 @@
     <OutputPath>bin\Debug</OutputPath>
     <ErrorReport>prompt</ErrorReport>
     <Externalconsole>true</Externalconsole>
-    <Commandlineparameters>-</Commandlineparameters>
+    <Commandlineparameters>/home/don/freefall/test.ff</Commandlineparameters>
     <EnvironmentVariables>
       <EnvironmentVariables>
         <Variable name="FREEFALL_STANDARD_PATH" value="/home/don/freefall/standard" />
