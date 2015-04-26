@@ -140,6 +140,9 @@ and ParseNegPow scan =
         let right, xscan = ParseNegPow rscan
         MakeNegative right, xscan
 
+    | {Text="+"} :: rscan ->
+        ParseNegPow rscan
+
     | _ ->
         let atom, xscan = ParseAtom scan
         match xscan with

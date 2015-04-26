@@ -21,7 +21,7 @@
  5  addop ::= "+" | "-"
     mulexpr ::= powexpr { mulop powexpr }
  6  mulop ::= "*" | "/"
- 7  powexpr ::= "-" powexpr | atom [ "^" powexpr ]
+ 7  powexpr ::= "-" powexpr | "+" powexpr | atom [ "^" powexpr ]
  8  atom ::= "@"{"@"} ident | eref | ident [ "(" arglist ")" ] | numeric | "(" expr ")"
     arglist ::= expr { "," expr }
  9  numeric ::= /[0-9]+(\.[0-9]*)?([eE][\+\-]?[0-9]+)?i?/
