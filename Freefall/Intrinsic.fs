@@ -205,7 +205,7 @@ let Function_Ln = { new IFunctionHandler with
                 AmountZero      // ln(1) = 0
             else 
                 match arg with
-                | Functor({Text="exp"}, [z]) -> z     // ln(exp(z)) ==> z
+                | Functor({Text="exp"}, [z]) when IsRealValuedExpression context z -> z   // ln(exp(z)) ==> z, but only for real z
                 | _ -> Functor(funcToken, [arg])
         | _ -> FailExactArgCount "Function" 1 argList.Length funcToken
 

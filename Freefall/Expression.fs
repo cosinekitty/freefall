@@ -1354,6 +1354,9 @@ let rec ExpressionNumericRange context expr =
     | NumExprRef(t,_) -> FailLingeringMacro t
     | PrevExprRef(t) -> FailLingeringMacro t
 
+let IsRealValuedExpression context expr = 
+    (ExpressionNumericRange context expr) <> ComplexRange
+
 //--------------------------------------------------------------------------------
 // Simplifier
 

@@ -2,6 +2,7 @@
 
 var a, b, c, d: complex;
 var x, y, z: real distance;
+var u, v, w: real;
 
 // Simplifier and identity tests.
 asserti(0, simp(c-c));
@@ -13,7 +14,8 @@ asserti(deriv(exp(a*a),a), 2*a*exp(a^2));
 asserti(deriv(exp(a^2),a), 2*a*exp(a^2));
 asserti(diff(ln(a),a), @a/a);
 asserti(deriv(ln(exp(z)),z), 1);
-asserti(simp(ln(exp(a))), a);
+asserti(simp(ln(exp(a))), ln(exp(a)));
+asserti(simp(ln(exp(v))), v);
 asserti(simp(-a*-a*-b*-a),a^3*b);
 asserti(simp((x+y+z)^0), 1);
 asserti(simp((x+y+z)^1), x+y+z);
