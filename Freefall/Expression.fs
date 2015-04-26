@@ -991,15 +991,7 @@ let rec MakeTermPattern context term =
     | PrevExprRef(t) -> FailLingeringMacro t
     | Del(token,order) -> TermPattern(QuantityOne, term)
 
-let UnmakeTermPattern (TermPattern(coeff,var)) =
-    if (IsQuantityZero coeff) || (IsExpressionZero var) then
-        AmountZero
-    elif IsQuantityOne coeff then
-        var
-    elif IsExpressionOne var then
-        Amount(coeff)
-    else
-        OptimizeMultiply (Amount(coeff)) var
+let UnmakeTermPattern (TermPattern(coeff,var)) = OptimizeMultiply (Amount(coeff)) var
 
 let rec FindMatchingTermPattern context (TermPattern(c1,x1) as pattern) mergedlist : option<TermPattern * list<TermPattern>> =
     match mergedlist with
