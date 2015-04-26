@@ -999,7 +999,7 @@ let UnmakeTermPattern (TermPattern(coeff,var)) =
     elif IsExpressionOne var then
         Amount(coeff)
     else
-        Product[Amount(coeff); var]
+        OptimizeMultiply (Amount(coeff)) var
 
 let rec FindMatchingTermPattern context (TermPattern(c1,x1) as pattern) mergedlist : option<TermPattern * list<TermPattern>> =
     match mergedlist with
@@ -1054,7 +1054,7 @@ let FormatTrigIdentityPattern tip =
     | CoefCosineSquared(coef,angle) -> sprintf "CoefCosineSquared(%s, %s)" (FormatExpression coef) (FormatExpression angle)
     | CoefSineSquared(coef,angle) -> sprintf "CoefSineSquared(%s, %s)" (FormatExpression coef) (FormatExpression angle)
 
-let FormatTrigListItem (expr:Expression, patlist:list<TrigIdentityPattern>) : string =
+let FormatTrigList (patlist:list<TrigIdentityPattern>) : string =
     let joiner accum pat =
         let text = FormatTrigIdentityPattern pat
         if accum = "" then
@@ -1062,7 +1062,10 @@ let FormatTrigListItem (expr:Expression, patlist:list<TrigIdentityPattern>) : st
         else
             accum + ", " + text
 
-    (FormatExpression expr) + ":[" + (List.fold joiner "" patlist) + "]"
+    "[" + (List.fold joiner "" patlist) + "]"
+
+let FormatTrigListItem (expr:Expression, patlist:list<TrigIdentityPattern>) : string =
+    (FormatExpression expr) + ":" + (FormatTrigList patlist)
 
 let FormatTrigSum tlist =
     let joiner accum item =
@@ -1160,9 +1163,8 @@ let rec AllTrigSimplifications context (plist : list<Expression * list<TrigIdent
     match plist with
     | [] -> [ [] ]
     | (original, patterns) :: rest ->
-        let rlist = AllTrigSimplifications context rest
         let mutable slist = []
-        for r in rlist do
+        for r in AllTrigSimplifications context rest do
             // Always include unmodified (original,patterns) with each solution
             slist <- ((original, patterns) :: r) :: slist
 
@@ -1187,7 +1189,7 @@ let MergeTrigIdentities context termlist =
     let slist : list<list<Expression * list<TrigIdentityPattern>>> = AllTrigSimplifications context plist
 
     //for s in slist do
-    //    printfn "!!! %s" (FormatTrigSum s)
+    //    printfn "!!!  %s" (FormatTrigSum s)
 
     // If slist is empty (there were no simplifications), we return termlist.
     // Otherwise, return the shortest simplifiction we can find.
