@@ -340,12 +340,16 @@ let rec AddQuantityList qlist =
         let (PhysicalQuantity(rnumber,rconcept)) = AddQuantityList rest
         PhysicalQuantity((AddNumbers fnumber rnumber), (AddConcepts fconcept rconcept))
 
+let QuantityPairProduct (PhysicalQuantity(aNumber,aConcept)) (PhysicalQuantity(bNumber,bConcept)) =
+    PhysicalQuantity(MultiplyNumbers aNumber bNumber, MultiplyConcepts aConcept bConcept)
+
+let QuantityPairSum (PhysicalQuantity(aNumber,aConcept)) (PhysicalQuantity(bNumber,bConcept)) =
+    PhysicalQuantity(AddNumbers aNumber bNumber, AddConcepts aConcept bConcept)
+
 let rec MultiplyQuantityList qlist =
     match qlist with
     | [] -> QuantityOne
-    | PhysicalQuantity(fnumber,fconcept) :: rest ->
-        let (PhysicalQuantity(rnumber,rconcept)) = MultiplyQuantityList rest
-        PhysicalQuantity((MultiplyNumbers fnumber rnumber), (MultiplyConcepts fconcept rconcept))
+    | fquantity :: rest -> QuantityPairProduct fquantity (MultiplyQuantityList rest)
 
 type Expression =
     | Amount of PhysicalQuantity
@@ -463,24 +467,27 @@ let Sqrt a = Power(a, AmountOneHalf)
 let RecipSqrt a = Power(a, AmountNegOneHalf)
 
 let OptimizeMultiply a b =
-    match a, b with
-    | Product(afactors), Product(bfactors) -> 
-        Product(afactors @ bfactors)
+    if IsExpressionZero a || IsExpressionZero b then
+        AmountZero
+    elif IsExpressionOne a then
+        b
+    elif IsExpressionOne b then
+        a
+    else
+        match a, b with
+        | Amount(qa), Amount(qb) ->
+            Amount(QuantityPairProduct qa qb)
 
-    | Product(afactors), _ -> 
-        Product(afactors @ [b])
+        | Product(afactors), Product(bfactors) -> 
+            Product(afactors @ bfactors)
 
-    | _, Product(bfactors) -> 
-        Product(a :: bfactors)
+        | Product(afactors), _ -> 
+            Product(afactors @ [b])
 
-    | _, _ -> 
-        if IsExpressionZero a || IsExpressionZero b then
-            AmountZero
-        elif IsExpressionOne a then
-            b
-        elif IsExpressionOne b then
-            a
-        else
+        | _, Product(bfactors) -> 
+            Product(a :: bfactors)
+
+        | _, _ -> 
             Product [a; b]
 
 let IsConceptDimensionless concept =
@@ -931,14 +938,11 @@ and FindIdenticalInList context expr elist =
 //-----------------------------------------------------------------------------------------------------
 // Expression simplifier.
 
-let QuantityPairSum (PhysicalQuantity(aNumber,aConcept)) (PhysicalQuantity(bNumber,bConcept)) =
-    PhysicalQuantity(AddNumbers aNumber bNumber, AddConcepts aConcept bConcept)
-
 let AddQuantities a b =
     Amount(QuantityPairSum a b)
 
-let MultiplyQuantities (PhysicalQuantity(aNumber,aConcept)) (PhysicalQuantity(bNumber,bConcept)) =
-    Amount(PhysicalQuantity(MultiplyNumbers aNumber bNumber, MultiplyConcepts aConcept bConcept))
+let MultiplyQuantities a b =
+    Amount(QuantityPairProduct a b)
 
 // Add together all constant terms in a sum list and move the result to the front of the list.
 let rec MergeConstants mergefunc terms =
