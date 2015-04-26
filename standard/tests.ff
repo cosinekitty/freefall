@@ -24,6 +24,7 @@ asserti(simp((3+4)^2), 49);
 asserti(simp(pow(-3,7)), -2187);
 asserti(deriv(asin(z) + acos(z), z), 0);
 asserti(deriv(asin(a), a), deriv(-acos(a), a));
+asserti(simp(cos(v+3)^2 + 17 + sin(3+v)*sin(1+v+2)), 18);
 
 // Expression formatter tests.
 assertf("123", simp(122+1));

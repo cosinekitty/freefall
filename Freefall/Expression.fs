@@ -425,6 +425,9 @@ let IsExpressionEqualToRational expr yNumer yDenom =
     | Amount(quantity) -> IsQuantityEqualToRational quantity yNumer yDenom
     | _ -> false
 
+let IsExpressionEqualToInteger expr n =
+    IsExpressionEqualToRational expr n 1I
+
 let SymbolPi = Solitaire(SynthToken "pi")
 let SymbolE  = Solitaire(SynthToken "e")
 
@@ -1017,6 +1020,93 @@ let MergeLikeTerms context termlist =
 
 //-----------------------------------------------------------------------------------------------
 
+type TrigIdentityPattern =
+    | CosineSquared of Expression                       // cos(expr)^2
+    | SineSquared of Expression                         // sin(expr)^2
+    | CoefCosineSquared of Expression * Expression      // expr*cos(expr)^2
+    | CoefSineSquared of Expression * Expression        // expr*sin(expr)^2
+
+let MakeTrigIdentityPatternList context term : list<TrigIdentityPattern> =
+    // In general, a given term can be converted into a TrigIdentityPattern in 
+    // more than one way.  This is crucial for simplifying expressions like the following:
+    // cos(a)^2*cos(z)^2 + sin(z)^2*cos(a)^2 ==> cos(a)^2
+    // If we just matched only the first obvious pattern, we could easily miss this simplification.
+    match term with
+    | Power(Functor({Text="cos"}, [angle]), two) when IsExpressionEqualToInteger two 2I ->
+        [CosineSquared(angle)]
+
+    | Power(Functor({Text="sin"}, [angle]), two) when IsExpressionEqualToInteger two 2I ->
+        [SineSquared(angle)]
+
+    // FIXFIXFIX - add recognizers for CoefCosineSquared, CoefSineSquared
+
+    | _ -> []       // no pattern matches
+
+let MergeTrigPatterns context a b =
+    match a, b with
+    | CosineSquared(x), SineSquared(y) 
+    | SineSquared(y), CosineSquared(x) 
+        when AreIdentical context x y -> Some(AmountOne)
+
+    // FIXFIXFIX - add mergers for CoefCosineSquared, CoefSineSquared
+
+    | _ -> None
+
+let rec FindTrigMergeList context pat simp =
+    match simp with
+    | [] -> []
+    | (rOriginal, rPatterns) :: rsimp ->
+        let mutable mergelist = []
+        for rpat in rPatterns do
+            match MergeTrigPatterns context pat rpat with
+            | None -> ()
+            | Some(mexpr) -> 
+                // pat and rpat can be merged to form mexpr.
+                // We need to analyze mexpr for *its* patterns
+                let merged = mexpr, MakeTrigIdentityPatternList context mexpr
+                mergelist <- (merged :: rsimp) :: mergelist
+
+        mergelist
+
+let rec AllTrigSimplifications context (plist : list<Expression * list<TrigIdentityPattern>>) : list<list<Expression * list<TrigIdentityPattern>>> =
+    match plist with
+    | [] -> [ [] ]
+    | (original, patterns) :: rest ->
+        let rlist = AllTrigSimplifications context rest
+        let mutable slist = []
+        for r in rlist do
+            // Always include unmodified (original,patterns) with each solution
+            slist <- ((original, patterns) :: r) :: slist
+
+            // See if any of this term's patterns can be merged with any of the patterns in r.
+            // If so, we need to have a list of all previous r elements and list of all following r elements handy.
+            // [r1; r2; r3; r4; r5]
+            //          ^^
+            // [r1; r2; merge(pat,); r4; r5]
+            for pat in patterns do
+                slist <- slist @ (FindTrigMergeList context pat r)
+        slist
+
+let FindShortestSimplification (shortest:list<Expression>) (s:list<Expression * list<TrigIdentityPattern>>) = 
+    if s.Length < shortest.Length then 
+        List.map (fun (orig,tlist) -> orig) s
+    else 
+        shortest
+
+let MergeTrigIdentities context termlist =
+    // y*cos(x)^2 + y*sin(x)^2 ==> y
+    // cos(x)^2 + sin(x)^2 ==> 1
+    let plist : list<Expression * list<TrigIdentityPattern>> =
+        List.map (fun term -> term, MakeTrigIdentityPatternList context term) termlist
+
+    let slist : list<list<Expression * list<TrigIdentityPattern>>> = AllTrigSimplifications context plist
+
+    // If slist is empty (there were no simplifications), we return termlist.
+    // Otherwise, return the shortest simplifiction we can find.
+    List.fold FindShortestSimplification termlist slist
+
+//-----------------------------------------------------------------------------------------------
+
 type FactorPattern = FactorPattern of Expression * Expression    // represents x^y
 
 let rec MakeFactorPattern context factor =
@@ -1393,6 +1483,7 @@ let rec SimplifyStep context expr =
                     SimplifySumArgs (List.map (SimplifyStep context) termlist) 
                     |> MergeConstants AddQuantities
                     |> MergeLikeTerms context
+                    |> MergeTrigIdentities context
 
                 match simpargs with
                 | [] -> AmountZero
