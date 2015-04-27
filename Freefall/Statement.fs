@@ -4,12 +4,6 @@ open Freefall.Expr
 
 //--------------------------------------------------------------------------------------------------
 
-type MultiVariableDeclaration = {
-    VarNameList : list<Token>
-    Range : NumericRange
-    ConceptExpr : Expression
-}
-
 type AssignmentStatement = {
     TargetName : option<Token>       // the optional user-specified name by which the entire expression should be known later
     Expr : Expression
@@ -20,8 +14,8 @@ type ConceptDefinition = {
     Expr : Expression
 }
 
-type UnitDefinition = {
-    UnitName : Token
+type DecomposeStatement = {
+    DecompToken : Token
     Expr : Expression
 }
 
@@ -31,10 +25,22 @@ type FormatAssertion = {
     Expr : Expression
 }
 
+type MultiVariableDeclaration = {
+    VarNameList : list<Token>
+    Range : NumericRange
+    ConceptExpr : Expression
+}
+
+type UnitDefinition = {
+    UnitName : Token
+    Expr : Expression
+}
+
 type Statement =
     | AssertFormat of FormatAssertion
     | Assignment of AssignmentStatement
     | ConceptDef of ConceptDefinition
+    | Decomp of DecomposeStatement
     | DoNothing
     | ForgetAllNumberedExpressions
     | ForgetNamedExpressions of list<Token>
@@ -67,6 +73,9 @@ let FormatStatement statement =
 
     | ConceptDef {ConceptName=idtoken; Expr=expr;} ->
         sprintf "concept %s = %s;" idtoken.Text (FormatExpression expr)
+
+    | Decomp {Expr=expr} ->
+        sprintf "decomp %s;" (FormatExpression expr)
 
     | DoNothing ->
         ";"
@@ -267,7 +276,6 @@ let ExecuteStatement context firstTokenInStatement statement shouldReportAssignm
 
     | Assignment {TargetName=target; Expr=rawexpr;} ->
         let expr = PrepareExpression context rawexpr
-        ValidateExpressionConcept context expr
         let range = ExpressionNumericRange context expr
         if IsEmptyRange range then
             ExpressionError rawexpr "Range of expression values is an empty set. This indicates it is impossible or solutionless."
@@ -283,6 +291,10 @@ let ExecuteStatement context firstTokenInStatement statement shouldReportAssignm
     | ConceptDef {ConceptName=idtoken; Expr=expr;} ->
         let concept = EvalConcept context expr
         DefineSymbol context idtoken (ConceptEntry(concept))
+
+    | Decomp {DecompToken=decompToken; Expr=rawexpr} ->
+        PrepareExpression context rawexpr 
+        |> DecomposeExpression context
 
     | DoNothing ->
         ()

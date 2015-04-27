@@ -635,13 +635,14 @@ let RunStandardScript context filename =
 // Create a context with intrinsic symbols built it.
 // Execute initialization script to define certain units, concepts, etc.
 
-let MakeContext assignmentHook probeHook saveHook = 
+let MakeContext assignmentHook probeHook saveHook decompHook = 
     let context = {
         SymbolTable = new Dictionary<string, SymbolEntry>()
         NumberedExpressionList = new ResizeArray<Expression>()
         AssignmentHook = assignmentHook
         ProbeHook = probeHook
         SaveToFile = saveHook
+        DecomposeHook = decompHook
         NextConstantSubscript = ref 0
         FirstTokenInExecutingStatement = ref (EndOfFileToken None)
     }

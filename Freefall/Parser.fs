@@ -377,6 +377,19 @@ let ParseStatement scan =
             firstTokenInStatement, ConceptDef{ConceptName=idtoken; Expr=expr}, scan5
         | _ -> SyntaxError conceptKeywordToken "Expected 'ident = expr;' after 'concept'."
 
+    | ({Text="decomp"} as decompToken) :: scan2 ->
+        // decomp ::= "decomp" [expr] ";"
+        let expr, scanx =
+            match scan2 with
+            | {Text=";"} :: scan3 -> 
+                // When expression is omitted, default to a reference to the previous expression.
+                PrevExprRef(SynthToken "#"), scan3
+            | _ ->
+                // Use the expression after the decomp keyword.
+                let expr, scan3 = ParseExpression scan2
+                expr, ExpectSemicolon scan3
+        firstTokenInStatement, Decomp {DecompToken=decompToken; Expr=expr}, scanx
+
     | ({Text="forget"} as forgetToken) :: scan2 ->
         // forget ::= "forget" idspec ";"
         // idspec ::= "*" | ident { "," ident }

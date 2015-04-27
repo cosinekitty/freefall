@@ -103,9 +103,15 @@ let MyProbeHook context expr range concept =
     printfn "PROBE(concept) : %s" (FormatConcept concept)
     printfn ""
 
+let MyDecompHook (context:Context) (exprArray:ResizeArray<Expression>) =
+    let index = ref 0
+    for expr in exprArray do
+        printfn "DECOMP(%3d) : %s" !index (FormatExpression expr)
+        incr index
+
 [<EntryPoint>]
 let main argv = 
-    let context = MakeContext MyAssignmentHook MyProbeHook HtmlSave
+    let context = MakeContext MyAssignmentHook MyProbeHook HtmlSave MyDecompHook
     try
         InitContext context |> ignore
         Array.map (ExecuteFile context) argv |> ignore

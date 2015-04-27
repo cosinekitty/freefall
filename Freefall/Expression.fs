@@ -771,6 +771,7 @@ and Context = {
     SaveToFile: Context -> string -> unit
     NextConstantSubscript: ref<int>
     FirstTokenInExecutingStatement: ref<Token>
+    DecomposeHook: Context -> ResizeArray<Expression> -> unit
 }
 
 let AppendNumberedExpression {NumberedExpressionList = numExprList} expr =
@@ -801,6 +802,32 @@ let DefineSymbol {SymbolTable=symtable} ({Text=symbol; Kind=kind} as symtoken) s
         SyntaxError symtoken "Symbol is already defined"
     else
         symtable.Add(symbol, symentry)
+
+let rec DecomposeExpressionToResizeArray expr (resizeArray:ResizeArray<Expression>) =
+    // Pre-order recursive traversal.
+    resizeArray.Add(expr)
+    match expr with
+    | Amount(_)
+    | Solitaire(_)
+    | NumExprRef(_, _)
+    | PrevExprRef(_)
+    | Del(_, _)         -> ()
+
+    | Functor(_, arglist)
+    | Sum(arglist)
+    | Product(arglist)  ->
+        for arg in arglist do
+            DecomposeExpressionToResizeArray arg resizeArray
+
+    | Power(left, right)
+    | Equals(left, right) ->
+        DecomposeExpressionToResizeArray left  resizeArray
+        DecomposeExpressionToResizeArray right resizeArray
+
+let DecomposeExpression context expr =
+    let resizeArray = ResizeArray<Expression>()
+    DecomposeExpressionToResizeArray expr resizeArray 
+    context.DecomposeHook context resizeArray
 
 let CreateVariable ({SymbolTable=symtable; NextConstantSubscript=subscript} as context) prefix range concept =
     incr subscript

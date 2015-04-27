@@ -1,11 +1,12 @@
     module ::= { statement }
     
-    statement ::=  assertf | concept | unit | assignment | 
+    statement ::=  assertf | concept | decomp | unit | assignment | 
                    vardecl | forget | probe | save | ";"
 
     save ::= "save" str ";"                   
     assertf ::= "assertf" "(" str "," expr ")" ";"
     concept ::= "concept" ident "=" expr ";"
+    decomp ::= "decomp" [expr] ";"
     unit ::= "unit" ident "=" expr ";"
     assignment ::= [ ident ":=" ] expr ";"    
     vardecl ::= "var" ident { "," ident } ":" type ";"

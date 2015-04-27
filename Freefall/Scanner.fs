@@ -94,8 +94,10 @@ let KeywordTable =
     Set.ofList [ 
         "assertf"
         "concept"
+        "decomp"
         "forget" 
         "probe" 
+        "save"
         "unit" 
         "var" 
     ]
