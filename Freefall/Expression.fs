@@ -740,8 +740,11 @@ and RemainingFactorText expr =
 //  Executed statements will accumulate references that can be used by later statements.
 //  Some statements "forget" statement references on purpose. 
 
+type MacroArgBehavior = PreExpandArgs | RawArgs
+
 type Macro = {
-    Expander: Token -> list<Expression> -> Expression;
+    Expander: Token -> list<Expression> -> Expression
+    ArgBehavior: MacroArgBehavior
 }
 
 type DerivativeKind = Differential | Derivative
@@ -828,6 +831,60 @@ let DecomposeExpression expr =
     let resizeArray = ResizeArray<Expression>()
     DecomposeExpressionToResizeArray expr resizeArray 
     resizeArray
+
+let rec ReplaceExpressionNode replacementExpr parentExpr targetIndex currentIndex : Expression * int =
+    if currentIndex = targetIndex then
+        // This is the node that needs to be replaced.
+        replacementExpr, 1+currentIndex
+    elif currentIndex > targetIndex then
+        // Optimization: we have already replaced the target node, so no need for further cloning.
+        // Prune out recursive traversal at this node and just return parentExpr verbatim.
+        // There is no need to keep currentIndex correct after this point,
+        // and doing so would be complicated by more recursive traversal logic.
+        // The fact that currentIndex > targetIndex is sufficient to make the rest
+        // of the cloning process work correctly, so we don't bother with needless effort.
+        parentExpr, currentIndex
+    else
+        // We have not yet replaced the target node, so we need to clone children until we find it.
+        match parentExpr with
+        | Amount(_)
+        | Solitaire(_)
+        | NumExprRef(_, _)
+        | PrevExprRef(_)
+        | Del(_, _) -> 
+            // No child nodes, so keep original (no need to clone).
+            parentExpr, 1+currentIndex
+
+        | Functor(funcNameToken, arglist) ->
+            let clonedArgList, updatedIndex = CloneOrReplaceChildren replacementExpr arglist targetIndex (1+currentIndex)
+            Functor(funcNameToken, clonedArgList), updatedIndex
+
+        | Sum(arglist) ->
+            let clonedArgList, updatedIndex = CloneOrReplaceChildren replacementExpr arglist targetIndex (1+currentIndex)
+            Sum(clonedArgList), updatedIndex
+
+        | Product(arglist)  ->
+            let clonedArgList, updatedIndex = CloneOrReplaceChildren replacementExpr arglist targetIndex (1+currentIndex)
+            Product(clonedArgList), updatedIndex
+
+        | Power(left, right) ->
+            let clonedLeft, afterLeftIndex = ReplaceExpressionNode replacementExpr left  targetIndex (1+currentIndex)
+            let clonedRight, updatedIndex  = ReplaceExpressionNode replacementExpr right targetIndex afterLeftIndex
+            Power(clonedLeft, clonedRight), updatedIndex
+
+        | Equals(left, right) ->
+            let clonedLeft, afterLeftIndex = ReplaceExpressionNode replacementExpr left  targetIndex (1+currentIndex)
+            let clonedRight, updatedIndex  = ReplaceExpressionNode replacementExpr right targetIndex afterLeftIndex
+            Equals(clonedLeft, clonedRight), updatedIndex
+    
+and CloneOrReplaceChildren replacementExpr arglist targetIndex currentIndex : list<Expression> * int =
+    let updatedIndex = ref currentIndex
+    let cloneArray = ResizeArray<Expression> ()
+    for child in arglist do
+        let clone, nextIndex = ReplaceExpressionNode replacementExpr child targetIndex !updatedIndex
+        cloneArray.Add(clone)
+        updatedIndex := nextIndex
+    List.ofSeq cloneArray, !updatedIndex
 
 let CreateVariable ({SymbolTable=symtable; NextConstantSubscript=subscript} as context) prefix range concept =
     incr subscript

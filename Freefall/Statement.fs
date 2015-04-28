@@ -126,7 +126,10 @@ let rec ExpandMacros context rawexpr =
             | FunctionEntry(_) -> SyntaxError nameToken "Cannot use function name as solitary symbol."
         | Functor(funcName,argList) -> 
             match FindSymbolEntry context funcName with
-            | MacroEntry({Expander=expander;}) -> expander funcName (List.map (ExpandMacros context) argList)
+            | MacroEntry({Expander=expander; ArgBehavior=argBehavior}) -> 
+                match argBehavior with
+                | RawArgs       -> expander funcName argList
+                | PreExpandArgs -> expander funcName (List.map (ExpandMacros context) argList)
             | FunctionEntry(_) -> Functor(funcName, (List.map (ExpandMacros context) argList))
             | VariableEntry(_) -> FailNonFuncMacro funcName "a variable"
             | ConceptEntry(_) -> FailNonFuncMacro funcName "a concept"

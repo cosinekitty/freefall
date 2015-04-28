@@ -11,8 +11,7 @@ open Freefall.Parser
 //-------------------------------------------------------------------------------------------------
 
 let EvalIntegerIndex context indexExpr (limit:int) =
-    let quantity = EvalQuantity context indexExpr
-    match quantity with
+    match EvalQuantity context indexExpr with
     | PhysicalQuantity(Rational(bigIndex,denom),concept) when IsConceptDimensionless concept && denom.IsOne ->
         let bigLimit = bigint limit
         if 0I <= bigIndex && bigIndex < bigLimit then
@@ -103,24 +102,53 @@ let ExtractMacroExpander context macroToken argList =
     // the same way decomp enumerates child expressions.
     match argList with
     | [rootExpr; indexExpr] ->
-        let array : ResizeArray<Expression> = DecomposeExpression rootExpr
+        let array = DecomposeExpression rootExpr
         let index = EvalIntegerIndex context indexExpr array.Count
         array.[index]
 
     | _ -> SyntaxError macroToken (sprintf "%s requires parameters (root, index)." macroToken.Text)
 
+let InjectMacroExpander context macroToken argList =
+    // inject(root, index, funcname, extra_args...)
+    // Create a clone of the expression, only with the substitution
+    // root[index] := funcname(root[index], extra_args...)
+
+    match argList with 
+    | rawRootExpr :: rawIndexExpr :: functorNameExpr :: rawExtraArgsList ->
+        // Note that this macro is special: it uses RawArgs option to avoid pre-expanding
+        // the arguments passed to it, because of the unusual passing of a function name as a solitaire.
+        // If arguments were pre-expanded, that would cause a syntax error.
+        // So we need to prepare everything here except functorNameExpr.
+        let rootExpr = PrepareExpression context rawRootExpr
+        let indexExpr = PrepareExpression context rawIndexExpr
+        let extraArgsList = List.map (PrepareExpression context) rawExtraArgsList
+
+        match functorNameExpr with
+        | Solitaire(functorNameToken) ->
+            let array = DecomposeExpression rootExpr
+            let index = EvalIntegerIndex context indexExpr array.Count
+            let replacementRawExpr = Functor(functorNameToken, array.[index] :: extraArgsList)
+            let replacementExpr = PrepareExpression context replacementRawExpr
+            let expr, finalIndex = ReplaceExpressionNode replacementExpr rootExpr index 0
+            expr
+
+        | _ -> ExpressionError functorNameExpr "Expected function or macro name."
+
+    | _ -> SyntaxError macroToken (sprintf "%s requires parameters (root, index, funcname, ...)" macroToken.Text)
+
 let IntrinsicMacros =
     [
-        ("asserti", AssertIdenticalMacroExpander)
-        ("cbrt",    PowerMacroExpander AmountOneThird)
-        ("deriv",   DiffDerivMacroExpander Derivative)
-        ("diff",    DiffDerivMacroExpander Differential)
-        ("eval",    EvalMacroExpander)
-        ("extract", ExtractMacroExpander)
-        ("float",   FloatMacroExpander)
-        ("simp",    SimplifyMacroExpander)
-        ("sqrt",    PowerMacroExpander AmountOneHalf)
-        ("square",  PowerMacroExpander AmountTwo)
+        ("asserti", PreExpandArgs,  AssertIdenticalMacroExpander)
+        ("cbrt",    PreExpandArgs,  PowerMacroExpander AmountOneThird)
+        ("deriv",   PreExpandArgs,  DiffDerivMacroExpander Derivative)
+        ("diff",    PreExpandArgs,  DiffDerivMacroExpander Differential)
+        ("eval",    PreExpandArgs,  EvalMacroExpander)
+        ("extract", PreExpandArgs,  ExtractMacroExpander)
+        ("float",   PreExpandArgs,  FloatMacroExpander)
+        ("inject",  RawArgs,        InjectMacroExpander)
+        ("simp",    PreExpandArgs,  SimplifyMacroExpander)
+        ("sqrt",    PreExpandArgs,  PowerMacroExpander AmountOneHalf)
+        ("square",  PreExpandArgs,  PowerMacroExpander AmountTwo)
     ]
 
 //-------------------------------------------------------------------------------------------------
@@ -682,8 +710,8 @@ let MakeContext assignmentHook probeHook saveHook decompHook =
         DefineIntrinsicSymbol context conceptName (ConceptEntry(concept))
         DefineIntrinsicSymbol context baseUnitName (UnitEntry(PhysicalQuantity(Rational(R1), concept)))
 
-    for macroName, macroFunc in IntrinsicMacros do
-        DefineIntrinsicSymbol context macroName (MacroEntry({Expander=(macroFunc context);}))
+    for macroName, argBehavior, macroFunc in IntrinsicMacros do
+        DefineIntrinsicSymbol context macroName (MacroEntry({Expander=(macroFunc context); ArgBehavior=argBehavior}))
 
     for funcName, handler in IntrinsicFunctions do
         DefineIntrinsicSymbol context funcName (FunctionEntry(handler))
