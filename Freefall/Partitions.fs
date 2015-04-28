@@ -10,6 +10,7 @@ let rec Partitions (items: list<'T>) : IEnumerable<list<list<'T>>> =
             for subpart in Partitions rest do
                 // For each sub-partition, we can place the first item by itself in a separate list.
                 yield [first] :: subpart
+
                 // The other N-1 possibilities are to put the first item in each of the remaining lists.
                 yield! PartitionDistrib first subpart
     } 

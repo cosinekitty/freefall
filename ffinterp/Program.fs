@@ -119,7 +119,7 @@ let PartitionTest (letters:string) =
     // Printing the total count is handy for sanity-checking the algorithm.
     // See the sequence of "Bell numbers" at
     // http://mathworld.wolfram.com/BellNumber.html
-    // 1, 2, 5, 15, 52, 203, 877, 4140, 21147, 115975, ...
+    // 1, 2, 5, 15, 52, 203, 877, 4140, 21147, 115975, 678570, 4213597 ...
     // http://oeis.org/A000110/list
     printfn "count = %d" count
 
@@ -128,6 +128,10 @@ let main argv =
     match argv with
     | [| "-p"; letters |] ->
         PartitionTest letters
+        0
+
+    | [| "-pt"; letters |] ->       // partition speed test
+        List.ofSeq letters |> Partitions |> Seq.length |> printfn "count = %d"
         0
 
     | _ ->
