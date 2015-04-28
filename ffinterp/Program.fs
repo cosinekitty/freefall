@@ -1,5 +1,6 @@
 ﻿// Freefall command-line interpreter program.
 // Don Cross - http://cosinekitty.com
+open Freefall.Partitions
 open Freefall.Scanner
 open Freefall.Expr
 open Freefall.Stmt
@@ -109,44 +110,54 @@ let MyDecompHook (context:Context) (exprArray:ResizeArray<Expression>) =
         printfn "DECOMP(%3d) : %s" !index (FormatExpression expr)
         incr index
 
+let PartitionTest (letters:string) =
+    for part in Partitions (List.ofSeq letters) do
+        printfn "%A" part
+
 [<EntryPoint>]
 let main argv = 
-    let context = MakeContext MyAssignmentHook MyProbeHook HtmlSave MyDecompHook
-    try
-        InitContext context |> ignore
-        Array.map (ExecuteFile context) argv |> ignore
+    match argv with
+    | [| "-p"; letters |] ->
+        PartitionTest letters
         0
-    with 
-        | SyntaxException(token,message) ->
-            printfn "EXCEPTION : %s" message
-            PrintTokenDiagnostic token
-            PrintExecutionContext context
-            1
 
-        | ExpressionException(expr,message) ->
-            printfn "EXCEPTION in subexpression '%s': %s" (FormatExpression expr) message
-            match PrimaryToken expr with
-            | None -> ()
-            | Some(token) -> PrintTokenDiagnostic token
-            PrintExecutionContext context
-            1
+    | _ ->
+        let context = MakeContext MyAssignmentHook MyProbeHook HtmlSave MyDecompHook
+        try
+            InitContext context
+            Array.iter (ExecuteFile context) argv
+            0
+        with 
+            | SyntaxException(token,message) ->
+                printfn "EXCEPTION : %s" message
+                PrintTokenDiagnostic token
+                PrintExecutionContext context
+                1
 
-        | FreefallRuntimeException(message) ->
-            printfn "Runtime error: %s" message
-            PrintExecutionContext context
-            1
+            | ExpressionException(expr,message) ->
+                printfn "EXCEPTION in subexpression '%s': %s" (FormatExpression expr) message
+                match PrimaryToken expr with
+                | None -> ()
+                | Some(token) -> PrintTokenDiagnostic token
+                PrintExecutionContext context
+                1
 
-        | UnexpectedEndException(None) ->
-            printfn "Syntax error: unexpected end of input"
-            PrintExecutionContext context
-            1
+            | FreefallRuntimeException(message) ->
+                printfn "Runtime error: %s" message
+                PrintExecutionContext context
+                1
 
-        | UnexpectedEndException(Some(filename)) ->
-            printfn "Syntax error: unexpected end of file '%s'" filename
-            PrintExecutionContext context
-            1
+            | UnexpectedEndException(None) ->
+                printfn "Syntax error: unexpected end of input"
+                PrintExecutionContext context
+                1
 
-        | :? System.IO.FileNotFoundException as ex ->
-            printfn "ERROR: %s" ex.Message
-            PrintExecutionContext context
-            1
+            | UnexpectedEndException(Some(filename)) ->
+                printfn "Syntax error: unexpected end of file '%s'" filename
+                PrintExecutionContext context
+                1
+
+            | :? System.IO.FileNotFoundException as ex ->
+                printfn "ERROR: %s" ex.Message
+                PrintExecutionContext context
+                1

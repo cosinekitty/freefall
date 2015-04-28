@@ -29,10 +29,10 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="AssemblyInfo.fs" />
+    <Compile Include="Partitions.fs" />
     <Compile Include="Scanner.fs" />
     <Compile Include="Expression.fs" />
-    <Compile Include="Calculus.fs">
-    </Compile>
+    <Compile Include="Calculus.fs" />
     <Compile Include="Statement.fs" />
     <Compile Include="Parser.fs" />
     <Compile Include="Intrinsic.fs" />
