@@ -20,11 +20,10 @@ and private PartitionDistrib (first:'T) (subpart:list<list<'T>>) : IEnumerable<l
         // Generate a sequence where 'first' appears at the front of each element of 'subpart' in turn.
         // For example, first=A, subpart=[[B];[C]] ==> { [[A;B];[C]; [[B];[A;C]] }.
         match subpart with
+        | [] -> ()
+
         | firstpart :: restparts ->
             yield (first :: firstpart) :: restparts
-            if restparts <> [] then
-                for distrib in PartitionDistrib first restparts do
-                    yield firstpart :: distrib
-        
-        | _ -> failwith "Impossible case in PartitionDistrib."
+            for distrib in PartitionDistrib first restparts do
+                yield firstpart :: distrib
     }
