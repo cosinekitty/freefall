@@ -9,6 +9,19 @@ open Freefall.Stmt
 open Freefall.Parser
 
 //-------------------------------------------------------------------------------------------------
+
+let EvalIntegerIndex context indexExpr (limit:int) =
+    let quantity = EvalQuantity context indexExpr
+    match quantity with
+    | PhysicalQuantity(Rational(bigIndex,denom),concept) when IsConceptDimensionless concept && denom.IsOne ->
+        let bigLimit = bigint limit
+        if 0I <= bigIndex && bigIndex < bigLimit then
+            int bigIndex
+        else
+            ExpressionError indexExpr (sprintf "Index expression = %O, but must be in the range 0..%d" bigIndex (limit-1))
+    | _ -> ExpressionError indexExpr "Index expression does not evaluate to a dimensionless integer."
+
+//-------------------------------------------------------------------------------------------------
 // Intrinsic macros
 
 let FailExactArgCount symbolType requiredCount actualCount token =
@@ -83,6 +96,19 @@ let PowerMacroExpander powerAmount context macroToken argList =
         | _ -> Product(argList)
     Power(arg, powerAmount)
 
+let ExtractMacroExpander context macroToken argList =
+    // extract(root, index)
+    // index must be an integer constant
+    // Returns the expression from within root at the traversal index,
+    // the same way decomp enumerates child expressions.
+    match argList with
+    | [rootExpr; indexExpr] ->
+        let array : ResizeArray<Expression> = DecomposeExpression rootExpr
+        let index = EvalIntegerIndex context indexExpr array.Count
+        array.[index]
+
+    | _ -> SyntaxError macroToken (sprintf "%s requires parameters (root, index)." macroToken.Text)
+
 let IntrinsicMacros =
     [
         ("asserti", AssertIdenticalMacroExpander)
@@ -90,6 +116,7 @@ let IntrinsicMacros =
         ("deriv",   DiffDerivMacroExpander Derivative)
         ("diff",    DiffDerivMacroExpander Differential)
         ("eval",    EvalMacroExpander)
+        ("extract", ExtractMacroExpander)
         ("float",   FloatMacroExpander)
         ("simp",    SimplifyMacroExpander)
         ("sqrt",    PowerMacroExpander AmountOneHalf)

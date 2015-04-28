@@ -803,7 +803,7 @@ let DefineSymbol {SymbolTable=symtable} ({Text=symbol; Kind=kind} as symtoken) s
     else
         symtable.Add(symbol, symentry)
 
-let rec DecomposeExpressionToResizeArray expr (resizeArray:ResizeArray<Expression>) =
+let rec private DecomposeExpressionToResizeArray expr (resizeArray:ResizeArray<Expression>) =
     // Pre-order recursive traversal.
     resizeArray.Add(expr)
     match expr with
@@ -824,10 +824,10 @@ let rec DecomposeExpressionToResizeArray expr (resizeArray:ResizeArray<Expressio
         DecomposeExpressionToResizeArray left  resizeArray
         DecomposeExpressionToResizeArray right resizeArray
 
-let DecomposeExpression context expr =
+let DecomposeExpression expr =
     let resizeArray = ResizeArray<Expression>()
     DecomposeExpressionToResizeArray expr resizeArray 
-    context.DecomposeHook context resizeArray
+    resizeArray
 
 let CreateVariable ({SymbolTable=symtable; NextConstantSubscript=subscript} as context) prefix range concept =
     incr subscript

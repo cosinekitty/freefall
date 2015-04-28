@@ -294,7 +294,8 @@ let ExecuteStatement context firstTokenInStatement statement shouldReportAssignm
 
     | Decomp {DecompToken=decompToken; Expr=rawexpr} ->
         PrepareExpression context rawexpr 
-        |> DecomposeExpression context
+        |> DecomposeExpression
+        |> context.DecomposeHook context
 
     | DoNothing ->
         ()
