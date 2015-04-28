@@ -111,8 +111,17 @@ let MyDecompHook (context:Context) (exprArray:ResizeArray<Expression>) =
         incr index
 
 let PartitionTest (letters:string) =
+    let mutable count = 0
     for part in Partitions (List.ofSeq letters) do
-        printfn "%A" part
+        String.concat ", " (List.map (fun charlist -> System.String(charlist |> List.toArray)) part) |> printfn "[%s]" 
+        count <- count + 1
+
+    // Printing the total count is handy for sanity-checking the algorithm.
+    // See the sequence of "Bell numbers" at
+    // http://mathworld.wolfram.com/BellNumber.html
+    // 1, 2, 5, 15, 52, 203, 877, 4140, 21147, 115975, ...
+    // http://oeis.org/A000110/list
+    printfn "count = %d" count
 
 [<EntryPoint>]
 let main argv = 
