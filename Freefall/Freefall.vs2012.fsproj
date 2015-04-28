@@ -41,11 +41,15 @@
     <Reference Include="System.Numerics" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Partitions.fs" />
     <Compile Include="Scanner.fs" />
     <Compile Include="Expression.fs" />
     <Compile Include="Statement.fs" />
     <Compile Include="Parser.fs" />
+    <Compile Include="Calculus.fs" />
     <Compile Include="Intrinsic.fs" />
+    <Compile Include="Latex.fs" />
+    <Compile Include="Html.fs" />
   </ItemGroup>
   <PropertyGroup>
     <MinimumVisualStudioVersion Condition="'$(MinimumVisualStudioVersion)' == ''">11</MinimumVisualStudioVersion>

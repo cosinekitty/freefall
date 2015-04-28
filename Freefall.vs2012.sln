@@ -3,8 +3,6 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 2012
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Freefall.vs2012", "Freefall\Freefall.vs2012.fsproj", "{D1A2A660-3DBA-46F1-BFFE-67FEC3599CA1}"
 EndProject
-Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "UnitTest.vs2012", "UnitTest\UnitTest.vs2012.fsproj", "{D2F88D4B-D352-4BC4-84FC-D1D31BB0E184}"
-EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "ffinterp.vs2012", "ffinterp\ffinterp.vs2012.fsproj", "{68C204EA-5864-4630-8055-4225CFD767BF}"
 EndProject
 Global
@@ -17,10 +15,6 @@ Global
 		{D1A2A660-3DBA-46F1-BFFE-67FEC3599CA1}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D1A2A660-3DBA-46F1-BFFE-67FEC3599CA1}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D1A2A660-3DBA-46F1-BFFE-67FEC3599CA1}.Release|Any CPU.Build.0 = Release|Any CPU
-		{D2F88D4B-D352-4BC4-84FC-D1D31BB0E184}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{D2F88D4B-D352-4BC4-84FC-D1D31BB0E184}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{D2F88D4B-D352-4BC4-84FC-D1D31BB0E184}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{D2F88D4B-D352-4BC4-84FC-D1D31BB0E184}.Release|Any CPU.Build.0 = Release|Any CPU
 		{68C204EA-5864-4630-8055-4225CFD767BF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{68C204EA-5864-4630-8055-4225CFD767BF}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{68C204EA-5864-4630-8055-4225CFD767BF}.Release|Any CPU.ActiveCfg = Release|Any CPU
