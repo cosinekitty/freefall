@@ -129,12 +129,26 @@ let InjectMacroExpander context macroToken argList =
             let index = EvalIntegerIndex context indexExpr array.Count
             let replacementRawExpr = Functor(functorNameToken, array.[index] :: extraArgsList)
             let replacementExpr = PrepareExpression context replacementRawExpr
-            let expr, finalIndex = ReplaceExpressionNode replacementExpr rootExpr index 0
+            let expr, _ = ReplaceExpressionNode replacementExpr rootExpr index 0
             expr
 
         | _ -> ExpressionError functorNameExpr "Expected function or macro name."
 
     | _ -> SyntaxError macroToken (sprintf "%s requires parameters (root, index, funcname, ...)" macroToken.Text)
+
+let SubstMacroExpander context macroToken argList =
+    // subst(root, index, repl)
+    // Similar to inject, only with a replacement expression instead of a functor name.
+    // Create a clone of the root expression, with a particular node replaced with repl expression.
+    match argList with
+
+    | [rootExpr; indexExpr; replExpr] ->
+        let array = DecomposeExpression rootExpr
+        let index = EvalIntegerIndex context indexExpr array.Count
+        let expr, _ = ReplaceExpressionNode replExpr rootExpr index 0
+        expr
+
+    | _ -> SyntaxError macroToken (sprintf "%s requires parameters (root, index, repl)" macroToken.Text)
 
 let IntrinsicMacros =
     [
@@ -149,6 +163,7 @@ let IntrinsicMacros =
         ("simp",    PreExpandArgs,  SimplifyMacroExpander)
         ("sqrt",    PreExpandArgs,  PowerMacroExpander AmountOneHalf)
         ("square",  PreExpandArgs,  PowerMacroExpander AmountTwo)
+        ("subst",   PreExpandArgs,  SubstMacroExpander)
     ]
 
 //-------------------------------------------------------------------------------------------------
