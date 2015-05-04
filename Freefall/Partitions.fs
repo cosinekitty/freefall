@@ -1,7 +1,6 @@
 ﻿module Freefall.Partitions
-open System.Collections.Generic
 
-let rec Partitions (items: list<'T>) : IEnumerable<list<list<'T>>> =
+let rec Partitions (items: list<'T>) : seq<list<list<'T>>> =
     seq { 
         match items with
         | [] -> yield [ [] ]
@@ -15,7 +14,7 @@ let rec Partitions (items: list<'T>) : IEnumerable<list<list<'T>>> =
                 yield! PartitionDistrib first subpart
     } 
 
-and private PartitionDistrib (first:'T) (subpart:list<list<'T>>) : IEnumerable<list<list<'T>>> =
+and private PartitionDistrib (first:'T) (subpart:list<list<'T>>) : seq<list<list<'T>>> =
     seq {
         // Generate a sequence where 'first' appears at the front of each element of 'subpart' in turn.
         // For example, first=A, subpart=[[B];[C]] ==> { [[A;B];[C]; [[B];[A;C]] }.
