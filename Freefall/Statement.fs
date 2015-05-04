@@ -167,6 +167,22 @@ let rec ExpandMacros context rawexpr =
 // We need to be able to apply safe, single-valued functions like this:
 //     exp(a=b)  ==>   exp(a) = exp(b)
 
+let NaivePowerSimp context a b =      // returns "naive" simplification of a^b
+    // This is a so-called "naive" simplification rule that does things like:
+    // sqrt(x^2) ==> x
+    // Or in general, (x^y)^b ==> x^(y*b)
+    // This is safe in cases where uroot is already in use to represent 
+    // the multiplicity of solutions in a transformed equation.
+    match a with
+    | Power(x, Amount(PhysicalQuantity(y, concept))) when concept = Dimensionless ->
+        let c = MultiplyNumbers y b
+        if IsNumberEqualToInteger 1I c then
+            x
+        else
+            Power(x, Amount(PhysicalQuantity(c, Dimensionless)))
+    | _ -> 
+        Power(a, Amount(PhysicalQuantity(b, Dimensionless)))
+
 let rec PartitionEquationsAndValues exprlist =
     match exprlist with
     | [] -> 0, [], []
@@ -234,10 +250,14 @@ and TransformEquations context expr =
                                 // This requires a scary side-effect!
                                 // We create a brand new variable K_n: integer[0, bd-1].
                                 let varExpr = Solitaire(CreateVariable context "K" (IntegerRange(FiniteLimit(0I), FiniteLimit(bDen-1I))) Dimensionless)
-                                let urootToken = SynthToken "uroot"
-                                let bDenAmount = Amount(PhysicalQuantity(Rational(bDen,1I),Dimensionless))
-                                let uroot = Functor(urootToken, [bDenAmount])
-                                Equals(Power(ax, bSimp), Product[Power(uroot, varExpr); Power(ay, bSimp)])
+                                let uroot = 
+                                    if bDen = 2I then
+                                        AmountNegOne    // pre-simplify uroot(2) ==> -1
+                                    else
+                                        Functor(SynthToken "uroot", [Amount(PhysicalQuantity(Rational(bDen,1I),Dimensionless))])
+                                let axPower = NaivePowerSimp context ax bNumber
+                                let ayPower = NaivePowerSimp context ay bNumber
+                                Equals(axPower, (OptimizeMultiply (Power(uroot, varExpr)) ayPower))
                         | _ ->
                             ExpressionError expr "Cannot raise both sides of an equation to a non-rational power."
                     else

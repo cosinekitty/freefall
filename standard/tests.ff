@@ -4,6 +4,9 @@ var a, b, c, d: complex;
 var x, y, z: real distance;
 var u, v, w: real;
 
+// Verify naive power simplification rule.
+assertf("a = (-1)^K_1*b", sqrt(a^2=b^2));
+
 // Simplifier and identity tests.
 asserti(0, simp(c-c));
 asserti(x+y, y+x);
