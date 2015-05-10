@@ -57,3 +57,7 @@ assertf("16.0", eval(2.0^4.0));
 assertf("0.0625", eval(2.0^(-4.0)));
 assertf("1267650600228229401496703205376", eval(2^100));
 assertf("1.26765060022823e+30", eval(2.0^100));
+
+// Factoring tests.
+asserti(factor(a^2 + a^3), a^2*(1+a));
+

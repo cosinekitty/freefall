@@ -53,6 +53,14 @@ let IsNumberEqualToRational yNumer yDenom x =
         | Real re -> re = CheckReal((float yNumer) / (float yDenom))
         | Complex(c) -> (c.Imaginary = 0.0) && (c.Real = CheckReal((float yNumer) / (float yDenom)))
 
+let CompareRationals (xNumer:bigint) (xDenom:bigint) (yNumer:bigint) (yDenom:bigint) : int =
+    // return +1 if x > y.
+    // return -1 if x < y.
+    // return  0 if x = y.
+    // Do this by calculating the sign of (xNumer/xDenom - yNumer/yDenom).
+    // Denominators must be positive, so xNumer*yDenom - yNumer*xDenom has the same sign.
+    (xNumer*yDenom - yNumer*xDenom).Sign
+
 let IsNumberEqualToInteger n x = 
     IsNumberEqualToRational n 1I x
 
@@ -733,7 +741,10 @@ and RemainingFactorText expr =
     | _ -> 
         let _, text = FormatExpressionPrec expr Precedence_Mul
         "*" + text
-    
+
+let FormatExpressionList exprlist =
+    "[" + (String.concat ", " (List.map FormatExpression exprlist)) + "]"
+
 //-----------------------------------------------------------------------------------------------------
 //  Context provides mutable state needed to execute a series of Freefall statements.
 //  Some statements will define units and types of variables that are subsequently referenced.

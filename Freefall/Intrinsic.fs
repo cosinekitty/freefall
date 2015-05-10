@@ -2,6 +2,7 @@
 
 open System.Collections.Generic
 
+open Freefall.Partitions
 open Freefall.Scanner
 open Freefall.Expr
 open Freefall.Calculus
@@ -150,6 +151,272 @@ let SubstMacroExpander context macroToken argList =
 
     | _ -> SyntaxError macroToken (sprintf "%s requires parameters (root, index, repl)" macroToken.Text)
 
+//-------------------------------------------------------------------------------------------------
+// Factoring expressions
+
+// expr      = -3.79*(x+y)^3
+// Coeff     = -3.79
+// VarPart   =  (x+y)
+// Exponent  =  3
+
+type Triplet = {
+    Coeff: PhysicalQuantity
+    VarPart: Expression
+    Exponent: Expression
+}
+
+let TermList expr =
+    match expr with
+    | Sum(termlist) -> termlist
+    | _ -> [expr]
+
+let TermListLength expr = TermList expr |> List.length
+
+let FactorList expr =
+    match expr with
+    | Product(factorlist) -> factorlist
+    | _ -> [expr]
+
+let FactorListLength expr = FactorList expr |> List.length
+
+let FlatSum termlist =
+    match termlist with
+    | [] -> AmountZero
+    | [single] -> single
+    | _ -> Sum(termlist)
+
+let AllPossibleTermListPartitions context expr = 
+    seq {
+        for exprlist in Partitions (TermList expr) do
+            if not ((List.length exprlist) = 1 && (List.length (List.head exprlist)) > 1) then      // ignore sum(sum())
+                yield FlatSum (List.map FlatSum exprlist)
+    }
+
+let MakeTriplet expr =
+    // We assume caller has already simplified the expression 
+    // so that constant factors have been moved to the front of all products.
+    let coeff, varpart, exponent =
+        match expr with
+        | Amount(c) -> c, AmountOne, AmountOne
+
+        | Power(x,y) -> QuantityOne, x, y
+
+        | Product([Amount(c); Power(x, y)]) -> c, x, y
+        | Product([Amount(c); x]) -> c, x, AmountOne
+        | Product(Amount(c) :: rest) -> c, Product(rest), AmountOne
+
+        | Product(_)
+        | Del(_,_)
+        | Functor(_)
+        | Sum(_)
+        | Solitaire(_) -> 
+            QuantityOne, expr, AmountOne
+
+        | NumExprRef(token,_)
+        | PrevExprRef(token) -> 
+            FailLingeringMacro token
+
+        | Equals(_,_) ->
+            ExpressionError expr "Cannot make factor pattern out of an equation."
+    {Coeff=coeff; VarPart=varpart; Exponent=exponent}
+
+let rec CancelFactor context factorList commonFactor commonExponent =
+    //printfn "!!! CancelFactor: factorList=%s, commonFactor=%s, commonExponent=%s" (FormatExpressionList factorList) (FormatExpression commonFactor) (FormatExpression commonExponent)
+
+    match factorList with
+    | [] -> failwith (sprintf "Cannot cancel factor=%s, exponent=%s from factor list." (FormatExpression commonFactor) (FormatExpression commonExponent))   // should never happen
+    | factor :: restFactorList ->
+        let {Coeff=coeff; VarPart=powbase; Exponent=powexp} = MakeTriplet factor
+        //printfn "!!! CancelFactor triplet : powbase=%s, powexp=%s" (FormatExpression powbase) (FormatExpression powexp)
+        if AreIdentical context powbase commonFactor then
+            // We found where we can cancel the commonFactor.
+            // This is a recursion limit; we can't cancel again.
+
+            // If there is a non-unity coefficient here, it means there was a problem in pre-simplification.
+            if not (IsQuantityOne coeff) then
+                failwith "Found unexpected non-unity coefficient in CancelFactor."
+
+            if AreIdentical context powexp commonExponent then
+                // The non-coefficient parts cancel completely.
+                restFactorList
+            else
+                // Subtract exponents to find the residue.
+                // Simplifier will de-uglify the exponent difference later.
+                (Power(commonFactor, Sum [powexp; Product[AmountNegOne; commonExponent]])) :: restFactorList
+        else
+            // Cannot cancel first factor, so it is kept verbatim and we recurse to cancel from the remaining factors.
+            factor :: (CancelFactor context restFactorList commonFactor commonExponent)
+
+let rec CancelFactorFromAllTerms context commonFactor termlist commonExponent : list<Expression> =
+    // Do cancellation by dividing by commonFactor^commonExponent on every term.
+    // This must be possible in every case or there is a bug in the calling code!
+    match termlist with
+    | [] -> []
+    | term :: restTermList -> 
+        let canceledFirstTerm = Product (CancelFactor context (FactorList term) commonFactor commonExponent)
+        let restCanceledTerms = CancelFactorFromAllTerms context commonFactor restTermList commonExponent
+        canceledFirstTerm :: restCanceledTerms
+
+let FactorAppearsInAllTerms context possibleCommonFactor termlist : option<Expression> =
+    // If the factor appears in all terms in termlist, we return its common exponent.
+    // Otherwise we return None.
+    // We have to expand each term in the termlist to its constituent factors,
+    // each with its own exponent, and look at just the base part.
+    // If we can find only variable exponents, we choose the first one we see.
+    // We prefer to extract a factor with a rational exponent if possible.
+    // In that case, we will only factor if all rational exponents are positive or
+    // all rational exponents are negative.  This prevents factoring something
+    // like (x + 1/x).
+    // So we remember the largest rational exponent and the smallest rational exponent.
+    let mutable minNumer = 0I
+    let mutable minDenom = 1I
+    let mutable maxNumer = 0I
+    let mutable maxDenom = 1I
+
+    //FormatExpressionList termlist |> printfn "!!! FactorAppearsInAllTerms: termlist = %s"
+
+    // We will store the first non-rational exponent we see in the output parameter commonExponent.
+    // Later we will overwrite it if rational exponents warrant such.
+    let mutable (commonExponent:option<Expression>) = None
+
+    let mutable foundFactorInAllTerms = true
+    for term in termlist do
+        let mutable foundFactorInThisTerm = false
+        for factor in FactorList term do
+            let {Coeff=coeff; VarPart=powbase; Exponent=exponent} = MakeTriplet factor
+            if AreIdentical context powbase possibleCommonFactor then
+                foundFactorInThisTerm <- true
+                match exponent with
+                | Amount(PhysicalQuantity(Rational(numer,denom) as rational, concept)) when (numer <> 0I) && (concept = Dimensionless) ->
+                    if minNumer = 0I then
+                        // This is the first rational exponent we have seen, so start out with it.
+                        minNumer <- numer
+                        minDenom <- denom
+                        maxNumer <- numer
+                        maxDenom <- denom
+                    else
+                        if -1 = CompareRationals numer denom minNumer minDenom then
+                            minNumer <- numer
+                            minDenom <- denom
+
+                        if +1 = CompareRationals numer denom maxNumer maxDenom then
+                            maxNumer <- numer
+                            maxDenom <- denom
+
+                | _ -> 
+                    if commonExponent = None then
+                        commonExponent <- Some(exponent)
+
+        foundFactorInAllTerms <- foundFactorInAllTerms && foundFactorInThisTerm
+
+    if foundFactorInAllTerms then
+        // If rational exponents are all the same polarity, choose whichever exponent has 
+        // the smallest absolute value (is the closest to zero).            
+        if (minNumer < 0I) && (maxNumer > 0I) then
+            None    // cannot factor because of mixed-polarity rational exponents.
+        elif minNumer > 0I then
+            // All rational exponents are positive, so choose the smallest one as the common exponent.
+            Some(Amount(PhysicalQuantity(MakeRational minNumer minDenom, Dimensionless)))
+        elif maxNumer < 0I then
+            // All rational exponents are negative, so choose the largest one (the one closest to zero) as the common exponent.
+            Some(Amount(PhysicalQuantity(MakeRational maxNumer maxDenom, Dimensionless)))
+        else
+            // We did not find any rational exponents, so leave 
+            // commonExponent set to the first non-rational exponent (if any),
+            // or None, if there not found.
+            commonExponent
+    else
+        None    // Cannot factor because desired factor did not appear in all terms.
+
+let FindUniqueFactors context termlist =
+    let mutable uniqueFactorList = []
+    for term in termlist do
+        for factor in FactorList term do
+            // Ignore constant coefficients and exponents.
+            // For example, if factor = 3.7*(x+y)^3, then let vpart = x+y
+            let {VarPart=vpart} = MakeTriplet factor
+            if not (IsExpressionOne vpart) then
+                // Prepend vpart if unique
+                if None = List.tryFind (fun existing -> AreIdentical context existing vpart) uniqueFactorList then
+                    uniqueFactorList <- vpart :: uniqueFactorList
+    uniqueFactorList
+
+let rec Factor depth context expr =
+    // Factoring makes sense on sums.
+    // For example, factor(sum(x^2, x^3, x^4)) ==> prod(x^2, sum(1,x,x^2)).
+    // Pre-simplify the expression so that we can rely on constant factors coming first in products.
+    let simp = Simplify context expr
+    let mutable best = simp
+    for partition in AllPossibleTermListPartitions context simp do
+        if depth = 0 || TermListLength partition > 1 then
+            let factored = FactorTermList (1+depth) context partition |> Simplify context
+            //printfn "factored=%s, best=%s, len(factored)=%d, len(best)=%d" (FormatExpression factored) (FormatExpression best) (FactorListLength factored) (FactorListLength best)
+            if FactorListLength factored > FactorListLength best then
+                best <- factored
+    best
+
+and FactorTermList depth context expr =
+    let rawTermList = TermList expr
+    let rawTermListLength = List.length rawTermList
+    if rawTermListLength > 1 then
+        // There are multiple terms. Factor each term in the term list to
+        // give us a better chance at finding even more common factors over the entire sum.
+        // For example:  (a + a*x) + (a + a*y) --> a*(1+x) + a*(1+y) -->  a*((1+x) + (1+y)).
+        let termlist = List.map (Factor 0 context) rawTermList
+
+        // Create a list of all distinct factors from all terms.
+        let uniqueFactors = FindUniqueFactors context termlist
+        let mutable improvedTermList = termlist
+        let factorsPulledOut = ResizeArray<Expression>()
+
+        // Determine whether each factor appears in *all* the terms (not just one or two).
+        // If so, put it aside, and create a new termList
+        // with that factor removed from all terms.
+        for factor in uniqueFactors do
+            match FactorAppearsInAllTerms context factor improvedTermList with
+            | None -> ()
+            | Some(exponent) -> 
+                //FormatExpression exponent |> printfn "FactorAppearsInAllTerms: exponent=%s"
+                improvedTermList <- CancelFactorFromAllTerms context factor improvedTermList exponent
+                if IsExpressionOne exponent then
+                    factorsPulledOut.Add(factor)
+                else
+                    factorsPulledOut.Add(Power(factor, exponent))
+
+        // FIXFIXFIX - Pull out as much of a constant rational factor as possible from all the terms.
+        // Only do this if all denominators are the same (including 1, i.e. all integer).
+        // Make the pulled-out rational factor positive unless all terms look negative,
+        // in which case we negate all the terms.
+
+        if factorsPulledOut.Count > 0 then
+            // We were able to do some factoring after all.
+            // The residue may still be factorable using special purpose rules (e.g. difference of squares).
+            let residue = Sum(improvedTermList) |> Factor 0 context
+            factorsPulledOut.Add(residue)
+            Product (List.ofSeq factorsPulledOut) |> Simplify context
+        else
+            // FIXFIXFIX - add special case rules here like difference-of-squares.
+            expr
+
+    elif rawTermListLength = 1 then
+        // There is a single term.  See if its factors can be recursively broken down into more factors.
+        let factorlist = FactorList expr
+        if List.length factorlist > 1 then
+            let resultlist = List.map (Factor 0 context) factorlist
+            Product(resultlist) |> Simplify context
+        else
+            expr
+    else
+        expr    // This should never happen.  Just return the original expression unmodified.
+
+let FactorMacroExpander context macroToken argList = 
+    // factor(expr)
+    match argList with
+    | [expr] -> Factor 0 context expr 
+    | _ -> SyntaxError macroToken (sprintf "%s requires a single expression argument" macroToken.Text)
+
+//-------------------------------------------------------------------------------------------------
+
 let IntrinsicMacros =
     [
         ("asserti", PreExpandArgs,  AssertIdenticalMacroExpander)
@@ -158,6 +425,7 @@ let IntrinsicMacros =
         ("diff",    PreExpandArgs,  DiffDerivMacroExpander Differential)
         ("eval",    PreExpandArgs,  EvalMacroExpander)
         ("extract", PreExpandArgs,  ExtractMacroExpander)
+        ("factor",  PreExpandArgs,  FactorMacroExpander)
         ("float",   PreExpandArgs,  FloatMacroExpander)
         ("inject",  RawArgs,        InjectMacroExpander)
         ("simp",    PreExpandArgs,  SimplifyMacroExpander)
