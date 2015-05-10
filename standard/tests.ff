@@ -60,4 +60,6 @@ assertf("1.26765060022823e+30", eval(2.0^100));
 
 // Factoring tests.
 asserti(factor(a^2 + a^3), a^2*(1+a));
+asserti(factor(3+3*a), 3*(1+a));
+
 

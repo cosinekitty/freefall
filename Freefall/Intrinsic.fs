@@ -341,6 +341,46 @@ let FindUniqueFactors context termlist =
                     uniqueFactorList <- vpart :: uniqueFactorList
     uniqueFactorList
 
+let rec FactorRationalCoeff termlist : option<bigint * bigint> =
+    // Pull out as much of a constant rational factor as possible from all the terms.
+    // Only do this if all denominators are the same (including 1, i.e. all integer).
+    // Make the pulled-out rational factor positive unless all terms look negative,
+    // in which case we negate all the terms.
+    match termlist with
+    | [] -> 
+        None        // Recursion should stop with other cases - getting here is weird.
+
+    | [term] -> 
+        let {Coeff=coeff} = MakeTriplet term
+        match coeff with
+        | PhysicalQuantity(Rational(numer,denom), _) -> Some(numer, denom)
+        | _ -> None
+
+    | term :: rest ->
+        let {Coeff=coeff} = MakeTriplet term
+        match coeff with
+        | PhysicalQuantity(Rational(numer,denom), _) -> 
+            match FactorRationalCoeff rest with
+            | None -> None
+            | Some(rnumer, rdenom) ->
+                if (denom = rdenom) then 
+                    let a = bigint.Abs(numer)
+                    let b = bigint.Abs(rnumer)
+                    let gcdNumer = GreatestCommonDivisor a b
+                    if (rnumer < 0I) && (numer < 0I) then
+                        // All are negative (so far), so hand back a negative numerator again.
+                        Some(-gcdNumer, denom)
+                    else
+                        // At least one positive, so hand back positive.
+                        if gcdNumer = 1I then
+                            None    // no point factoring out 1, and will cause infinite recursion!
+                        else
+                            Some(gcdNumer, denom)
+                else
+                    None    // Denominators do not match, so cannot factor constant out.
+        | _ -> None
+
+
 let rec Factor depth context expr =
     // Factoring makes sense on sums.
     // For example, factor(sum(x^2, x^3, x^4)) ==> prod(x^2, sum(1,x,x^2)).
@@ -383,10 +423,17 @@ and FactorTermList depth context expr =
                 else
                     factorsPulledOut.Add(Power(factor, exponent))
 
-        // FIXFIXFIX - Pull out as much of a constant rational factor as possible from all the terms.
-        // Only do this if all denominators are the same (including 1, i.e. all integer).
-        // Make the pulled-out rational factor positive unless all terms look negative,
-        // in which case we negate all the terms.
+        // Pull out as much of a constant rational factor as possible from all the terms.
+        match FactorRationalCoeff improvedTermList with
+        | None -> ()
+        | Some(numer,denom) ->
+            let constToPullOut = Amount(PhysicalQuantity(Rational(numer, denom), Dimensionless))
+
+            // The constant coefficient we factored out goes at the front of the product list.
+            factorsPulledOut.Insert(0, constToPullOut)
+
+            // Divide through by rational constant.  There is no need to simplify here, because we will do that below.
+            improvedTermList <- List.map (fun t -> Divide t constToPullOut) improvedTermList
 
         if factorsPulledOut.Count > 0 then
             // We were able to do some factoring after all.
