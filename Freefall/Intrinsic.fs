@@ -372,7 +372,7 @@ let rec FactorRationalCoeff termlist : option<bigint * bigint> =
                         Some(-gcdNumer, denom)
                     else
                         // At least one positive, so hand back positive.
-                        if gcdNumer = 1I then
+                        if (gcdNumer = 1I) && (denom = 1I) then
                             None    // no point factoring out 1, and will cause infinite recursion!
                         else
                             Some(gcdNumer, denom)
