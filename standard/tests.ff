@@ -41,6 +41,7 @@ asserti(simp(v*cos(w)^2*cos(u)^2 + sin(u)^2*cos(w)^2*v), v*cos(w)^2);
 asserti(simp(2*cos(w)^2*cos(u)^2 + 2*cos(w)^2*sin(u)^2), 2*cos(w)^2);
 asserti(simp(17 + 2*cos(w)^2*cos(u)^2 - 3 + 2*cos(w)^2*sin(u)^2 - 4), 10 + 2*cos(w)^2);
 asserti((a-b)^2, (b-a)^2);
+asserti(simp(0/a=x/a), 0=x/a);
 
 // Expression formatter tests.
 assertf("123", simp(122+1));

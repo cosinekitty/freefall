@@ -1648,8 +1648,8 @@ let rec ExpressionNumericRange context expr =
         else
             match (aRange, bRange) with
             // FIXFIXFIX - try to handle all the integer range special cases
-            | (IntegerRange(_,_), IntegerRange(_,_)) -> RationalRange     // 3 ^ (-2) = 1/9
-            | (IntegerRange(_,_), RationalRange) -> RealRange        // 3 ^ (1/2) = sqrt(3)
+            | (IntegerRange(_,_), IntegerRange(_,_)) -> RationalRange       // 3 ^ (-2) = 1/9
+            | (IntegerRange(_,_), RationalRange) -> RealRange               // 3 ^ (1/2) = sqrt(3)
             | (IntegerRange(_,_), RealRange) -> RealRange
             | (IntegerRange(_,_), ComplexRange) -> ComplexRange
             | (RationalRange, IntegerRange(_,_)) -> RationalRange
@@ -1682,6 +1682,9 @@ let rec SimplifyStep context expr =
     match expr with
     | Amount(_) -> expr     // already as simple as possible
     | Del(_) -> expr        // already as simple as possible
+    | Equals(a,b) ->        // must prevent ExpressionNumericRange trick below from turning equation into a single value!
+        Equals((SimplifyStep context a), (SimplifyStep context b))
+
     | _ ->
         // Special case: if numeric range analysis can pin down the expression's
         // range of possible values to a specific dimensonless rational number, then 
@@ -1698,6 +1701,7 @@ let rec SimplifyStep context expr =
             match expr with
             | Amount(_) -> expr     // Should never get here - already handled above
             | Del(_) -> expr        // Should never get here - already handled above
+            | Equals(_, _) -> expr  // Should never get here - already handled above
             | Solitaire(_) -> expr  // already as simple as possible
 
             | Functor(funcName, argList) ->
@@ -1749,14 +1753,12 @@ let rec SimplifyStep context expr =
                     | _, _ -> 
                         Power(sx,sy)            
 
-            | Equals(a,b) ->
-                Equals((SimplifyStep context a), (SimplifyStep context b))
-
             | NumExprRef(t,_) ->
                 FailLingeringMacro t
 
             | PrevExprRef(t) ->
                 FailLingeringMacro t
+
 
 // Sum(Sum(A,B,C), Sum(D,E)) = Sum(A,B,C,D,E)
 // We want to "lift" all inner Sum() contents to the top level of a list.
