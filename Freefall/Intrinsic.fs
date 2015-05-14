@@ -364,6 +364,21 @@ let PerfectSquareRoot context expr =
     | _ -> 
         None
 
+let FactorDifferenceOfSquares aIndex bIndex context expr =
+    let termlist = TermList expr
+    if List.length termlist = 2 then
+        // a^2 - b^2 ==> (a+b) * (a-b)
+        let aSquared = List.nth termlist aIndex
+        let neg_bSquared = List.nth termlist bIndex
+        let bSquared = MakeNegative neg_bSquared
+        match PerfectSquareRoot context aSquared, PerfectSquareRoot context bSquared with
+        | Some(a), Some(b) ->
+            Product[Sum[a; b]; Sum[a; MakeNegative b]]
+        | _, _ ->
+            expr
+    else
+        expr
+
 let FactorSquaredBinomial middleIndex leftIndex rightIndex context expr =
     let termlist = TermList expr
     if List.length termlist = 3 then
@@ -502,6 +517,8 @@ and FactorTermList depth context expr : option<Expression> =
                 |> FactorSquaredBinomial 0 1 2 context
                 |> FactorSquaredBinomial 1 0 2 context
                 |> FactorSquaredBinomial 2 0 1 context
+                |> FactorDifferenceOfSquares 0 1 context
+                |> FactorDifferenceOfSquares 1 0 context
             //printfn "special = %s" (FormatExpression special)
             Some(special)
 
