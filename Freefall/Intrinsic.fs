@@ -341,6 +341,53 @@ let FindUniqueFactors context termlist =
                     uniqueFactorList <- vpart :: uniqueFactorList
     uniqueFactorList
 
+let PerfectSquareRoot context expr =
+    match expr with
+    | Amount(PhysicalQuantity(Rational(numer,denom), concept)) when (concept = Dimensionless) && (numer > 0I) ->
+        let rootNumer = IntegerSquareRoot numer
+        let rootDenom = IntegerSquareRoot denom
+        if (rootNumer*rootNumer = numer) && (rootDenom*rootDenom = denom) then
+            Some(Amount(PhysicalQuantity((MakeRational rootNumer rootDenom), Dimensionless)))
+        else
+            None
+
+    | Power(x, Amount(PhysicalQuantity(Rational(numer, denom), concept))) when (concept = Dimensionless) && (denom = 1I) && (bigint.Abs(numer) % 2I = 0I) ->
+        // We can take a perfect square root of anything with an even integer exponent.
+        // sqrt(x^42) = x^21
+        // sqrt(x^2) = x
+        // sqrt(x^(-8)) = x^(-4)
+        if numer = 2I then
+            Some(x)       // x^2  ==>  x
+        else
+            Some(Power(x, Amount(PhysicalQuantity(Rational(numer/2I, denom), Dimensionless))))
+
+    | _ -> 
+        None
+
+let FactorSquaredBinomial middleIndex leftIndex rightIndex context expr =
+    let termlist = TermList expr
+    if List.length termlist = 3 then
+        let left   = List.nth termlist leftIndex
+        let right  = List.nth termlist rightIndex
+        let middle = List.nth termlist middleIndex
+
+        match PerfectSquareRoot context left, PerfectSquareRoot context right with
+        | Some(leftRoot), Some(rightRoot) ->
+            let checkMiddlePos = Product[AmountTwo; leftRoot; rightRoot] |> Simplify context
+            let checkMiddleNeg = Product[AmountNegTwo; leftRoot; rightRoot] |> Simplify context
+            //printfn "middle=%s , checkMiddlePos=%s" (FormatExpression middle) (FormatExpression checkMiddlePos)
+            if AreIdentical context middle checkMiddlePos then
+                // x^2 + 2*x*y + y^2 ==> (x+y)^2
+                Power(Sum[leftRoot; rightRoot], AmountTwo)
+            elif AreIdentical context middle checkMiddleNeg then
+                // x^2 - 2*x*y + y^2 ==> (x-y)^2
+                Power(Sum[leftRoot; (OptimizeMultiply AmountNegOne rightRoot)], AmountTwo)
+            else
+                expr
+        | _, _ -> expr
+    else
+        expr
+
 let rec FactorRationalCoeff termlist : option<bigint * bigint> =
     // Pull out as much of a constant rational factor as possible from all the terms.
     // Only do this if all denominators are the same (including 1, i.e. all integer).
@@ -386,16 +433,23 @@ let rec Factor depth context expr =
     // For example, factor(sum(x^2, x^3, x^4)) ==> prod(x^2, sum(1,x,x^2)).
     // Pre-simplify the expression so that we can rely on constant factors coming first in products.
     let simp = Simplify context expr
-    let mutable best = simp
+    let mutable best = None
+    let mutable bestFactorCount = 0
     for partition in AllPossibleTermListPartitions context simp do
         if depth = 0 || TermListLength partition > 1 then
-            let factored = FactorTermList (1+depth) context partition |> Simplify context
-            //printfn "factored=%s, best=%s, len(factored)=%d, len(best)=%d" (FormatExpression factored) (FormatExpression best) (FactorListLength factored) (FactorListLength best)
-            if FactorListLength factored > FactorListLength best then
-                best <- factored
-    best
+            match FactorTermList (1+depth) context partition with
+            | Some(attempt) -> 
+                let factored = Simplify context attempt
+                let factorCount = FactorListLength factored
+                if factorCount > bestFactorCount then
+                    best <- Some(factored)
+                    bestFactorCount <- factorCount
+            | None -> ()
+    match best with
+    | Some(bestFactoring) -> bestFactoring
+    | None -> simp
 
-and FactorTermList depth context expr =
+and FactorTermList depth context expr : option<Expression> =
     let rawTermList = TermList expr
     let rawTermListLength = List.length rawTermList
     if rawTermListLength > 1 then
@@ -440,26 +494,32 @@ and FactorTermList depth context expr =
             // The residue may still be factorable using special purpose rules (e.g. difference of squares).
             let residue = Sum(improvedTermList) |> Factor 0 context
             factorsPulledOut.Add(residue)
-            Product (List.ofSeq factorsPulledOut) |> Simplify context
+            Some(Product (List.ofSeq factorsPulledOut) |> Simplify context)
         else
-            // FIXFIXFIX - add special case rules here like difference-of-squares.
-            expr
+            // Check special case rules, e.g. difference-of-squares.
+            let special =
+                expr
+                |> FactorSquaredBinomial 0 1 2 context
+                |> FactorSquaredBinomial 1 0 2 context
+                |> FactorSquaredBinomial 2 0 1 context
+            //printfn "special = %s" (FormatExpression special)
+            Some(special)
 
     elif rawTermListLength = 1 then
         // There is a single term.  See if its factors can be recursively broken down into more factors.
         let factorlist = FactorList expr
         if List.length factorlist > 1 then
             let resultlist = List.map (Factor 0 context) factorlist
-            Product(resultlist) |> Simplify context
+            Some(Product(resultlist) |> Simplify context)
         else
-            expr
+            None
     else
-        expr    // This should never happen.  Just return the original expression unmodified.
+        None
 
 let FactorMacroExpander context macroToken argList = 
     // factor(expr)
     match argList with
-    | [expr] -> Factor 0 context expr 
+    | [expr] -> Factor 0 context expr
     | _ -> SyntaxError macroToken (sprintf "%s requires a single expression argument" macroToken.Text)
 
 //-------------------------------------------------------------------------------------------------

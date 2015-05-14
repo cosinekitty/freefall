@@ -62,6 +62,12 @@ assertf("1.26765060022823e+30", eval(2.0^100));
 asserti(factor(a^2 + a^3), a^2*(1+a));
 asserti(factor(3+3*a), 3*(1+a));
 asserti(factor(x/2+y/2),(x+y)/2);
+asserti(factor(x^2 + 2*x*y + y^2), (x+y)^2);
+asserti(factor(x^2 + y^2 + 2*x*y), (x+y)^2);
+asserti(factor(2*x*y + y^2 + x^2), (x+y)^2);
+asserti(factor(x^2 - 2*x*y + y^2), (x-y)^2);
+asserti(factor(x^2 + y^2 - 2*x*y), (x-y)^2);
+//asserti(factor(-2*x*y + y^2 + x^2), (x-y)^2);    // See Issue #26
 
 
 

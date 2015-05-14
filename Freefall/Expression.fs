@@ -40,6 +40,19 @@ let CheckComplex z =
     else
         z
 
+let IntegerSquareRoot n =
+    if n < 0I then
+        raise (FreefallRuntimeException "Cannot take square root of negative integer")
+    elif n < 2I then
+        n   // sqrt(0)=0, sqrt(1)=1
+    else
+        // Use divide-and-average to converge on correct value.
+        let mutable r = 1I
+        while (r*r <> n) || not (r*r < n && (r+1I)*(r+1I) > n) do
+            r <- ((n / r) + r) / 2I
+        r
+        
+
 let MakeComplex z = Complex(CheckComplex z)
 
 let MakePairComplex (a,b) = MakeComplex(complex(a, b))
@@ -325,6 +338,7 @@ let QuantityOneHalf     = PhysicalQuantity(Rational( 1I, 2I), Dimensionless)
 let QuantityNegOneHalf  = PhysicalQuantity(Rational(-1I, 2I), Dimensionless)
 let QuantityOneThird    = PhysicalQuantity(Rational( 1I, 3I), Dimensionless)
 let QuantityTwo         = PhysicalQuantity(Rational( 2I, 1I), Dimensionless)
+let QuantityNegTwo      = PhysicalQuantity(Rational(-2I, 1I), Dimensionless)
 
 let InvertNumber number =        // calculate the numeric reciprocal
     if IsNumberZero number then
@@ -399,6 +413,7 @@ let AmountOneHalf       = Amount(QuantityOneHalf)
 let AmountNegOneHalf    = Amount(QuantityNegOneHalf)
 let AmountOneThird      = Amount(QuantityOneThird)
 let AmountTwo           = Amount(QuantityTwo)
+let AmountNegTwo        = Amount(QuantityNegTwo)
 
 let IsQuantityZero (PhysicalQuantity(number,concept)) =
     (concept = ConceptZero) || (IsNumberZero number)
