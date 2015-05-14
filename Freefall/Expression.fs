@@ -981,7 +981,7 @@ let rec AreIdentical context a b =
     | (_, Sum(_)) -> false
     | (Product(afactors),Product(bfactors)) -> ArePermutedLists context afactors bfactors
     | (Product(_), _) -> false
-    | (Power(abase,aexp),Power(bbase,bexp)) -> (AreIdentical context abase bbase) && (AreIdentical context aexp bexp)
+    | (Power(abase,aexp),Power(bbase,bexp)) -> AreIdenticalPowers context abase aexp bbase bexp
     | (Power(_,_), _) -> false
     | (_, Power(_,_)) -> false
     | (NumExprRef(t,_), _) -> FailLingeringMacro t
@@ -995,6 +995,30 @@ let rec AreIdentical context a b =
         ((AreIdentical context aleft bleft)  && (AreIdentical context aright bright)) ||
         ((AreIdentical context aleft bright) && (AreIdentical context aright bleft))
     | (Equals(_,_), (_)) -> false
+
+and AreIdenticalPowers context abase aexp bbase bexp =
+    if AreIdentical context aexp bexp then
+        if AreIdentical context abase bbase then
+            true
+        else
+            // Special case: if the common exponent aexp=bexp is an even integer,
+            // regardless of polarity, and the bases are negatives of each other,
+            // then the two expressions are identical.
+            // Examples:
+            // (a-b)^2 = (b-a)^2
+            // x^(-4) = (-x)^(-4)
+            match aexp with
+            | Amount(PhysicalQuantity(Rational(numer,denom), concept)) when (concept = Dimensionless) && (denom = 1I) && (numer % 2I = 0I) ->
+                match abase, bbase with
+                | Sum(aterms), Sum(bterms) ->
+                    let negbterms = List.map MakeNegative bterms
+                    //printfn "fnord: a=%s, b=%s, neg(b)=%s" (FormatExpressionRaw abase) (FormatExpressionRaw bbase) (FormatExpressionRaw (Sum(negbterms)))
+                    AreIdentical context (Sum(aterms)) (Sum(negbterms))
+                | _ -> AreIdentical context abase (MakeNegative bbase)
+            | _ -> false
+    else
+        false
+
 
 and AreIdenticalExprLists context list1 list2 =
     if list1.Length <> list2.Length then

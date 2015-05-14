@@ -40,6 +40,7 @@ asserti(simp(v*cos(w)^2*cos(u)^2 + v*cos(w)^2*sin(u)^2), v*cos(w)^2);
 asserti(simp(v*cos(w)^2*cos(u)^2 + sin(u)^2*cos(w)^2*v), v*cos(w)^2);
 asserti(simp(2*cos(w)^2*cos(u)^2 + 2*cos(w)^2*sin(u)^2), 2*cos(w)^2);
 asserti(simp(17 + 2*cos(w)^2*cos(u)^2 - 3 + 2*cos(w)^2*sin(u)^2 - 4), 10 + 2*cos(w)^2);
+asserti((a-b)^2, (b-a)^2);
 
 // Expression formatter tests.
 assertf("123", simp(122+1));
@@ -67,7 +68,7 @@ asserti(factor(x^2 + y^2 + 2*x*y), (x+y)^2);
 asserti(factor(2*x*y + y^2 + x^2), (x+y)^2);
 asserti(factor(x^2 - 2*x*y + y^2), (x-y)^2);
 asserti(factor(x^2 + y^2 - 2*x*y), (x-y)^2);
-//asserti(factor(-2*x*y + y^2 + x^2), (x-y)^2);    // See Issue #26
+asserti(factor(-2*x*y + y^2 + x^2), (x-y)^2);
 asserti(factor(a^2 - b^2), (a-b)*(a+b));
 asserti(factor(-b^2 + a^2), (a-b)*(a+b));
 asserti(factor(-b^2 + a^2), (a+b)*(a-b));
