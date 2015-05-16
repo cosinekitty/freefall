@@ -43,6 +43,17 @@ asserti(simp(17 + 2*cos(w)^2*cos(u)^2 - 3 + 2*cos(w)^2*sin(u)^2 - 4), 10 + 2*cos
 asserti((a-b)^2, (b-a)^2);
 asserti(simp(0/a=x/a), 0=x/a);
 
+// Inequality identities.
+asserti(v<w, simp(v+0 < w+0));
+asserti(v<w, w>v);
+asserti(w>v, w>v);
+asserti(w>v, v<w);
+asserti(v<=w, v<=w);
+asserti(v<=w, w>=v);
+asserti(w>=v, v<=w);
+asserti(v!=w, w!=v);
+asserti(w!=v, w!=v);
+
 // Expression formatter tests.
 assertf("123", simp(122+1));
 assertf("3+4", sum(3,4));

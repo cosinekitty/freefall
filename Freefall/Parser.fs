@@ -66,6 +66,18 @@ let rec ParseExpression scan =
     | {Text="!="} :: scan3 ->
         let right, scan4 = ParseAddSub scan3
         (DoesNotEqual(expr,right)), scan4
+    | {Text="<"} :: scan3 ->
+        let right, scan4 = ParseAddSub scan3
+        (LessThan(expr,right)), scan4
+    | {Text="<="} :: scan3 ->
+        let right, scan4 = ParseAddSub scan3
+        (LessThanOrEqual(expr,right)), scan4
+    | {Text=">"} :: scan3 ->
+        let right, scan4 = ParseAddSub scan3
+        (GreaterThan(expr,right)), scan4
+    | {Text=">="} :: scan3 ->
+        let right, scan4 = ParseAddSub scan3
+        (GreaterThanOrEqual(expr,right)), scan4
     | _ ->
         expr, scan2
 

@@ -218,6 +218,10 @@ let MakeTriplet expr =
 
         | Equals(_,_)
         | DoesNotEqual(_,_)
+        | LessThan(_,_)
+        | LessThanOrEqual(_,_)
+        | GreaterThan(_,_)
+        | GreaterThanOrEqual(_,_)
             -> ExpressionError expr "Cannot make factor pattern out of a relational expression."
     {Coeff=coeff; VarPart=varpart; Exponent=exponent}
 

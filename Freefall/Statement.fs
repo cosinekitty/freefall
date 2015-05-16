@@ -140,6 +140,10 @@ let rec ExpandMacros context rawexpr =
         | Power(a,b) -> Power((ExpandMacros context a), (ExpandMacros context b))
         | Equals(a,b) -> Equals((ExpandMacros context a), (ExpandMacros context b))
         | DoesNotEqual(a,b) -> DoesNotEqual((ExpandMacros context a), (ExpandMacros context b))
+        | LessThan(a,b) -> LessThan((ExpandMacros context a), (ExpandMacros context b))
+        | LessThanOrEqual(a,b) -> LessThanOrEqual((ExpandMacros context a), (ExpandMacros context b))
+        | GreaterThan(a,b) -> GreaterThan((ExpandMacros context a), (ExpandMacros context b))
+        | GreaterThanOrEqual(a,b) -> GreaterThanOrEqual((ExpandMacros context a), (ExpandMacros context b))
         | NumExprRef(token,index) -> FindNumberedExpression context token index
         | PrevExprRef(token) -> FindPreviousExpression context token
 
@@ -275,8 +279,12 @@ and TransformEquations context expr =
                 
             | _ -> Power(aTrans, bTrans)
 
-        | DoesNotEqual(a,b) -> DoesNotEqual((TransformEquations context a), (TransformEquations context b))
         | Equals(a,b) -> Equals((TransformEquations context a), (TransformEquations context b))
+        | DoesNotEqual(a,b) -> DoesNotEqual((TransformEquations context a), (TransformEquations context b))
+        | LessThan(a,b) -> LessThan((TransformEquations context a), (TransformEquations context b))
+        | LessThanOrEqual(a,b) -> LessThanOrEqual((TransformEquations context a), (TransformEquations context b))
+        | GreaterThan(a,b) -> GreaterThan((TransformEquations context a), (TransformEquations context b))
+        | GreaterThanOrEqual(a,b) -> GreaterThanOrEqual((TransformEquations context a), (TransformEquations context b))
         | NumExprRef(token,index) -> FailLingeringMacro token
         | PrevExprRef(token) -> FailLingeringMacro token
 

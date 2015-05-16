@@ -382,6 +382,10 @@ type Expression =
     | Power of Expression * Expression
     | Equals of Expression * Expression
     | DoesNotEqual of Expression * Expression
+    | LessThan of Expression * Expression
+    | LessThanOrEqual of Expression * Expression
+    | GreaterThan of Expression * Expression
+    | GreaterThanOrEqual of Expression * Expression
     | NumExprRef of Token * int                     // a reference to a prior expression indexed by automatic integer counter
     | PrevExprRef of Token                          // a reference to the previous expression
     | Del of Token * int      // calculus 'd' or 'del' operator applied to a variable, n times, where n = 1, 2, ...
@@ -394,8 +398,12 @@ let PrimaryToken expr =
     | Sum(_) -> None
     | Product(_) -> None
     | Power(_) -> None
-    | Equals(_) -> None
-    | DoesNotEqual(_) -> None
+    | Equals(_,_) -> None
+    | DoesNotEqual(_,_) -> None
+    | LessThan(_,_) -> None
+    | LessThanOrEqual(_,_) -> None
+    | GreaterThan(_,_) -> None
+    | GreaterThanOrEqual(_,_) -> None
     | NumExprRef(t,_) -> Some(t)
     | PrevExprRef(t) -> Some(t)
     | Del(t,_) -> Some(t)
@@ -648,6 +656,10 @@ let rec FormatExpressionRaw expr =
     | Power(a,b) -> "pow(" + FormatExpressionRaw a + "," + FormatExpressionRaw b + ")"
     | Equals(a,b) -> FormatExpressionRaw a + " = " + FormatExpressionRaw b
     | DoesNotEqual(a,b) -> FormatExpressionRaw a + " != " + FormatExpressionRaw b
+    | LessThan(a,b) -> FormatExpressionRaw a + " < " + FormatExpressionRaw b
+    | LessThanOrEqual(a,b) -> FormatExpressionRaw a + " <= " + FormatExpressionRaw b
+    | GreaterThan(a,b) -> FormatExpressionRaw a + " > " + FormatExpressionRaw b
+    | GreaterThanOrEqual(a,b) -> FormatExpressionRaw a + " >= " + FormatExpressionRaw b
     | NumExprRef(_,i) -> "#" + i.ToString()
     | PrevExprRef(_) -> "#"
     | Del(token,order) -> (String.replicate order "@") + token.Text
@@ -701,7 +713,12 @@ and FormatExpressionPrec expr parentPrecedence =
                 let _, bText = FormatExpressionPrec b Precedence_Pow
                 Precedence_Pow, aText + "^" + bText
         | Equals(a,b)
-        | DoesNotEqual(a,b) ->
+        | DoesNotEqual(a,b) 
+        | LessThan(a,b)
+        | LessThanOrEqual(a,b)
+        | GreaterThan(a,b)
+        | GreaterThanOrEqual(a,b)
+            ->
             let _, aText = FormatExpressionPrec a Precedence_Rel
             let _, bText = FormatExpressionPrec b Precedence_Rel
             Precedence_Rel, aText + RelOpText expr + bText
@@ -718,6 +735,10 @@ and RelOpText expr =
     match expr with
     | Equals(_,_) -> " = "
     | DoesNotEqual(_,_) -> " != "
+    | LessThan(_,_) ->  " < "
+    | LessThanOrEqual(_,_) -> " <= "
+    | GreaterThan(_,_) -> " > "
+    | GreaterThanOrEqual(_,_) -> " >= "
     | _ -> failwith "Unknown relational operator."
 
 and FormatExprList exprlist =
@@ -860,7 +881,12 @@ let rec private DecomposeExpressionToResizeArray expr (resizeArray:ResizeArray<E
 
     | Power(left, right)
     | Equals(left, right)
-    | DoesNotEqual(left, right) ->
+    | DoesNotEqual(left, right) 
+    | LessThan(left, right)
+    | LessThanOrEqual(left, right)
+    | GreaterThan(left, right)
+    | GreaterThanOrEqual(left, right)
+        ->
         DecomposeExpressionToResizeArray left  resizeArray
         DecomposeExpressionToResizeArray right resizeArray
 
@@ -918,6 +944,26 @@ let rec ReplaceExpressionNode replacementExpr parentExpr targetIndex currentInde
             let clonedLeft, afterLeftIndex = ReplaceExpressionNode replacementExpr left  targetIndex (1+currentIndex)
             let clonedRight, updatedIndex  = ReplaceExpressionNode replacementExpr right targetIndex afterLeftIndex
             DoesNotEqual(clonedLeft, clonedRight), updatedIndex
+
+        | LessThan(left, right) ->
+            let clonedLeft, afterLeftIndex = ReplaceExpressionNode replacementExpr left  targetIndex (1+currentIndex)
+            let clonedRight, updatedIndex  = ReplaceExpressionNode replacementExpr right targetIndex afterLeftIndex
+            LessThan(clonedLeft, clonedRight), updatedIndex
+
+        | LessThanOrEqual(left, right) ->
+            let clonedLeft, afterLeftIndex = ReplaceExpressionNode replacementExpr left  targetIndex (1+currentIndex)
+            let clonedRight, updatedIndex  = ReplaceExpressionNode replacementExpr right targetIndex afterLeftIndex
+            LessThanOrEqual(clonedLeft, clonedRight), updatedIndex
+
+        | GreaterThan(left, right) ->
+            let clonedLeft, afterLeftIndex = ReplaceExpressionNode replacementExpr left  targetIndex (1+currentIndex)
+            let clonedRight, updatedIndex  = ReplaceExpressionNode replacementExpr right targetIndex afterLeftIndex
+            GreaterThan(clonedLeft, clonedRight), updatedIndex
+
+        | GreaterThanOrEqual(left, right) ->
+            let clonedLeft, afterLeftIndex = ReplaceExpressionNode replacementExpr left  targetIndex (1+currentIndex)
+            let clonedRight, updatedIndex  = ReplaceExpressionNode replacementExpr right targetIndex afterLeftIndex
+            GreaterThanOrEqual(clonedLeft, clonedRight), updatedIndex
 
 and CloneOrReplaceChildren replacementExpr arglist targetIndex currentIndex : list<Expression> * int =
     let updatedIndex = ref currentIndex
@@ -1015,6 +1061,19 @@ let rec AreIdentical context a b =
         ((AreIdentical context aleft bleft)  && (AreIdentical context aright bright)) ||
         ((AreIdentical context aleft bright) && (AreIdentical context aright bleft))
     | (DoesNotEqual(_,_), _) -> false
+    | (LessThan(aLo, aHi), LessThan(bLo, bHi))                      // x<y  is identical to  x<y
+    | (LessThan(aLo, aHi), GreaterThan(bHi, bLo))                   // x<y  is identical to  y>x
+    | (LessThanOrEqual(aLo, aHi), LessThanOrEqual(bLo, bHi))        // x<=y is identical to  x<=y
+    | (LessThanOrEqual(aLo, aHi), GreaterThanOrEqual(bHi, bLo))     // x<=y is identical to  y>=x
+    | (GreaterThan(aHi, aLo), GreaterThan(bHi, bLo))                // y>x  is identical to  y>x
+    | (GreaterThan(aHi, aLo), LessThan(bLo, bHi))                   // y>x  is identical to  x<=y
+    | (GreaterThanOrEqual(aHi, aLo), GreaterThanOrEqual(bHi, bLo))  // y>=x is identical to  y>=x
+    | (GreaterThanOrEqual(aHi, aLo), LessThanOrEqual(bLo, bHi))     // y>=x is identical to  x<=y
+        -> ((AreIdentical context aLo bLo) && (AreIdentical context aHi bHi))
+    | (LessThan(_,_), _) -> false
+    | (LessThanOrEqual(_,_), _) -> false
+    | (GreaterThan(_,_), _) -> false
+    | (GreaterThanOrEqual(_,_), _) -> false
 
 and AreIdenticalPowers context abase aexp bbase bexp =
     if AreIdentical context aexp bexp then
@@ -1151,8 +1210,12 @@ let rec MakeTermPattern context term =
             | _ -> TermPattern(QuantityOne, term)
     | Power(x,y) -> TermPattern(QuantityOne, term)
     | Equals(_,_)
-    | DoesNotEqual(_,_) ->
-        ExpressionError term "Relational expression should not appear in a term."
+    | DoesNotEqual(_,_)
+    | LessThan(_,_)
+    | LessThanOrEqual(_,_)
+    | GreaterThan(_,_)
+    | GreaterThanOrEqual(_,_)
+        -> ExpressionError term "Relational expression should not appear in a term."
     | NumExprRef(t,i) -> FailLingeringMacro t
     | PrevExprRef(t) -> FailLingeringMacro t
     | Del(token,order) -> TermPattern(QuantityOne, term)
@@ -1375,8 +1438,12 @@ let rec MakeFactorPattern context factor =
     | Product factors -> failwith "Flattener failure: prod() should have been marged into parent."
     | Power(x,y) -> FactorPattern(x,y)
     | Equals(_,_)
-    | DoesNotEqual(_,_) ->
-        ExpressionError factor "Relational operator should not appear in a factor."
+    | DoesNotEqual(_,_)
+    | LessThan(_,_)
+    | LessThanOrEqual(_,_)
+    | GreaterThan(_,_)
+    | GreaterThanOrEqual(_,_)
+        -> ExpressionError factor "Relational operator should not appear in a factor."
     | NumExprRef(t,i) -> FailLingeringMacro t
     | PrevExprRef(t) -> FailLingeringMacro t
     | Del(token,order) -> FactorPattern(factor, AmountOne)
@@ -1479,8 +1546,12 @@ let rec EvalQuantity context expr =
         let bval = EvalQuantity context b
         PowerQuantities expr aval bval
     | Equals(_,_)
-    | DoesNotEqual(_,_) ->
-        ExpressionError expr "Relational operator not allowed in numeric expression."
+    | DoesNotEqual(_,_)
+    | LessThan(_,_)
+    | LessThanOrEqual(_,_)
+    | GreaterThan(_,_)
+    | GreaterThanOrEqual(_,_)
+        -> ExpressionError expr "Relational operator not allowed in numeric expression."
     | NumExprRef(t,_) -> FailLingeringMacro t
     | PrevExprRef(t) -> FailLingeringMacro t
 
@@ -1529,6 +1600,10 @@ let rec EvalDimensionlessNumber expr =
         ExpressionError expr "Power expressions not yet supported here."
     | Equals(_,_)
     | DoesNotEqual(_,_)
+    | LessThan(_,_)
+    | LessThanOrEqual(_,_)
+    | GreaterThan(_,_)
+    | GreaterThanOrEqual(_,_)
         -> ExpressionError expr "Relational operator not allowed in numeric expression."
     | NumExprRef(t,_) -> FailLingeringMacro t
     | PrevExprRef(t) -> FailLingeringMacro t
@@ -1697,7 +1772,19 @@ let rec ExpressionNumericRange context expr =
         let aRange = ExpressionNumericRange context a
         let bRange = ExpressionNumericRange context b
         NumericRangePairIntersection aRange bRange
-    | DoesNotEqual(_,_) -> ComplexRange     // FIXFIXFIX - not clear how this should behave, or whether it ever matters.
+    | DoesNotEqual(_,_) -> ComplexRange     // FIXFIXFIX - not clear how these should behave, or whether it ever matters.
+
+    | LessThan(a,b)
+    | LessThanOrEqual(a,b)
+    | GreaterThan(a,b)
+    | GreaterThanOrEqual(a,b)
+        ->      // These inequality operators are not allowed on complex arguments.
+        let aRange = ExpressionNumericRange context a
+        let bRange = ExpressionNumericRange context b
+        match aRange, bRange with
+        | (ComplexRange, _) | (_, ComplexRange) -> ExpressionError expr "Complex-valued arguments not allowed for this inequality operator."
+        | (_, _) -> RealRange       // FIXFIXFIX - not clear what use this return value has, or whether it matters.            
+
     | NumExprRef(t,_) -> FailLingeringMacro t
     | PrevExprRef(t) -> FailLingeringMacro t
 
@@ -1712,10 +1799,13 @@ let rec SimplifyStep context expr =
     match expr with
     | Amount(_) -> expr     // already as simple as possible
     | Del(_) -> expr        // already as simple as possible
-    | Equals(a,b) ->        // must prevent ExpressionNumericRange trick below from turning equation into a single value!
-        Equals((SimplifyStep context a), (SimplifyStep context b))
-    | DoesNotEqual(a,b) ->
-        DoesNotEqual ((SimplifyStep context a), (SimplifyStep context b))
+    // must prevent ExpressionNumericRange trick below from turning equation/inequality into a single value!
+    | Equals(a,b) -> Equals((SimplifyStep context a), (SimplifyStep context b))
+    | DoesNotEqual(a,b) -> DoesNotEqual ((SimplifyStep context a), (SimplifyStep context b))
+    | LessThan(a,b) -> LessThan ((SimplifyStep context a), (SimplifyStep context b))
+    | LessThanOrEqual(a,b) -> LessThanOrEqual ((SimplifyStep context a), (SimplifyStep context b))
+    | GreaterThan(a,b) -> GreaterThan ((SimplifyStep context a), (SimplifyStep context b))
+    | GreaterThanOrEqual(a,b) -> GreaterThanOrEqual ((SimplifyStep context a), (SimplifyStep context b))
     | _ ->
         // Special case: if numeric range analysis can pin down the expression's
         // range of possible values to a specific dimensonless rational number, then 
@@ -1730,10 +1820,14 @@ let rec SimplifyStep context expr =
         | RealRange
         | ComplexRange ->
             match expr with
-            | Amount(_) -> expr             // Should never get here - already handled above
-            | Del(_) -> expr                // Should never get here - already handled above
-            | Equals(_, _) -> expr          // Should never get here - already handled above
-            | DoesNotEqual(_, _) -> expr    // Should never get here - already handled above
+            | Amount(_) -> expr                 // Should never get here - already handled above
+            | Del(_) -> expr                    // Should never get here - already handled above
+            | Equals(_, _) -> expr              // Should never get here - already handled above
+            | DoesNotEqual(_, _) -> expr        // Should never get here - already handled above
+            | LessThan(_, _) -> expr            // Should never get here - already handled above
+            | LessThanOrEqual(_, _) -> expr     // Should never get here - already handled above
+            | GreaterThan(_, _) -> expr         // Should never get here - already handled above
+            | GreaterThanOrEqual(_, _) -> expr  // Should never get here - already handled above
             | Solitaire(_) -> expr  // already as simple as possible
 
             | Functor(funcName, argList) ->
@@ -1835,6 +1929,10 @@ let rec ExpressionConcept context expr =
     | Power(a,b) -> PowerConcept context a b
     | Equals(a,b) 
     | DoesNotEqual(a,b) 
+    | LessThan(a,b)
+    | LessThanOrEqual(a,b)
+    | GreaterThan(a,b)
+    | GreaterThanOrEqual(a,b)
         -> EquationConcept context a b
     | NumExprRef(t,_)
     | PrevExprRef(t) 
@@ -1985,6 +2083,10 @@ let rec EvalConcept context expr =
     | Sum(terms) -> ExpressionError expr "Addition/subtraction not allowed in concept expression."
     | Equals(a,b) 
     | DoesNotEqual(a,b)
+    | LessThan(a,b)
+    | LessThanOrEqual(a,b)
+    | GreaterThan(a,b)
+    | GreaterThanOrEqual(a,b)
         -> ExpressionError expr "Relational operator not allowed in concept expression."
     | NumExprRef(t,_) -> ExpressionError expr "Numbered expression reference not allowed in concept expression."
     | PrevExprRef(t) -> ExpressionError expr "Previous-expression reference not allowed in concept expression."
