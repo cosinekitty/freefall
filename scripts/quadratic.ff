@@ -1,0 +1,7 @@
+// quadratic.ff - Derivation of the quadratic formula.
+
+var x, a, b, c: complex;
+a != 0;
+a*x^2 + b*x + c = 0;
+
+save "quadratic.html";

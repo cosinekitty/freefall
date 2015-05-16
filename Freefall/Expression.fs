@@ -381,6 +381,7 @@ type Expression =
     | Product of list<Expression>
     | Power of Expression * Expression
     | Equals of Expression * Expression
+    | DoesNotEqual of Expression * Expression
     | NumExprRef of Token * int                     // a reference to a prior expression indexed by automatic integer counter
     | PrevExprRef of Token                          // a reference to the previous expression
     | Del of Token * int      // calculus 'd' or 'del' operator applied to a variable, n times, where n = 1, 2, ...
@@ -394,6 +395,7 @@ let PrimaryToken expr =
     | Product(_) -> None
     | Power(_) -> None
     | Equals(_) -> None
+    | DoesNotEqual(_) -> None
     | NumExprRef(t,_) -> Some(t)
     | PrevExprRef(t) -> Some(t)
     | Del(t,_) -> Some(t)
@@ -645,6 +647,7 @@ let rec FormatExpressionRaw expr =
     | Product factors -> "prod(" + FormatExprListRaw factors + ")"
     | Power(a,b) -> "pow(" + FormatExpressionRaw a + "," + FormatExpressionRaw b + ")"
     | Equals(a,b) -> FormatExpressionRaw a + " = " + FormatExpressionRaw b
+    | DoesNotEqual(a,b) -> FormatExpressionRaw a + " != " + FormatExpressionRaw b
     | NumExprRef(_,i) -> "#" + i.ToString()
     | PrevExprRef(_) -> "#"
     | Del(token,order) -> (String.replicate order "@") + token.Text
@@ -697,10 +700,11 @@ and FormatExpressionPrec expr parentPrecedence =
                 let _, aText = FormatExpressionPrec a Precedence_Pow
                 let _, bText = FormatExpressionPrec b Precedence_Pow
                 Precedence_Pow, aText + "^" + bText
-        | Equals(a,b) -> 
+        | Equals(a,b)
+        | DoesNotEqual(a,b) ->
             let _, aText = FormatExpressionPrec a Precedence_Rel
             let _, bText = FormatExpressionPrec b Precedence_Rel
-            Precedence_Rel, aText + " = " + bText
+            Precedence_Rel, aText + RelOpText expr + bText
         | NumExprRef(_,i) -> Precedence_Atom, "#" + i.ToString()
         | PrevExprRef(_) -> Precedence_Atom, "#"
         | Del(token,order) -> Precedence_Atom, (String.replicate order "@") + token.Text
@@ -709,6 +713,12 @@ and FormatExpressionPrec expr parentPrecedence =
         precedence, innerText
     else
         Precedence_Atom, "(" + innerText + ")"
+
+and RelOpText expr =
+    match expr with
+    | Equals(_,_) -> " = "
+    | DoesNotEqual(_,_) -> " != "
+    | _ -> failwith "Unknown relational operator."
 
 and FormatExprList exprlist =
     match exprlist with
@@ -849,7 +859,8 @@ let rec private DecomposeExpressionToResizeArray expr (resizeArray:ResizeArray<E
             DecomposeExpressionToResizeArray arg resizeArray
 
     | Power(left, right)
-    | Equals(left, right) ->
+    | Equals(left, right)
+    | DoesNotEqual(left, right) ->
         DecomposeExpressionToResizeArray left  resizeArray
         DecomposeExpressionToResizeArray right resizeArray
 
@@ -903,6 +914,11 @@ let rec ReplaceExpressionNode replacementExpr parentExpr targetIndex currentInde
             let clonedRight, updatedIndex  = ReplaceExpressionNode replacementExpr right targetIndex afterLeftIndex
             Equals(clonedLeft, clonedRight), updatedIndex
     
+        | DoesNotEqual(left, right) ->
+            let clonedLeft, afterLeftIndex = ReplaceExpressionNode replacementExpr left  targetIndex (1+currentIndex)
+            let clonedRight, updatedIndex  = ReplaceExpressionNode replacementExpr right targetIndex afterLeftIndex
+            DoesNotEqual(clonedLeft, clonedRight), updatedIndex
+
 and CloneOrReplaceChildren replacementExpr arglist targetIndex currentIndex : list<Expression> * int =
     let updatedIndex = ref currentIndex
     let cloneArray = ResizeArray<Expression> ()
@@ -994,7 +1010,11 @@ let rec AreIdentical context a b =
     | (Equals(aleft,aright),Equals(bleft,bright)) -> 
         ((AreIdentical context aleft bleft)  && (AreIdentical context aright bright)) ||
         ((AreIdentical context aleft bright) && (AreIdentical context aright bleft))
-    | (Equals(_,_), (_)) -> false
+    | (Equals(_,_), _) -> false
+    | (DoesNotEqual(aleft,aright), DoesNotEqual(bleft, bright)) ->
+        ((AreIdentical context aleft bleft)  && (AreIdentical context aright bright)) ||
+        ((AreIdentical context aleft bright) && (AreIdentical context aright bleft))
+    | (DoesNotEqual(_,_), _) -> false
 
 and AreIdenticalPowers context abase aexp bbase bexp =
     if AreIdentical context aexp bexp then
@@ -1130,7 +1150,9 @@ let rec MakeTermPattern context term =
                 | _ -> TermPattern(quantity, (Product rest))
             | _ -> TermPattern(QuantityOne, term)
     | Power(x,y) -> TermPattern(QuantityOne, term)
-    | Equals(_,_) -> ExpressionError term "Equality should not appear in a term."
+    | Equals(_,_)
+    | DoesNotEqual(_,_) ->
+        ExpressionError term "Relational expression should not appear in a term."
     | NumExprRef(t,i) -> FailLingeringMacro t
     | PrevExprRef(t) -> FailLingeringMacro t
     | Del(token,order) -> TermPattern(QuantityOne, term)
@@ -1352,7 +1374,9 @@ let rec MakeFactorPattern context factor =
     | Sum terms -> FactorPattern(factor, AmountOne)
     | Product factors -> failwith "Flattener failure: prod() should have been marged into parent."
     | Power(x,y) -> FactorPattern(x,y)
-    | Equals(_,_) -> ExpressionError factor "Equality should not appear in a factor."
+    | Equals(_,_)
+    | DoesNotEqual(_,_) ->
+        ExpressionError factor "Relational operator should not appear in a factor."
     | NumExprRef(t,i) -> FailLingeringMacro t
     | PrevExprRef(t) -> FailLingeringMacro t
     | Del(token,order) -> FactorPattern(factor, AmountOne)
@@ -1454,7 +1478,9 @@ let rec EvalQuantity context expr =
         let aval = EvalQuantity context a
         let bval = EvalQuantity context b
         PowerQuantities expr aval bval
-    | Equals(a,b) -> ExpressionError expr "Equality operator not allowed in numeric expression."
+    | Equals(_,_)
+    | DoesNotEqual(_,_) ->
+        ExpressionError expr "Relational operator not allowed in numeric expression."
     | NumExprRef(t,_) -> FailLingeringMacro t
     | PrevExprRef(t) -> FailLingeringMacro t
 
@@ -1501,7 +1527,9 @@ let rec EvalDimensionlessNumber expr =
         |> MultiplyDimensionlessNumberList
     | Power(a,b) -> 
         ExpressionError expr "Power expressions not yet supported here."
-    | Equals(a,b) -> ExpressionError expr "Equality operator not allowed in numeric expression."
+    | Equals(_,_)
+    | DoesNotEqual(_,_)
+        -> ExpressionError expr "Relational operator not allowed in numeric expression."
     | NumExprRef(t,_) -> FailLingeringMacro t
     | PrevExprRef(t) -> FailLingeringMacro t
 
@@ -1665,9 +1693,11 @@ let rec ExpressionNumericRange context expr =
             | (ComplexRange, RealRange) -> ComplexRange
             | (ComplexRange, ComplexRange) -> ComplexRange
     | Equals(a,b) ->    
+        // This case is important because it helps us detect impossible equations like 0=3.
         let aRange = ExpressionNumericRange context a
         let bRange = ExpressionNumericRange context b
         NumericRangePairIntersection aRange bRange
+    | DoesNotEqual(_,_) -> ComplexRange     // FIXFIXFIX - not clear how this should behave, or whether it ever matters.
     | NumExprRef(t,_) -> FailLingeringMacro t
     | PrevExprRef(t) -> FailLingeringMacro t
 
@@ -1684,7 +1714,8 @@ let rec SimplifyStep context expr =
     | Del(_) -> expr        // already as simple as possible
     | Equals(a,b) ->        // must prevent ExpressionNumericRange trick below from turning equation into a single value!
         Equals((SimplifyStep context a), (SimplifyStep context b))
-
+    | DoesNotEqual(a,b) ->
+        DoesNotEqual ((SimplifyStep context a), (SimplifyStep context b))
     | _ ->
         // Special case: if numeric range analysis can pin down the expression's
         // range of possible values to a specific dimensonless rational number, then 
@@ -1699,9 +1730,10 @@ let rec SimplifyStep context expr =
         | RealRange
         | ComplexRange ->
             match expr with
-            | Amount(_) -> expr     // Should never get here - already handled above
-            | Del(_) -> expr        // Should never get here - already handled above
-            | Equals(_, _) -> expr  // Should never get here - already handled above
+            | Amount(_) -> expr             // Should never get here - already handled above
+            | Del(_) -> expr                // Should never get here - already handled above
+            | Equals(_, _) -> expr          // Should never get here - already handled above
+            | DoesNotEqual(_, _) -> expr    // Should never get here - already handled above
             | Solitaire(_) -> expr  // already as simple as possible
 
             | Functor(funcName, argList) ->
@@ -1801,9 +1833,12 @@ let rec ExpressionConcept context expr =
     | Sum(terms) -> SumConcept context terms
     | Product(factors) -> ProductConcept context factors
     | Power(a,b) -> PowerConcept context a b
-    | Equals(a,b) -> EquationConcept context a b
-    | NumExprRef(t,_) -> FailLingeringMacro t
-    | PrevExprRef(t) -> FailLingeringMacro t
+    | Equals(a,b) 
+    | DoesNotEqual(a,b) 
+        -> EquationConcept context a b
+    | NumExprRef(t,_)
+    | PrevExprRef(t) 
+        -> FailLingeringMacro t
 
 and FindSolitaireConcept context token =
     match FindSymbolEntry context token with
@@ -1948,7 +1983,9 @@ let rec EvalConcept context expr =
                         
     | Functor(funcName,argList) -> SyntaxError funcName "Function or macro not allowed in concept expression."
     | Sum(terms) -> ExpressionError expr "Addition/subtraction not allowed in concept expression."
-    | Equals(a,b) -> ExpressionError expr "Equality operator not allowed in concept expression."
+    | Equals(a,b) 
+    | DoesNotEqual(a,b)
+        -> ExpressionError expr "Relational operator not allowed in concept expression."
     | NumExprRef(t,_) -> ExpressionError expr "Numbered expression reference not allowed in concept expression."
     | PrevExprRef(t) -> ExpressionError expr "Previous-expression reference not allowed in concept expression."
 

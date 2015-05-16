@@ -53,6 +53,11 @@ let rec TakeDifferential derivKind context varNameList expr =
         let da = TakeDifferential derivKind context varNameList a
         let db = TakeDifferential derivKind context varNameList b
         Equals(da,db)
+    | DoesNotEqual(a,b) ->
+        // It is not correct to take the derivative of an inequality.
+        // Two unequal expressions may have derivatives that are unequal or equal.
+        // For example:  cos(x) + 3 != cos(x) + 7 is always true, but their derivatives are the same.
+        ExpressionError expr "Cannot take derivative of an inequality."
     | NumExprRef(badtoken,_) -> FailLingeringMacro badtoken
     | PrevExprRef(badtoken) -> FailLingeringMacro badtoken
     | Del(vartoken,order) ->

@@ -216,8 +216,9 @@ let MakeTriplet expr =
         | PrevExprRef(token) -> 
             FailLingeringMacro token
 
-        | Equals(_,_) ->
-            ExpressionError expr "Cannot make factor pattern out of an equation."
+        | Equals(_,_)
+        | DoesNotEqual(_,_)
+            -> ExpressionError expr "Cannot make factor pattern out of a relational expression."
     {Coeff=coeff; VarPart=varpart; Exponent=exponent}
 
 let rec CancelFactor context factorList commonFactor commonExponent =

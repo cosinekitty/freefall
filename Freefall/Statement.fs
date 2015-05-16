@@ -139,6 +139,7 @@ let rec ExpandMacros context rawexpr =
         | Product(factors) -> Product(List.map (ExpandMacros context) factors)
         | Power(a,b) -> Power((ExpandMacros context a), (ExpandMacros context b))
         | Equals(a,b) -> Equals((ExpandMacros context a), (ExpandMacros context b))
+        | DoesNotEqual(a,b) -> DoesNotEqual((ExpandMacros context a), (ExpandMacros context b))
         | NumExprRef(token,index) -> FindNumberedExpression context token index
         | PrevExprRef(token) -> FindPreviousExpression context token
 
@@ -232,6 +233,10 @@ and TransformEquations context expr =
             let bTrans = TransformEquations context b
 
             match aTrans, bTrans with
+            | DoesNotEqual(_,_), _
+            | _, DoesNotEqual(_,_)
+                -> ExpressionError expr "Unsupported inequality transformation"
+
             | Equals(_,_), Equals(_,_) ->
                 ExpressionError expr "Unsupported equation transformation"
 
@@ -270,6 +275,7 @@ and TransformEquations context expr =
                 
             | _ -> Power(aTrans, bTrans)
 
+        | DoesNotEqual(a,b) -> DoesNotEqual((TransformEquations context a), (TransformEquations context b))
         | Equals(a,b) -> Equals((TransformEquations context a), (TransformEquations context b))
         | NumExprRef(token,index) -> FailLingeringMacro token
         | PrevExprRef(token) -> FailLingeringMacro token

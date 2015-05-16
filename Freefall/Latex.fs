@@ -212,6 +212,11 @@ and FormatLatexPrec context expr parentPrecedence : (string * LatexFactorSeparat
             let btext, _, _ = FormatLatexPrec context b Precedence_Rel
             atext + " = " + btext, LatexFactorSeparator.Space, Precedence_Rel
 
+        | DoesNotEqual(a,b) ->
+            let atext, _, _ = FormatLatexPrec context a Precedence_Rel
+            let btext, _, _ = FormatLatexPrec context b Precedence_Rel
+            atext + @" \ne " + btext, LatexFactorSeparator.Space, Precedence_Rel
+
         | NumExprRef(hashToken,listIndex) -> FailLingeringMacro hashToken
         | PrevExprRef(hashToken) -> FailLingeringMacro hashToken
 
