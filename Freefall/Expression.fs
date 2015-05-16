@@ -947,7 +947,7 @@ let IsZeroNumberConceptPair number concept =
     (concept = ConceptZero) || (IsNumberZero number)
 
 let IsDeterministicFunctionName funcName =
-    true        // FIXFIXFIX - adjust this in case we have something like random() in the future (I hope not!)
+    true        // adjust this in case we have something like random() in the future (I hope not!)
 
 let rec AreIdenticalNumbers a b =
     match (a,b) with
