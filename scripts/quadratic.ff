@@ -4,4 +4,12 @@ var x, a, b, c: complex;
 a != 0;
 a*x^2 + b*x + c = 0;
 
+#-c;
+simp(#);
+
+#/a;
+decomp;
+simp(#);
+decomp;
+
 save "quadratic.html";

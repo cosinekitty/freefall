@@ -107,7 +107,19 @@ let MyProbeHook context expr range concept =
 let MyDecompHook (context:Context) (exprArray:ResizeArray<Expression>) =
     let index = ref 0
     for expr in exprArray do
-        printfn "DECOMP(%3d) : %s" !index (FormatExpression expr)
+        let fmt = FormatExpression expr
+        let raw = FormatExpressionRaw expr
+        if fmt = raw then
+            // If there is no difference, don't be redundant in the output.
+            printfn "DECOMP(%3d) : %s" !index fmt
+        elif fmt.Length + raw.Length > 70 then
+            // Split very long output across lines.
+            printfn "DECOMP(%3d) : %s" !index fmt
+            printfn "            : %s" raw
+            printfn ""
+        else
+            // Fit all on one line
+            printfn "DECOMP(%3d) : %s : %s" !index fmt raw
         incr index
 
 let PartitionTest (letters:string) =
