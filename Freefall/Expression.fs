@@ -415,6 +415,60 @@ exception ExpressionException of Expression * string
 
 let ExpressionError expr message =
     raise (ExpressionException(expr,message))
+
+//--------------------------------------------------------------------------------------------------------
+// Decomposition allows us to analyze and manipulate an expression using linearized integer indexes.
+
+type DecompNode = {
+    Expr: Expression
+    Index: int
+    Parent: option<DecompNode>
+    Children: ResizeArray<DecompNode>
+}
+
+let DecomposeExpression expr : ResizeArray<DecompNode> =
+    let nodeList = ResizeArray<DecompNode>()
+    let rec DecomposeHelper expr parent : unit =
+        let node = {Expr=expr; Index=nodeList.Count; Parent=parent; Children=ResizeArray<DecompNode>()}
+        nodeList.Add(node)
+
+        match expr with
+        | Amount(_)
+        | Solitaire(_)
+        | NumExprRef(_,_)
+        | PrevExprRef(_)
+        | Del(_)
+            -> ()
+
+        | Functor(_, arglist)
+        | Sum(arglist)
+        | Product(arglist)
+            ->
+            for child in arglist do
+                let childIndex = nodeList.Count
+                DecomposeHelper child (Some(node))
+                node.Children.Add(nodeList.[childIndex])
+
+        | Power(left, right)
+        | Equals(left, right)
+        | DoesNotEqual(left, right)
+        | LessThan(left, right)
+        | LessThanOrEqual(left, right)
+        | GreaterThan(left, right)
+        | GreaterThanOrEqual(left, right)
+            ->
+            let leftChildIndex = nodeList.Count
+            DecomposeHelper left (Some(node))
+            node.Children.Add(nodeList.[leftChildIndex])
+
+            let rightChildIndex = nodeList.Count
+            DecomposeHelper right (Some(node))
+            node.Children.Add(nodeList.[rightChildIndex])
+
+    DecomposeHelper expr None
+    nodeList
+
+//--------------------------------------------------------------------------------------------------------
  
 let AmountZero          = Amount(QuantityZero)
 let AmountOne           = Amount(QuantityOne)
@@ -831,7 +885,7 @@ and Context = {
     SaveToFile: Context -> string -> unit
     NextConstantSubscript: ref<int>
     FirstTokenInExecutingStatement: ref<Token>
-    DecomposeHook: Context -> ResizeArray<Expression> -> unit
+    DecomposeHook: Context -> ResizeArray<DecompNode> -> unit
 }
 
 let AppendNumberedExpression {NumberedExpressionList = numExprList} expr =
@@ -862,38 +916,6 @@ let DefineSymbol {SymbolTable=symtable} ({Text=symbol; Kind=kind} as symtoken) s
         SyntaxError symtoken "Symbol is already defined"
     else
         symtable.Add(symbol, symentry)
-
-let rec private DecomposeExpressionToResizeArray expr (resizeArray:ResizeArray<Expression>) =
-    // Pre-order recursive traversal.
-    resizeArray.Add(expr)
-    match expr with
-    | Amount(_)
-    | Solitaire(_)
-    | NumExprRef(_, _)
-    | PrevExprRef(_)
-    | Del(_, _)         -> ()
-
-    | Functor(_, arglist)
-    | Sum(arglist)
-    | Product(arglist)  ->
-        for arg in arglist do
-            DecomposeExpressionToResizeArray arg resizeArray
-
-    | Power(left, right)
-    | Equals(left, right)
-    | DoesNotEqual(left, right) 
-    | LessThan(left, right)
-    | LessThanOrEqual(left, right)
-    | GreaterThan(left, right)
-    | GreaterThanOrEqual(left, right)
-        ->
-        DecomposeExpressionToResizeArray left  resizeArray
-        DecomposeExpressionToResizeArray right resizeArray
-
-let DecomposeExpression expr =
-    let resizeArray = ResizeArray<Expression>()
-    DecomposeExpressionToResizeArray expr resizeArray 
-    resizeArray
 
 let rec ReplaceExpressionNode replacementExpr parentExpr targetIndex currentIndex : Expression * int =
     if currentIndex = targetIndex then

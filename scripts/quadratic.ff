@@ -8,8 +8,9 @@ a*x^2 + b*x + c = 0;
 simp(#);
 
 #/a;
-decomp;
 simp(#);
-decomp;
+distrib(#, 11, 2);
+simp(#);
+
 
 save "quadratic.html";

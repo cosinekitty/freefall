@@ -104,23 +104,21 @@ let MyProbeHook context expr range concept =
     printfn "PROBE(concept) : %s" (FormatConcept concept)
     printfn ""
 
-let MyDecompHook (context:Context) (exprArray:ResizeArray<Expression>) =
-    let index = ref 0
-    for expr in exprArray do
-        let fmt = FormatExpression expr
-        let raw = FormatExpressionRaw expr
+let MyDecompHook (context:Context) (nodeArray:ResizeArray<DecompNode>) =
+    for node in nodeArray do
+        let fmt = FormatExpression node.Expr
+        let raw = FormatExpressionRaw node.Expr
         if fmt = raw then
             // If there is no difference, don't be redundant in the output.
-            printfn "DECOMP(%3d) : %s" !index fmt
+            printfn "DECOMP(%3d) : %s" node.Index fmt
         elif fmt.Length + raw.Length > 70 then
             // Split very long output across lines.
-            printfn "DECOMP(%3d) : %s" !index fmt
+            printfn "DECOMP(%3d) : %s" node.Index fmt
             printfn "            : %s" raw
             printfn ""
         else
             // Fit all on one line
-            printfn "DECOMP(%3d) : %s : %s" !index fmt raw
-        incr index
+            printfn "DECOMP(%3d) : %s : %s" node.Index fmt raw
 
 let PartitionTest (letters:string) =
     let mutable count = 0

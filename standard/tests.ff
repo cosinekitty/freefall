@@ -54,6 +54,9 @@ asserti(w>=v, v<=w);
 asserti(v!=w, w!=v);
 asserti(w!=v, w!=v);
 
+// Distribution.
+asserti(distrib(x*(y+z),1,2), x*y + x*z);
+
 // Expression formatter tests.
 assertf("123", simp(122+1));
 assertf("3+4", sum(3,4));

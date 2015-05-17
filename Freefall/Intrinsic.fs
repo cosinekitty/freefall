@@ -74,6 +74,14 @@ let DiffDerivMacroExpander derivKind context macroToken argList =
         let varnames = List.map (DiffVariableName context) varlist
         TakeDifferential derivKind context varnames expr |> Simplify context
 
+let DumpExpression expr =
+    let fmt = FormatExpression expr
+    let raw = FormatExpressionRaw expr
+    if fmt = raw then
+        fmt
+    else
+        sprintf "%s : %s" fmt raw
+
 let AssertIdenticalMacroExpander context macroToken argList =
     // asserti(expr1,expr2)
     match argList with
@@ -81,7 +89,9 @@ let AssertIdenticalMacroExpander context macroToken argList =
         if AreIdentical context expr1 expr2 then
             expr1       // All macros have to return some expression, so we choose the left expression.
         else
-            SyntaxError macroToken (sprintf "Expressions are not identical:\n%s\n%s" (FormatExpression expr1) (FormatExpression expr2))
+            let dump1 = DumpExpression expr1
+            let dump2 = DumpExpression expr2
+            SyntaxError macroToken (sprintf "Expressions are not identical:\n%s\n%s" dump1 dump2)
     | _ -> SyntaxError macroToken (sprintf "%s requires exactly 2 expression arguments." macroToken.Text)
 
 let PowerMacroExpander powerAmount context macroToken argList =
@@ -105,7 +115,7 @@ let ExtractMacroExpander context macroToken argList =
     | [rootExpr; indexExpr] ->
         let array = DecomposeExpression rootExpr
         let index = EvalIntegerIndex context indexExpr array.Count
-        array.[index]
+        array.[index].Expr
 
     | _ -> SyntaxError macroToken (sprintf "%s requires parameters (root, index)." macroToken.Text)
 
@@ -128,7 +138,7 @@ let InjectMacroExpander context macroToken argList =
         | Solitaire(functorNameToken) ->
             let array = DecomposeExpression rootExpr
             let index = EvalIntegerIndex context indexExpr array.Count
-            let replacementRawExpr = Functor(functorNameToken, array.[index] :: extraArgsList)
+            let replacementRawExpr = Functor(functorNameToken, array.[index].Expr :: extraArgsList)
             let replacementExpr = PrepareExpression context replacementRawExpr
             let expr, _ = ReplaceExpressionNode replacementExpr rootExpr index 0
             expr
@@ -546,12 +556,92 @@ let FactorMacroExpander context macroToken argList =
 
 //-------------------------------------------------------------------------------------------------
 
+let ParentNode errorToken (array:ResizeArray<DecompNode>) index =
+    if (index >= 0) && (index < array.Count) then
+        match array.[index].Parent with
+        | Some(parent) -> parent
+        | None -> SyntaxError errorToken (sprintf "Node at index %d has no parent (is the root?)" index)
+    else
+        SyntaxError errorToken (sprintf "Index %d is out of bounds." index)
+
+let DistribMacroExpander context macroToken argList =
+    // distrib(rootExpr, payloadIndex, targetIndex)
+    match argList with
+    | [rootExpr ; payloadIndexExpr ; targetIndexExpr] ->
+        let array = DecomposeExpression rootExpr
+        let payloadIndex = EvalIntegerIndex context payloadIndexExpr array.Count
+        let targetIndex  = EvalIntegerIndex context targetIndexExpr  array.Count
+        if payloadIndex = targetIndex then
+            SyntaxError macroToken "Payload and target index must be different."
+        else
+            // The replacement index is the index of the common product expression that is
+            // the parent of both the payload and target.
+            let parentNode  = ParentNode macroToken array payloadIndex
+            let parentCheck = ParentNode macroToken array targetIndex
+            if parentNode.Index <> parentCheck.Index then
+                SyntaxError macroToken (sprintf "%s requires target and payload to have a common parent node." macroToken.Text)
+            else
+                let targetNode  = array.[targetIndex]
+                let payloadNode = array.[payloadIndex]
+                // Common parent must be a product node
+                match parentNode.Expr, targetNode.Expr with
+                | Product(_), Sum(terms) ->
+                    // The parentNode is a Product expression whose children include
+                    // both the target and payload nodes.  Example:
+                    //
+                    //                                      target
+                    //     parentNode.Expr = Product(_, _, Sum(...), _, payload, _, _)
+                    //                               0  1     2      3     4     5  6
+                    //
+
+                    // Preserve the original relative order of the target and payload nodes
+                    let multiplier =
+                        if payloadIndex > targetIndex then
+                            fun term -> OptimizeMultiply term payloadNode.Expr
+                        else
+                            fun term -> OptimizeMultiply payloadNode.Expr term
+
+                    // Create the distributed sum expression by multiplying the payload with
+                    // every term in the target sum.
+
+                    let distribSum = Sum(List.map multiplier terms)
+
+                    // Make a replacement node whose children have the following changes:
+                    // 1. The payload node has been removed.
+                    // 2. The target sum has been replaced by the distributed sum.
+                    let replFactorList = ResizeArray<Expression>()
+                    for factorNode in parentNode.Children do
+                        if factorNode.Index = targetIndex then 
+                            replFactorList.Add(distribSum)
+                        elif factorNode.Index <> payloadIndex then
+                            replFactorList.Add(factorNode.Expr)
+
+                    let replacementExpr =
+                        match List.ofSeq replFactorList with
+                        | [single] -> single
+                        | factors -> Product(factors)
+
+                    let result, _ = ReplaceExpressionNode replacementExpr rootExpr parentNode.Index 0
+                    result
+
+                | Product(_), _
+                    -> SyntaxError macroToken "Target node must be a sum expression."
+
+                | _, _ 
+                    -> SyntaxError macroToken "Parent of target and payload must be a product node."
+
+
+    | _ -> SyntaxError macroToken (sprintf "%s requires 3 arguments: (rootExpr, payloadIndex, targetIndex)" macroToken.Text)
+
+//-------------------------------------------------------------------------------------------------
+
 let IntrinsicMacros =
     [
         ("asserti", PreExpandArgs,  AssertIdenticalMacroExpander)
         ("cbrt",    PreExpandArgs,  PowerMacroExpander AmountOneThird)
         ("deriv",   PreExpandArgs,  DiffDerivMacroExpander Derivative)
         ("diff",    PreExpandArgs,  DiffDerivMacroExpander Differential)
+        ("distrib", PreExpandArgs,  DistribMacroExpander)
         ("eval",    PreExpandArgs,  EvalMacroExpander)
         ("extract", PreExpandArgs,  ExtractMacroExpander)
         ("factor",  PreExpandArgs,  FactorMacroExpander)
