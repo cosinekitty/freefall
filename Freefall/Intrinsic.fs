@@ -405,7 +405,7 @@ let FactorSquaredBinomial middleIndex leftIndex rightIndex context expr =
         | Some(leftRoot), Some(rightRoot) ->
             let checkMiddlePos = Product[AmountTwo; leftRoot; rightRoot] |> Simplify context
             let checkMiddleNeg = Product[AmountNegTwo; leftRoot; rightRoot] |> Simplify context
-            //printfn "middle=%s , checkMiddlePos=%s" (FormatExpression middle) (FormatExpression checkMiddlePos)
+            //printfn "middle=%s , checkMiddlePos=%s" (FormatExpressionRaw middle) (FormatExpressionRaw checkMiddlePos)
             if AreIdentical context middle checkMiddlePos then
                 // x^2 + 2*x*y + y^2 ==> (x+y)^2
                 Power(Sum[leftRoot; rightRoot], AmountTwo)
@@ -551,7 +551,10 @@ and FactorTermList depth context expr : option<Expression> =
 let FactorMacroExpander context macroToken argList = 
     // factor(expr)
     match argList with
-    | [expr] -> Factor 0 context expr
+    | [expr] -> 
+        match expr with
+        | Equals(left, right) -> Equals(Factor 0 context left, Factor 0 context right)
+        | _ -> Factor 0 context expr
     | _ -> SyntaxError macroToken (sprintf "%s requires a single expression argument" macroToken.Text)
 
 //-------------------------------------------------------------------------------------------------
