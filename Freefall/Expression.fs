@@ -1414,11 +1414,13 @@ let MergeTrigPatterns context a b =
     match a, b with
     | CosineSquared(x), SineSquared(y) 
     | SineSquared(y), CosineSquared(x) 
-        when AreIdentical context x y -> Some(AmountOne)
+        when AreIdentical context x y 
+        -> Some(AmountOne)
 
     | CoefCosineSquared(xcoef,xangle), CoefSineSquared(ycoef,yangle)
     | CoefSineSquared(ycoef,yangle), CoefCosineSquared(xcoef,xangle)
-        when AreIdentical context xcoef ycoef && AreIdentical context xangle yangle -> Some(xcoef)
+        when AreIdentical context xcoef ycoef && AreIdentical context xangle yangle 
+        -> Some(xcoef)
 
     | _ -> None
 
@@ -1481,22 +1483,35 @@ let MergeTrigIdentities context termlist =
 
 type FactorPattern = FactorPattern of Expression * Expression    // represents x^y
 
-let rec MakeFactorPattern context factor =
-    // Transform a factor expression into the form x^y.
+let rec MakeFactorPatternList context factor =
+    // Transform a factor expression into a list of factor patterns of the form x^y.
     match factor with
-    | Amount(_) -> FactorPattern(factor, AmountOne)     // coeff ==> ceoff^1
+    | Amount(_) -> [FactorPattern(factor, AmountOne)]     // coeff ==> ceoff^1
     | Solitaire(token) -> 
         match FindSymbolEntry context token with
-        | VariableEntry(_,_) -> FactorPattern(factor, AmountOne)      // var ==> var^1
+        | VariableEntry(_,_) -> [FactorPattern(factor, AmountOne)]      // var ==> var^1
         | ConceptEntry(_) -> SyntaxError token "Cannot use concept in prod()"
-        | UnitEntry(amount) -> FactorPattern(factor, AmountOne)            // unit ==> unit*1
+        | UnitEntry(amount) -> [FactorPattern(factor, AmountOne)]            // unit ==> unit*1
         | AssignmentEntry(_) -> FailLingeringMacro token
         | MacroEntry(_) -> FailLingeringMacro token
         | FunctionEntry(fe) -> SyntaxError token "Cannot use function name as a variable."
-    | Functor(funcName, argList) -> FactorPattern(factor, AmountOne)
-    | Sum terms -> FactorPattern(factor, AmountOne)
+    | Functor(funcName, argList) -> [FactorPattern(factor, AmountOne)]
+    | Sum terms -> [FactorPattern(factor, AmountOne)]
     | Product factors -> failwith "Flattener failure: prod() should have been marged into parent."
-    | Power(x,y) -> FactorPattern(x,y)
+
+    | Power(Product(powfactors), y)
+        ->
+        // Split (a*b*c)^y  ==>  a^y * b^y * c^y  to maximize the chance of cancelling things.
+        [ 
+            for pf in powfactors do 
+                let pp = MakeFactorPatternList context pf
+                for FactorPattern(px,py) in pp do
+                    yield FactorPattern(px, OptimizeMultiply y py)
+        ]
+
+    | Power(x,y) 
+        -> [FactorPattern(x,y)]
+
     | Equals(_,_)
     | DoesNotEqual(_,_)
     | LessThan(_,_)
@@ -1504,9 +1519,13 @@ let rec MakeFactorPattern context factor =
     | GreaterThan(_,_)
     | GreaterThanOrEqual(_,_)
         -> ExpressionError factor "Relational operator should not appear in a factor."
-    | NumExprRef(t,i) -> FailLingeringMacro t
-    | PrevExprRef(t) -> FailLingeringMacro t
-    | Del(token,order) -> FactorPattern(factor, AmountOne)
+
+    | NumExprRef(t,_)
+    | PrevExprRef(t) 
+        -> FailLingeringMacro t
+
+    | Del(token,order) 
+        -> [FactorPattern(factor, AmountOne)]
 
 let UnmakeFactorPattern (FactorPattern(x,y)) =
     if IsExpressionOne y then
@@ -1535,7 +1554,10 @@ let rec FindMatchingFactorPattern context (FactorPattern(x1,y1) as pattern) merg
 
 
 let MergeLikeFactors context factorList =
-    let plist = List.map (MakeFactorPattern context) factorList
+    let plist = [
+        for f in factorList do
+            yield! MakeFactorPatternList context f
+    ]
     let mlist = MergeLikePatterns FindMatchingFactorPattern context plist
     List.map UnmakeFactorPattern mlist
 

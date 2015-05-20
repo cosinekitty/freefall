@@ -44,6 +44,8 @@ asserti((a-b)^2, (b-a)^2);
 asserti(simp(0/a=x/a), 0=x/a);
 asserti(simp((17*a)/(17*b)), a/b);
 asserti(simp((a*144)/(b*12)^2), a/b^2);
+asserti(simp((a*b)^3 / a^3), b^3);
+asserti(simp((a^3 * b)^2/a^6), b^2);
 
 // Inequality identities.
 asserti(v<w, simp(v+0 < w+0));
