@@ -598,6 +598,19 @@ let SkipUnity first rest =
 let SkipZero first rest =
     if IsExpressionZero first then rest else first :: rest
 
+let PowerQuantities expr (PhysicalQuantity(aNumber,aConcept) as aQuantity) (PhysicalQuantity(bNumber,bConcept) as bQuantity) =
+    if IsQuantityZero bQuantity then
+        if IsQuantityZero aQuantity then
+            ExpressionError expr "Cannot evaluate 0^0."
+        else
+            QuantityOne
+    elif bConcept <> Dimensionless then
+        ExpressionError expr "Cannot raise a number to a dimensional power."
+    else
+        let cNumber = PowerNumbers aNumber bNumber
+        let cConcept = RaiseConceptToNumberPower aConcept bNumber
+        PhysicalQuantity(cNumber,cConcept)
+
 //-----------------------------------------------------------------------------------------------------
 // Formatting - conversion of expressions to human-readable strings.
 
@@ -1186,17 +1199,42 @@ let MultiplyQuantities a b =
     Amount(QuantityPairProduct a b)
 
 // Add together all constant terms in a sum list and move the result to the front of the list.
-let rec MergeConstants mergefunc terms =
+let rec MergeSumConstants terms =
     match terms with
     | [] -> []
-    | [first] -> [first]
     | first :: rest -> 
-        let mrest = MergeConstants mergefunc rest
-        match (first, mrest) with
-        | (Amount(a), Amount(b) :: residue) -> mergefunc a b :: residue
-        | (_, Amount(b) :: residue) -> Amount(b) :: first :: residue
+        let mrest = MergeSumConstants rest
+        match first, mrest with
+        | Amount(a), Amount(b) :: residue -> AddQuantities a b :: residue
+        | _, Amount(b) :: residue -> Amount(b) :: first :: residue
         | _ -> first :: mrest
-       
+
+// Multiply together all constant terms in product list and move the result to the front of the list.
+let rec MergeProductConstants factors =
+    match factors with
+    | [] -> []
+    | first :: rest -> 
+        let mrest = MergeProductConstants rest
+        match first, mrest with
+        | Amount(a), Amount(b) :: residue -> MultiplyQuantities a b :: residue
+        | Power(Product(pfactors), Amount(PhysicalQuantity(Rational(pnumer,pdenom),pconcept) as intpow)), _ 
+            when pdenom = 1I && pconcept = Dimensionless ->
+            // Pull constants out of a product raised to an integer power:
+            // pow(prod(A,x),N) ==> (A^N) * pow(x,N)
+            match MergeProductConstants pfactors with
+            | Amount(pa) :: pr -> 
+                let a = PowerQuantities first pa intpow
+                let remainingPow = Power(Product(pr), Amount(intpow))
+                match mrest with
+                | Amount(b) :: residue -> MultiplyQuantities a b :: remainingPow :: residue
+                | _ -> Amount(a) :: remainingPow :: mrest
+            | _ -> 
+                match mrest with
+                | Amount(b) :: residue -> Amount(b) :: first :: residue
+                | _ -> first :: mrest
+        | _, Amount(b) :: residue -> Amount(b) :: first :: residue
+        | _ -> first :: mrest
+               
 //-----------------------------------------------------------------------------------------------
 // Advanced pattern-matching simplifier rules.
 
@@ -1531,19 +1569,6 @@ let FindVariableEntry context vartoken =
 // Quantity evaluator - forces an expression to reduce to a physical quantity.
 // Fails if the expression cannot be reduced to a quantity.
 
-let PowerQuantities expr (PhysicalQuantity(aNumber,aConcept) as aQuantity) (PhysicalQuantity(bNumber,bConcept) as bQuantity) =
-    if IsQuantityZero bQuantity then
-        if IsQuantityZero aQuantity then
-            ExpressionError expr "Cannot evaluate 0^0."
-        else
-            QuantityOne
-    elif bConcept <> Dimensionless then
-        ExpressionError expr "Cannot raise a number to a dimensional power."
-    else
-        let cNumber = PowerNumbers aNumber bNumber
-        let cConcept = RaiseConceptToNumberPower aConcept bNumber
-        PhysicalQuantity(cNumber,cConcept)
-
 let rec EvalQuantity context expr =
     match expr with
     | Amount(quantity) -> quantity
@@ -1860,7 +1885,7 @@ let rec SimplifyStep context expr =
             | Sum(termlist) ->
                 let simpargs = 
                     SimplifySumArgs (List.map (SimplifyStep context) termlist) 
-                    |> MergeConstants AddQuantities
+                    |> MergeSumConstants
                     |> MergeLikeTerms context
                     |> MergeTrigIdentities context
 
@@ -1872,7 +1897,7 @@ let rec SimplifyStep context expr =
             | Product(factorlist) ->
                 let simpfactors = 
                     SimplifyProductArgs (List.map (SimplifyStep context) factorlist) 
-                    |> MergeConstants MultiplyQuantities
+                    |> MergeProductConstants
                     |> MergeLikeFactors context
 
                 if List.exists IsExpressionZero simpfactors then

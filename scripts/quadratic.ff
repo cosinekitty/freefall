@@ -12,5 +12,9 @@ simp(#);
 distrib(#, 11, 2);
 simp(#);
 
+// Complete the square.
+# + (b/(2*a))^2;
+simp(#);
+factor(#);
 
 save "quadratic.html";

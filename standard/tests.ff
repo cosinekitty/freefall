@@ -42,6 +42,8 @@ asserti(simp(2*cos(w)^2*cos(u)^2 + 2*cos(w)^2*sin(u)^2), 2*cos(w)^2);
 asserti(simp(17 + 2*cos(w)^2*cos(u)^2 - 3 + 2*cos(w)^2*sin(u)^2 - 4), 10 + 2*cos(w)^2);
 asserti((a-b)^2, (b-a)^2);
 asserti(simp(0/a=x/a), 0=x/a);
+asserti(simp((17*a)/(17*b)), a/b);
+asserti(simp((a*144)/(b*12)^2), a/b^2);
 
 // Inequality identities.
 asserti(v<w, simp(v+0 < w+0));
@@ -88,4 +90,4 @@ asserti(factor(a^2 - b^2), (a-b)*(a+b));
 asserti(factor(-b^2 + a^2), (a-b)*(a+b));
 asserti(factor(-b^2 + a^2), (a+b)*(a-b));
 
-
+//asserti(factor(u^2 + b*u/a + (b/(2*a)^2)), (u + b/(2*a))^2);
