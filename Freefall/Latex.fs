@@ -177,7 +177,7 @@ and FormatLatexPrec context expr parentPrecedence : (string * LatexFactorSeparat
             | numerList, denomList -> 
                 let numerText, sep, _ = LatexFormatFactorList context numerList 0 Precedence_Lowest
                 let denomText, _, _ = LatexFormatFactorList context denomList 0 Precedence_Lowest
-                sprintf @"\frac{%s}{%s}" numerText denomText, sep, Precedence_Atom
+                sprintf @"\frac{%s}{%s}" numerText denomText, sep, Precedence_Mul
 
         | Power(a,b) ->
             if IsExpressionEqualToRational b 1I 2I then
