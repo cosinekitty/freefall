@@ -99,25 +99,6 @@ let LatexFormatQuantity context (PhysicalQuantity(scalar,concept)) =
                 sprintf @"%s \cdot %s" stext utext, Precedence_Mul
     text, LatexFactorSeparator.LeftDot, precedence
 
-let rec SplitNumerDenom factorList =
-    match factorList with
-    | [] -> [], []
-    | first::rest ->
-        let rNumerList, rDenomList = SplitNumerDenom rest
-        match first with
-        | Amount(PhysicalQuantity(Rational(a,b),concept)) when concept = Dimensionless && a.IsOne && (not b.IsOne) ->
-            rNumerList, (Amount(PhysicalQuantity((MakeRational b a),concept)) :: rDenomList)
-
-        | Power(x, Amount(PhysicalQuantity(Rational(a,b),concept) as quantity)) when concept = Dimensionless && a.Sign < 0 ->
-            let recip =
-                if IsQuantityNegOne quantity then
-                    x
-                else
-                    Power(x, Amount(PhysicalQuantity((MakeRational -a b), Dimensionless)))
-            rNumerList, (recip :: rDenomList)
-
-        | _ -> (first :: rNumerList), rDenomList
-
 // Some Latex Greek letters are written using Latin letters.
 // For example, capital chi is written using X.
 // Because there is no way to tell Latin X from Greek X,

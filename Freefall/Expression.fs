@@ -740,6 +740,25 @@ and FormatExprListRaw exprlist =
 //-----------------------------------------------------------------------------------------------------
 // The normal expression formatter displays a more conventional notation.
 
+let rec SplitNumerDenom factorList =
+    match factorList with
+    | [] -> [], []
+    | first::rest ->
+        let rNumerList, rDenomList = SplitNumerDenom rest
+        match first with
+        | Amount(PhysicalQuantity(Rational(a,b),concept)) when concept = Dimensionless && a.IsOne && (not b.IsOne) ->
+            rNumerList, (Amount(PhysicalQuantity((MakeRational b a),concept)) :: rDenomList)
+
+        | Power(x, Amount(PhysicalQuantity(Rational(a,b),concept) as quantity)) when concept = Dimensionless && a.Sign < 0 ->
+            let recip =
+                if IsQuantityNegOne quantity then
+                    x
+                else
+                    Power(x, Amount(PhysicalQuantity((MakeRational -a b), Dimensionless)))
+            rNumerList, (recip :: rDenomList)
+
+        | _ -> (first :: rNumerList), rDenomList
+
 let rec FormatExpression expr =
     let _, text = FormatExpressionPrec expr Precedence_Lowest
     text
@@ -748,12 +767,24 @@ and ExpressionPrecedence expr =
     let precedence, _ = FormatExpressionPrec expr Precedence_Lowest
     precedence
 
+and FormatFactorList factors =
+    match factors with
+    | [] -> Precedence_Atom, "1"
+    | [single] -> FormatExpressionPrec single Precedence_Lowest
+    | Amount(quantity) :: rest when quantity = QuantityNegOne -> 
+        let _, restText = FormatExpressionPrec (Product rest) Precedence_Neg
+        Precedence_Neg, "-" + restText
+    | first :: rest -> 
+        let _, firstText = FormatExpressionPrec first Precedence_Mul 
+        Precedence_Mul, firstText + JoinRemainingFactors rest
+
 and FormatExpressionPrec expr parentPrecedence =
     let precedence, innerText =
         match expr with
         | Amount quantity -> PrecFormatQuantity quantity
         | Solitaire(token) -> Precedence_Atom, token.Text
         | Functor(funcName, argList) -> Precedence_Atom, funcName.Text + "(" + FormatExprList argList + ")"
+
         | Sum terms ->
             match terms with
             | [] -> Precedence_Atom, "0"
@@ -761,16 +792,28 @@ and FormatExpressionPrec expr parentPrecedence =
             | first :: rest -> 
                 let _, firstText = FormatExpressionPrec first Precedence_Add 
                 Precedence_Add, firstText + JoinRemainingTerms rest
-        | Product factors ->
-            match factors with
-            | [] -> Precedence_Atom, "1"
-            | [single] -> FormatExpressionPrec single Precedence_Lowest
-            | Amount(quantity) :: rest when quantity = QuantityNegOne -> 
-                let _, restText = FormatExpressionPrec (Product rest) Precedence_Neg
-                Precedence_Neg, "-" + restText
-            | first :: rest -> 
-                let _, firstText = FormatExpressionPrec first Precedence_Mul 
-                Precedence_Mul, firstText + JoinRemainingFactors rest
+
+        | Product factorList ->
+            match SplitNumerDenom factorList with
+            | numerList, [] -> FormatFactorList numerList
+            | numerList, denomList -> 
+                let numerPrec, numerText = FormatFactorList numerList
+                let denomPrec, denomText = FormatFactorList denomList
+
+                let fixedNumerText =
+                    if numerPrec < Precedence_Mul then
+                        sprintf @"(%s)" numerText
+                    else
+                        numerText
+
+                let fixedDenomText =
+                    if denomPrec <= Precedence_Mul then     // note parens even when denominator precedence is equal, e.g. "a/(b*c)"
+                        sprintf @"(%s)" denomText
+                    else
+                        denomText
+
+                Precedence_Mul, (sprintf @"%s/%s" fixedNumerText fixedDenomText)
+
         | Power(a,b) -> 
             if IsExpressionEqualToRational b 1I 2I then
                 let _, aText = FormatExpressionPrec a Precedence_Lowest
@@ -779,6 +822,7 @@ and FormatExpressionPrec expr parentPrecedence =
                 let _, aText = FormatExpressionPrec a Precedence_Pow
                 let _, bText = FormatExpressionPrec b Precedence_Pow
                 Precedence_Pow, aText + "^" + bText
+
         | Equals(a,b)
         | DoesNotEqual(a,b) 
         | LessThan(a,b)
@@ -789,6 +833,7 @@ and FormatExpressionPrec expr parentPrecedence =
             let _, aText = FormatExpressionPrec a Precedence_Rel
             let _, bText = FormatExpressionPrec b Precedence_Rel
             Precedence_Rel, aText + RelOpText expr + bText
+
         | NumExprRef(_,i) -> Precedence_Atom, "#" + i.ToString()
         | PrevExprRef(_) -> Precedence_Atom, "#"
         | Del(token,order) -> Precedence_Atom, (String.replicate order "@") + token.Text

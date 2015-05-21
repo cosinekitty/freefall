@@ -71,6 +71,7 @@ assertf("(a+b)*(c-d)/(x+y)", (a+b)*(c-d)/(x+y));
 assertf("3/4", 3/4);
 assertf("sqrt(a*b)", sqrt(a*b));
 assertf("sqrt(a*b)", pow(prod(a,b),1/2));
+assertf("b^3/(a*c^4)", prod(pow(a,-1),pow(b,3),pow(c,-4)));
 
 // Numeric evaluation tests.
 assertf("16.0", eval(2.0^4.0));
