@@ -50,7 +50,70 @@ let IntegerSquareRoot n =
         let mutable r = 1I
         while (r*r > n) || ((r+1I)*(r+1I) <= n) do
             r <- ((n / r) + r) / 2I
-        r        
+        r
+
+let rec PowerIntInt (a:bigint) (b:int) =
+    if b < 0 then
+        raise (FreefallRuntimeException "PowerIntInt: cannot raise integer to negative integer power.")
+    elif b = 0 then
+        if a.Sign = 0 then
+            raise (FreefallRuntimeException "PowerIntInt: Cannot raise 0 to 0 power.")
+        else
+            1I
+    else
+        // Raising integer to positive integer power.
+        // Consider the binary representation of b.
+        // Keep squaring a, and if the corresponding bit in b is set, include that factor in the result.
+        let mutable power = a
+        let mutable product = 1I
+        let mutable residue = b
+        while residue > 0 do
+            let nextres = residue / 2
+            let bit = residue % 2
+            if bit = 1 then
+                product <- product * power
+            residue <- nextres
+            power <- power * power
+
+        product
+
+let rec IntegerRoot (number:int) (powdenom:int) =
+    if powdenom < 1 then
+        raise (FreefallRuntimeException (sprintf "IntegerRoot: invalid powdenom = %d" powdenom))
+
+    if number < 0 then
+        if powdenom % 2 = 0 then
+            raise (FreefallRuntimeException (sprintf "IntegerRoot: cannot raise negative integer %O to 1/%d power" number powdenom))
+        else
+            -(IntegerRoot (- number) powdenom)
+    elif number < 2 then
+        number      // nth root of 0 = 0, and nth root of 1 = 1.
+    else
+        // Use floating point approximation.
+        let approx = System.Math.Pow((float number), 1.0/(float powdenom))
+        let root = int (System.Math.Round(approx))
+
+        // We must return a value R such that R^powdenom <= number.
+        if PowerIntInt (bigint root) powdenom > (bigint number) then
+            root - 1
+        else
+            root
+
+let UnitTestIntegerRoot () =
+    for powdenom in 1 .. 9 do
+        for answer in 1 .. 10 do
+            let pow = int (PowerIntInt (bigint answer) powdenom)
+            let check = IntegerRoot pow powdenom
+            if check <> answer then
+                failwith (sprintf "UnitTestIntegerRoot: powdenom=%d, answer=%d, check=%d" powdenom answer check)
+
+            // Test odd roots of negative integers...
+            if powdenom % 2 = 1 then
+                let ncheck = IntegerRoot (- pow) powdenom
+                if ncheck <> -answer then
+                    failwith (sprintf "UnitTestIntegerRoot: powdenom=%d, -answer=%d, ncheck=%d" powdenom (-answer) ncheck)
+
+            //printfn "UnitTestIntegerRoot: powdenom=%d, answer=%d, pow=%d, check=%d" powdenom answer pow check
 
 let MakeComplex z = Complex(CheckComplex z)
 
@@ -201,7 +264,19 @@ let PerfectIntegerRoot (number:bigint) (powdenom:int) =
         else
             None
     else
-        None    // FIXFIXFIX - make generic integer root algorithm for powdenom = 3, 4, ...
+        if (number < 0I) && (powdenom % 2 = 0) then
+            None    // cannot take even root of negative integer
+        elif CanConvertBigInteger number then
+            let nint = int number
+            let iroot = IntegerRoot nint powdenom
+            let root = bigint iroot
+            let check = PowerIntInt root powdenom
+            if check = number then
+                Some(root)
+            else
+                None
+        else
+            None    // FIXFIXFIX - would be nice to take roots of very large integers
 
 let PerfectRationalRoot (numer:bigint) (denom:bigint) (root:int) =
     match (PerfectIntegerRoot numer root), (PerfectIntegerRoot denom root) with

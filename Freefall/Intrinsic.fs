@@ -1227,3 +1227,8 @@ let InitContext context =
     // Execute standard library's initialization script init.ff.
     // Use environment variable to figure out where the standard scripts are.
     RunStandardScript context "init.ff"
+
+//-----------------------------------------------------------------------------------------------
+
+let UnitTests context =
+    UnitTestIntegerRoot ()

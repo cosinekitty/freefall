@@ -85,6 +85,7 @@ let ExecuteFile context filename =
             lineNumber <- 1 + lineNumber
             line <- PromptLine lineNumber
     elif filename = "-t" then
+        UnitTests context
         RunStandardScript context "tests.ff"
     else
         TokenizeFile filename |> ExecuteStatements context
