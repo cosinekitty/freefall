@@ -172,19 +172,29 @@ let rec ExpandMacros context rawexpr =
 // We need to be able to apply safe, single-valued functions like this:
 //     exp(a=b)  ==>   exp(a) = exp(b)
 
-let NaivePowerSimp context a b =      // returns "naive" simplification of a^b
+let rec NaivePowerSimp context a b =      // returns "naive" simplification of a^b
     // This is a so-called "naive" simplification rule that does things like:
     // sqrt(x^2) ==> x
     // Or in general, (x^y)^b ==> x^(y*b)
     // This is safe in cases where uroot is already in use to represent 
     // the multiplicity of solutions in a transformed equation.
     match a with
+    | Amount(PhysicalQuantity(anumber, concept)) when concept = Dimensionless ->
+        match PerfectRationalPower anumber b with
+        | None -> Power(a, Amount(PhysicalQuantity(b, Dimensionless)))
+        | Some(c) -> Amount(PhysicalQuantity(c, Dimensionless))
+
     | Power(x, Amount(PhysicalQuantity(y, concept))) when concept = Dimensionless ->
         let c = MultiplyNumbers y b
         if IsNumberEqualToInteger 1I c then
             x
         else
             Power(x, Amount(PhysicalQuantity(c, Dimensionless)))
+
+    | Product(factorlist) ->
+        // Distribute the power simplification across the terms of the product.
+        Product(List.map (fun f -> NaivePowerSimp context f b) factorlist)
+
     | _ -> 
         Power(a, Amount(PhysicalQuantity(b, Dimensionless)))
 

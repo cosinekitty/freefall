@@ -218,8 +218,9 @@ and FormatLatexPrec context expr parentPrecedence : (string * LatexFactorSeparat
             let btext, _, _ = FormatLatexPrec context b Precedence_Rel
             atext + @" \ge " + btext, LatexFactorSeparator.Space, Precedence_Rel
 
-        | NumExprRef(hashToken,listIndex) -> FailLingeringMacro hashToken
-        | PrevExprRef(hashToken) -> FailLingeringMacro hashToken
+        | NumExprRef(hashToken,_)
+        | PrevExprRef(hashToken) -> 
+            FailLingeringMacro hashToken
 
         | Del(opToken,order) ->
             let vtext = FormatLatex context (Solitaire(opToken))

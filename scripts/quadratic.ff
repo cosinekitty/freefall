@@ -14,7 +14,15 @@ simp(#);
 
 // Complete the square.
 # + (b/(2*a))^2;
-simp(#);
 factor(#);
 
+# * (4*a^2);
+distrib(#,33,18);
+simp(#);
+sqrt(#);
+#/(2*a);
+simp(#);
+# - b/(2*a);
+inject(#,18,factor);
+simp(#);
 save "quadratic.html";

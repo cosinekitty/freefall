@@ -6,6 +6,7 @@ var u, v, w: real;
 
 // Verify naive power simplification rule.
 assertf("a = (-1)^K_1*b", sqrt(a^2=b^2));
+assertf("a*b*2 = (-1)^K_2*c", sqrt(a^2 * b^2 * 4 = c^2));
 
 // Simplifier and identity tests.
 asserti(0, simp(c-c));

@@ -48,10 +48,9 @@ let IntegerSquareRoot n =
     else
         // Use divide-and-average to converge on correct value.
         let mutable r = 1I
-        while (r*r <> n) || not (r*r < n && (r+1I)*(r+1I) > n) do
+        while (r*r > n) || ((r+1I)*(r+1I) <= n) do
             r <- ((n / r) + r) / 2I
-        r
-        
+        r        
 
 let MakeComplex z = Complex(CheckComplex z)
 
@@ -187,52 +186,94 @@ let rec PowerFloatInt (a:float) (b:bigint) =
 
         product
 
-let PowerNumbers anum bnum =
+let PerfectIntegerRoot (number:bigint) (powdenom:int) =
+    if powdenom <= 0 then
+        None
+    elif powdenom = 1 then
+        Some(number)
+    elif powdenom = 2 then
+        if number >= 0I then     // avoid exception
+            let root = IntegerSquareRoot number
+            if root*root = number then
+                Some(root)
+            else
+                None
+        else
+            None
+    else
+        None    // FIXFIXFIX - make generic integer root algorithm for powdenom = 3, 4, ...
+
+let PerfectRationalRoot (numer:bigint) (denom:bigint) (root:int) =
+    match (PerfectIntegerRoot numer root), (PerfectIntegerRoot denom root) with
+    | Some(nr), Some(dr) -> Some(MakeRational nr dr)
+    | _, _ -> None
+
+let PerfectRationalPower anum bnum =
     // Get this nasty special case out of the way first.
     if (IsNumberZero anum) && (IsNumberZero bnum) then
         raise (FreefallRuntimeException "Cannot evaluate 0^0.")
 
     match (anum, bnum) with
-    | (Rational(an,ad), Rational(bn,bd)) ->
-        if bd.IsOne && (CanConvertBigInteger bn) then
-            // We can raise any rational to any 32-bit integer power with an exact rational result.
-            // bigint supports non-negative 32-bit signed exponents only.
-            // Raising to any negative power just means we need to take a reciprocal when we are done.
-            // (an/ad)^b = (an)^b / (ad)^b          if   b = 0, 1, 2, ...
-            // (an/ad)^b = (ad)^(-b) / (an)^(-b)    if b = -1, -2, ...
-            let intpow = int bn
-            if intpow < 0 then
-                MakeRational (bigint.Pow(ad, -intpow)) (bigint.Pow(an, -intpow))
+    | (Rational(an,ad), Rational(bn,bd)) when (CanConvertBigInteger bn) && (CanConvertBigInteger bd) ->
+        let intbn = int bn
+        let intbd = int bd
+
+        // Calculate c = (cn/cd) = (an/ad)^bn.  Then we need to calculate c^(1/bd).
+        // We can raise any rational to any 32-bit integer power with an exact rational result.
+        // bigint supports non-negative 32-bit signed exponents only.
+        // Raising to any negative power just means we need to take a reciprocal when we are done.
+        // (an/ad)^bn = an^bn / ad^bn          if bn = 0, 1, 2, ...
+        // (an/ad)^bn = ad^(-bn) / an^(-bn)    if bn = -1, -2, ...
+        let cn, cd =
+            if intbn < 0 then
+                bigint.Pow(ad, -intbn), bigint.Pow(an, -intbn)
             else
-                MakeRational (bigint.Pow(an, intpow)) (bigint.Pow(ad, intpow))
-        else
-            // Any nonrational (or very large) power requires numerical approximation.
+                bigint.Pow(an, intbn), bigint.Pow(ad, intbn)
+
+        PerfectRationalRoot cn cd intbd
+
+    | _ -> None
+
+let PowerNumbers anum bnum =
+    match PerfectRationalPower anum bnum with
+    | Some(cnum) -> cnum
+    | None ->
+        match (anum, bnum) with
+        | (Rational(an,ad), Rational(bn,bd)) ->
             let a = (float an) / (float ad)
             let b = (float bn) / (float bd)
             PowerFloats a b
-    | (Rational(an,ad), Real(b)) ->
-        let a = (float an) / (float ad)
-        PowerFloats a b
-    | (Rational(an,ad), Complex(b)) ->
-        let a = complex((float an) / (float ad), 0.0)
-        MakeComplex(complex.Pow(a,b))
-    | (Real(a), Rational(bn,bd)) ->
-        if bd.IsOne then
-            MakeReal(PowerFloatInt a bn)
-        else
-            let b = (float bn) / (float bd)
+
+        | (Rational(an,ad), Real(b)) ->
+            let a = (float an) / (float ad)
             PowerFloats a b
-    | (Real(a), Real(b)) ->
-        PowerFloats a b
-    | (Real(a), Complex(b)) ->
-        MakeComplex(complex.Pow(complex(a,0.0), b))
-    | (Complex(a), Rational(bn,bd)) ->
-        let b = complex((float bn) / (float bd), 0.0)
-        MakeComplex(complex.Pow(a,b))
-    | (Complex(a), Real(b)) ->
-        MakeComplex(complex.Pow(a, complex(b, 0.0)))
-    | (Complex(a), Complex(b)) ->
-        MakeComplex(complex.Pow(a,b))
+
+        | (Rational(an,ad), Complex(b)) ->
+            let a = complex((float an) / (float ad), 0.0)
+            MakeComplex(complex.Pow(a,b))
+
+        | (Real(a), Rational(bn,bd)) ->
+            if bd.IsOne then
+                MakeReal(PowerFloatInt a bn)
+            else
+                let b = (float bn) / (float bd)
+                PowerFloats a b
+
+        | (Real(a), Real(b)) ->
+            PowerFloats a b
+
+        | (Real(a), Complex(b)) ->
+            MakeComplex(complex.Pow(complex(a,0.0), b))
+
+        | (Complex(a), Rational(bn,bd)) ->
+            let b = complex((float bn) / (float bd), 0.0)
+            MakeComplex(complex.Pow(a,b))
+
+        | (Complex(a), Real(b)) ->
+            MakeComplex(complex.Pow(a, complex(b, 0.0)))
+
+        | (Complex(a), Complex(b)) ->
+            MakeComplex(complex.Pow(a,b))
 
 type PhysicalConcept = 
     | ConceptZero                         // a special case because 0 is considered compatible with any concept: 0*meter = 0*second. Weird but necessary.
