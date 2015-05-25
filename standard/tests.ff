@@ -47,6 +47,8 @@ asserti(simp((17*a)/(17*b)), a/b);
 asserti(simp((a*144)/(b*12)^2), a/b^2);
 asserti(simp((a*b)^3 / a^3), b^3);
 asserti(simp((a^3 * b)^2/a^6), b^2);
+asserti(simp(sqrt(9/4)), 3/2);
+asserti(simp(sqrt(eval(144*foot^2/second^2))), eval(12*foot/second));
 
 // Inequality identities.
 asserti(v<w, simp(v+0 < w+0));

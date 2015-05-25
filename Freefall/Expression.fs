@@ -1946,127 +1946,6 @@ let rec ExpressionNumericRange context expr =
 let IsRealValuedExpression context expr = 
     (ExpressionNumericRange context expr) <> ComplexRange
 
-//--------------------------------------------------------------------------------
-// Simplifier
-
-let rec SimplifyStep context expr =
-    // For the sake of performance, handle obvious leaf cases first.
-    match expr with
-    | Amount(_) -> expr     // already as simple as possible
-    | Del(_) -> expr        // already as simple as possible
-    // must prevent ExpressionNumericRange trick below from turning equation/inequality into a single value!
-    | Equals(a,b) -> Equals((SimplifyStep context a), (SimplifyStep context b))
-    | DoesNotEqual(a,b) -> DoesNotEqual ((SimplifyStep context a), (SimplifyStep context b))
-    | LessThan(a,b) -> LessThan ((SimplifyStep context a), (SimplifyStep context b))
-    | LessThanOrEqual(a,b) -> LessThanOrEqual ((SimplifyStep context a), (SimplifyStep context b))
-    | GreaterThan(a,b) -> GreaterThan ((SimplifyStep context a), (SimplifyStep context b))
-    | GreaterThanOrEqual(a,b) -> GreaterThanOrEqual ((SimplifyStep context a), (SimplifyStep context b))
-    | _ ->
-        // Special case: if numeric range analysis can pin down the expression's
-        // range of possible values to a specific dimensonless rational number, then 
-        // replace the expression with that rational number.
-        match ExpressionNumericRange context expr with
-        | IntegerRange(FiniteLimit(lo), FiniteLimit(hi)) when lo = hi ->
-            // Note that ExpressionNumericRange will only return IntegerRange for dimensionless values.
-            Amount(PhysicalQuantity(Rational(lo,1I), Dimensionless))
-
-        | IntegerRange(_,_)
-        | RationalRange
-        | RealRange
-        | ComplexRange ->
-            match expr with
-            | Amount(_) -> expr                 // Should never get here - already handled above
-            | Del(_) -> expr                    // Should never get here - already handled above
-            | Equals(_, _) -> expr              // Should never get here - already handled above
-            | DoesNotEqual(_, _) -> expr        // Should never get here - already handled above
-            | LessThan(_, _) -> expr            // Should never get here - already handled above
-            | LessThanOrEqual(_, _) -> expr     // Should never get here - already handled above
-            | GreaterThan(_, _) -> expr         // Should never get here - already handled above
-            | GreaterThanOrEqual(_, _) -> expr  // Should never get here - already handled above
-            | Solitaire(_) -> expr  // already as simple as possible
-
-            | Functor(funcName, argList) ->
-                let simpArgList = List.map (SimplifyStep context) argList
-                let funcHandler = FindFunctionEntry context funcName
-                funcHandler.SimplifyStep context funcName simpArgList
-
-            | Sum(termlist) ->
-                let simpargs = 
-                    SimplifySumArgs (List.map (SimplifyStep context) termlist) 
-                    |> MergeSumConstants
-                    |> MergeLikeTerms context
-                    |> MergeTrigIdentities context
-
-                match simpargs with
-                | [] -> AmountZero
-                | [term] -> term
-                | _ -> Sum simpargs
-
-            | Product(factorlist) ->
-                let simpfactors = 
-                    SimplifyProductArgs (List.map (SimplifyStep context) factorlist) 
-                    |> MergeProductConstants
-                    |> MergeLikeFactors context
-
-                if List.exists IsExpressionZero simpfactors then
-                    AmountZero
-                else
-                    match simpfactors with
-                    | [] -> AmountOne
-                    | [factor] -> factor
-                    | _ -> Product simpfactors
-
-            | Power(x,y) ->
-                let sx = SimplifyStep context x
-                let sy = SimplifyStep context y
-                if IsExpressionZero sy then
-                    if IsExpressionZero sx then
-                        ExpressionError expr "Cannot evaluate 0^0."
-                    else
-                        AmountOne
-                elif IsExpressionOne sy then
-                    sx
-                else
-                    match sx, sy with
-                    | Amount(xq), Amount(PhysicalQuantity(Rational(_,yb),_) as yq) when yb = 1I -> 
-                        // Simplify pow(numeric,integer) by numerical evaluation.
-                        Amount(PowerQuantities expr xq yq)
-                    | _, _ -> 
-                        Power(sx,sy)            
-
-            | NumExprRef(t,_) ->
-                FailLingeringMacro t
-
-            | PrevExprRef(t) ->
-                FailLingeringMacro t
-
-
-// Sum(Sum(A,B,C), Sum(D,E)) = Sum(A,B,C,D,E)
-// We want to "lift" all inner Sum() contents to the top level of a list.
-and SimplifySumArgs simpargs =           
-    match simpargs with
-    | [] -> []
-    | (Sum terms)::rest -> (SimplifySumArgs (RemoveZeroes terms)) @ (SimplifySumArgs rest)
-    | first::rest -> SkipZero first (SimplifySumArgs rest)
-
-and SimplifyProductArgs simpargs =           
-    match simpargs with
-    | [] -> []
-    | (Product factors)::rest -> (SimplifyProductArgs (RemoveUnities factors)) @ (SimplifyProductArgs rest)
-    | first::rest -> SkipUnity first (SimplifyProductArgs rest)
-
-//---------------------------------------------------------------------------
-// Aggressive, iterative simplifier...
-
-let Simplify context expr =
-    // Keep iterating SimplifyStep until the expression stops changing.
-    let mutable prev = expr
-    let mutable simp = SimplifyStep context expr
-    while simp <> prev do
-        prev <- simp
-        simp <- SimplifyStep context simp
-    simp
-
 //-----------------------------------------------------------------------------------------------------
 // Unit determination - verify that units are coherent and determine what they are.
 // For example, sum(3*meter,4*second) should raise an exception because adding distance to time is illegal.
@@ -2245,4 +2124,129 @@ let rec EvalConcept context expr =
         -> ExpressionError expr "Relational operator not allowed in concept expression."
     | NumExprRef(t,_) -> ExpressionError expr "Numbered expression reference not allowed in concept expression."
     | PrevExprRef(t) -> ExpressionError expr "Previous-expression reference not allowed in concept expression."
+
+//--------------------------------------------------------------------------------
+// Simplifier
+
+and SimplifyStep context expr =
+    // For the sake of performance, handle obvious leaf cases first.
+    match expr with
+    | Amount(_) -> expr     // already as simple as possible
+    | Del(_) -> expr        // already as simple as possible
+    // must prevent ExpressionNumericRange trick below from turning equation/inequality into a single value!
+    | Equals(a,b) -> Equals((SimplifyStep context a), (SimplifyStep context b))
+    | DoesNotEqual(a,b) -> DoesNotEqual ((SimplifyStep context a), (SimplifyStep context b))
+    | LessThan(a,b) -> LessThan ((SimplifyStep context a), (SimplifyStep context b))
+    | LessThanOrEqual(a,b) -> LessThanOrEqual ((SimplifyStep context a), (SimplifyStep context b))
+    | GreaterThan(a,b) -> GreaterThan ((SimplifyStep context a), (SimplifyStep context b))
+    | GreaterThanOrEqual(a,b) -> GreaterThanOrEqual ((SimplifyStep context a), (SimplifyStep context b))
+    | _ ->
+        // Special case: if numeric range analysis can pin down the expression's
+        // range of possible values to a specific dimensonless rational number, then 
+        // replace the expression with that rational number.
+        match ExpressionNumericRange context expr with
+        | IntegerRange(FiniteLimit(lo), FiniteLimit(hi)) when lo = hi ->
+            // Note that ExpressionNumericRange will only return IntegerRange for dimensionless values.
+            Amount(PhysicalQuantity(Rational(lo,1I), Dimensionless))
+
+        | IntegerRange(_,_)
+        | RationalRange
+        | RealRange
+        | ComplexRange ->
+            match expr with
+            | Amount(_) -> expr                 // Should never get here - already handled above
+            | Del(_) -> expr                    // Should never get here - already handled above
+            | Equals(_, _) -> expr              // Should never get here - already handled above
+            | DoesNotEqual(_, _) -> expr        // Should never get here - already handled above
+            | LessThan(_, _) -> expr            // Should never get here - already handled above
+            | LessThanOrEqual(_, _) -> expr     // Should never get here - already handled above
+            | GreaterThan(_, _) -> expr         // Should never get here - already handled above
+            | GreaterThanOrEqual(_, _) -> expr  // Should never get here - already handled above
+            | Solitaire(_) -> expr  // already as simple as possible
+
+            | Functor(funcName, argList) ->
+                let simpArgList = List.map (SimplifyStep context) argList
+                let funcHandler = FindFunctionEntry context funcName
+                funcHandler.SimplifyStep context funcName simpArgList
+
+            | Sum(termlist) ->
+                let simpargs = 
+                    SimplifySumArgs (List.map (SimplifyStep context) termlist) 
+                    |> MergeSumConstants
+                    |> MergeLikeTerms context
+                    |> MergeTrigIdentities context
+
+                match simpargs with
+                | [] -> AmountZero
+                | [term] -> term
+                | _ -> Sum simpargs
+
+            | Product(factorlist) ->
+                let simpfactors = 
+                    SimplifyProductArgs (List.map (SimplifyStep context) factorlist) 
+                    |> MergeProductConstants
+                    |> MergeLikeFactors context
+
+                if List.exists IsExpressionZero simpfactors then
+                    AmountZero
+                else
+                    match simpfactors with
+                    | [] -> AmountOne
+                    | [factor] -> factor
+                    | _ -> Product simpfactors
+
+            | Power(x,y) ->
+                let sx = SimplifyStep context x
+                let sy = SimplifyStep context y
+                if IsExpressionZero sy then
+                    if IsExpressionZero sx then
+                        ExpressionError expr "Cannot evaluate 0^0."
+                    else
+                        AmountOne
+                elif IsExpressionOne sy then
+                    sx
+                else
+                    match sx, sy with
+                    | Amount(PhysicalQuantity(xNumber,xConcept)), Amount(PhysicalQuantity(yNumber,yConcept)) when (yConcept = Dimensionless) -> 
+                        match PerfectRationalPower xNumber yNumber with
+                        | Some(zNumber) -> 
+                            let zConcept = PowerConcept context sx sy
+                            Amount(PhysicalQuantity(zNumber,zConcept))
+                        | None -> 
+                            Power(sx,sy)
+                    | _, _ -> 
+                        Power(sx,sy)            
+
+            | NumExprRef(t,_) ->
+                FailLingeringMacro t
+
+            | PrevExprRef(t) ->
+                FailLingeringMacro t
+
+
+// Sum(Sum(A,B,C), Sum(D,E)) = Sum(A,B,C,D,E)
+// We want to "lift" all inner Sum() contents to the top level of a list.
+and SimplifySumArgs simpargs =           
+    match simpargs with
+    | [] -> []
+    | (Sum terms)::rest -> (SimplifySumArgs (RemoveZeroes terms)) @ (SimplifySumArgs rest)
+    | first::rest -> SkipZero first (SimplifySumArgs rest)
+
+and SimplifyProductArgs simpargs =           
+    match simpargs with
+    | [] -> []
+    | (Product factors)::rest -> (SimplifyProductArgs (RemoveUnities factors)) @ (SimplifyProductArgs rest)
+    | first::rest -> SkipUnity first (SimplifyProductArgs rest)
+
+//---------------------------------------------------------------------------
+// Aggressive, iterative simplifier...
+
+and Simplify context expr =
+    // Keep iterating SimplifyStep until the expression stops changing.
+    let mutable prev = expr
+    let mutable simp = SimplifyStep context expr
+    while simp <> prev do
+        prev <- simp
+        simp <- SimplifyStep context simp
+    simp
 
