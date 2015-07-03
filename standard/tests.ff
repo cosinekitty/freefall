@@ -9,6 +9,8 @@ assertf("a = (-1)^K_1*b", sqrt(a^2=b^2));
 assertf("a*b*2 = (-1)^K_2*c", sqrt(a^2 * b^2 * 4 = c^2));
 
 // Simplifier and identity tests.
+a+b=0;  asserti(simp(#-b), a = -b);
+asserti(simp((a + b = 0) - b), a = -b);
 asserti(0, simp(c-c));
 asserti(x+y, y+x);
 asserti(x*y, y*x);
@@ -97,3 +99,5 @@ asserti(factor(-b^2 + a^2), (a-b)*(a+b));
 asserti(factor(-b^2 + a^2), (a+b)*(a-b));
 
 //asserti(factor(u^2 + b*u/a + (b/(2*a)^2)), (u + b/(2*a))^2);
+
+

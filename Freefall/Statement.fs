@@ -111,49 +111,6 @@ let FormatStatement statement =
 let FailNonFuncMacro token expected =
     SyntaxError token (sprintf "This symbol is %s, but is used as if it were a function or macro." expected)
 
-let rec ExpandMacros context rawexpr =
-    let expr =
-        match rawexpr with
-        | Amount(_) -> rawexpr
-        | Del(_,_) -> rawexpr
-        | Solitaire(nameToken) -> 
-            match FindSymbolEntry context nameToken with
-            | VariableEntry(_) -> rawexpr
-            | ConceptEntry(_) -> rawexpr
-            | UnitEntry(_) -> rawexpr
-            | AssignmentEntry(expr) -> expr
-            | MacroEntry(_) -> SyntaxError nameToken "Cannot use macro name as solitary symbol."
-            | FunctionEntry(_) -> SyntaxError nameToken "Cannot use function name as solitary symbol."
-        | Functor(funcName,argList) -> 
-            match FindSymbolEntry context funcName with
-            | MacroEntry({Expander=expander; ArgBehavior=argBehavior}) -> 
-                match argBehavior with
-                | RawArgs       -> expander funcName argList
-                | PreExpandArgs -> expander funcName (List.map (ExpandMacros context) argList)
-            | FunctionEntry(_) -> Functor(funcName, (List.map (ExpandMacros context) argList))
-            | VariableEntry(_) -> FailNonFuncMacro funcName "a variable"
-            | ConceptEntry(_) -> FailNonFuncMacro funcName "a concept"
-            | UnitEntry(_) -> FailNonFuncMacro funcName "a unit"
-            | AssignmentEntry(_) -> FailNonFuncMacro funcName "an assignment target"
-        | Sum(terms) -> Sum(List.map (ExpandMacros context) terms)
-        | Product(factors) -> Product(List.map (ExpandMacros context) factors)
-        | Power(a,b) -> Power((ExpandMacros context a), (ExpandMacros context b))
-        | Equals(a,b) -> Equals((ExpandMacros context a), (ExpandMacros context b))
-        | DoesNotEqual(a,b) -> DoesNotEqual((ExpandMacros context a), (ExpandMacros context b))
-        | LessThan(a,b) -> LessThan((ExpandMacros context a), (ExpandMacros context b))
-        | LessThanOrEqual(a,b) -> LessThanOrEqual((ExpandMacros context a), (ExpandMacros context b))
-        | GreaterThan(a,b) -> GreaterThan((ExpandMacros context a), (ExpandMacros context b))
-        | GreaterThanOrEqual(a,b) -> GreaterThanOrEqual((ExpandMacros context a), (ExpandMacros context b))
-        | NumExprRef(token,index) -> FindNumberedExpression context token index
-        | PrevExprRef(token) -> FindPreviousExpression context token
-
-    // Before handing back the expanded expression, validate its units.
-    // We do this at every level of recursion to make sure we don't miss any problems,
-    // because macro expanders should not have to worry about this.
-    ValidateExpressionConcept context expr    
-
-    expr
-
 //--------------------------------------------------------------------------------------------------
 // Equation transformer: this is an important part of Freefall as an algebra helper.
 //
@@ -211,19 +168,33 @@ let rec TransformAndPartition context exprlist =
     List.map (TransformEquations context) exprlist
     |> PartitionEquationsAndValues
 
-and TransformEquations context expr =
+and TransformEquations context expr =       // expands macros, equation references and transforms equations
     let xform =
         match expr with
         | Amount(_) -> expr
         | Solitaire(_) -> expr
         | Del(_,_) -> expr
         | Functor(name,argList) -> 
-            let numEquations, leftList, rightList = TransformAndPartition context argList
-            if numEquations = 0 then
-                Functor(name,leftList)
-            else
-                let handler = FindFunctionEntry context name
-                handler.DistributeAcrossEquation context name leftList rightList
+            match FindSymbolEntry context name with
+            | MacroEntry({Expander=expander; ArgBehavior=argBehavior}) -> 
+                let expanded =
+                    match argBehavior with
+                    | RawArgs       -> expander name argList
+                    | PreExpandArgs -> expander name (List.map (TransformEquations context) argList)
+                TransformEquations context expanded
+
+            | FunctionEntry(_) -> 
+                let numEquations, leftList, rightList = TransformAndPartition context argList
+                if numEquations = 0 then
+                    Functor(name,leftList)
+                else
+                    let handler = FindFunctionEntry context name
+                    handler.DistributeAcrossEquation context name leftList rightList
+
+            | VariableEntry(_) -> FailNonFuncMacro name "a variable"
+            | ConceptEntry(_) -> FailNonFuncMacro name "a concept"
+            | UnitEntry(_) -> FailNonFuncMacro name "a unit"
+            | AssignmentEntry(_) -> FailNonFuncMacro name "an assignment target"
 
         | Sum(terms) -> 
             let numEquations, leftList, rightList = TransformAndPartition context terms
@@ -295,8 +266,8 @@ and TransformEquations context expr =
         | LessThanOrEqual(a,b) -> LessThanOrEqual((TransformEquations context a), (TransformEquations context b))
         | GreaterThan(a,b) -> GreaterThan((TransformEquations context a), (TransformEquations context b))
         | GreaterThanOrEqual(a,b) -> GreaterThanOrEqual((TransformEquations context a), (TransformEquations context b))
-        | NumExprRef(token,index) -> FailLingeringMacro token
-        | PrevExprRef(token) -> FailLingeringMacro token
+        | NumExprRef(token,index) -> FindNumberedExpression context token index
+        | PrevExprRef(token) -> FindPreviousExpression context token
 
     // Make sure units are OK at each recursive level of transformation.
     // This takes the burden off each of the transformation rules and helps prevent bugs from creeping in.
@@ -306,8 +277,6 @@ and TransformEquations context expr =
 
 //--------------------------------------------------------------------------------------------------
 
-let PrepareExpression context rawexpr = rawexpr |> ExpandMacros context |> TransformEquations context
-
 let ExecuteStatement context firstTokenInStatement statement shouldReportAssignments =
     // Before excecuting the statement, record the first token in that statement.
     // This is our last line of defense for diagnosing exceptions.
@@ -316,13 +285,13 @@ let ExecuteStatement context firstTokenInStatement statement shouldReportAssignm
     match statement with
 
     | AssertFormat {AssertToken=token; ExpectedFormat=expected; Expr=rawexpr} ->
-        let expr = PrepareExpression context rawexpr
+        let expr = TransformEquations context rawexpr
         let actual = FormatExpression expr
         if expected <> actual then
             SyntaxError token ("Format assertion failure:\nexpected = '" + expected + "'\nactual   = '" + actual + "'")
 
     | Assignment {TargetName=target; Expr=rawexpr;} ->
-        let expr = PrepareExpression context rawexpr
+        let expr = TransformEquations context rawexpr
         let range = ExpressionNumericRange context expr
         if IsEmptyRange range then
             ExpressionError rawexpr "Range of expression values is an empty set. This indicates it is impossible or solutionless."
@@ -340,7 +309,7 @@ let ExecuteStatement context firstTokenInStatement statement shouldReportAssignm
         DefineSymbol context idtoken (ConceptEntry(concept))
 
     | Decomp {DecompToken=decompToken; Expr=rawexpr} ->
-        PrepareExpression context rawexpr 
+        TransformEquations context rawexpr 
         |> DecomposeExpression
         |> context.DecomposeHook context
 
@@ -357,7 +326,7 @@ let ExecuteStatement context firstTokenInStatement statement shouldReportAssignm
         context.SaveToFile context filename
 
     | Probe(rawexpr) ->
-        let expr = PrepareExpression context rawexpr
+        let expr = TransformEquations context rawexpr
         let range = ExpressionNumericRange context expr
         let concept = ExpressionConcept context expr
         context.ProbeHook context expr range concept

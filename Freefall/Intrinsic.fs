@@ -130,16 +130,16 @@ let InjectMacroExpander context macroToken argList =
         // the arguments passed to it, because of the unusual passing of a function name as a solitaire.
         // If arguments were pre-expanded, that would cause a syntax error.
         // So we need to prepare everything here except functorNameExpr.
-        let rootExpr = PrepareExpression context rawRootExpr
-        let indexExpr = PrepareExpression context rawIndexExpr
-        let extraArgsList = List.map (PrepareExpression context) rawExtraArgsList
+        let rootExpr = TransformEquations context rawRootExpr
+        let indexExpr = TransformEquations context rawIndexExpr
+        let extraArgsList = List.map (TransformEquations context) rawExtraArgsList
 
         match functorNameExpr with
         | Solitaire(functorNameToken) ->
             let array = DecomposeExpression rootExpr
             let index = EvalIntegerIndex context indexExpr array.Count
             let replacementRawExpr = Functor(functorNameToken, array.[index].Expr :: extraArgsList)
-            let replacementExpr = PrepareExpression context replacementRawExpr
+            let replacementExpr = TransformEquations context replacementRawExpr
             let expr, _ = ReplaceExpressionNode replacementExpr rootExpr index 0
             expr
 
