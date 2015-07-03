@@ -4,25 +4,19 @@ var x, a, b, c: complex;
 a != 0;
 a*x^2 + b*x + c = 0;
 
-#-c;
-simp(#);
+simp(#-c);
 
-#/a;
-simp(#);
-distrib(#, 11, 2);
-simp(#);
+simp(#/a);
+simp(distrib(#, 11, 2));
 
 // Complete the square.
 # + (b/(2*a))^2;
 factor(#);
 
 # * (4*a^2);
-distrib(#,33,18);
-simp(#);
+simp(distrib(#,33,18));
 sqrt(#);
-#/(2*a);
-simp(#);
+simp(#/(2*a));
 # - b/(2*a);
-inject(#,18,factor);
-simp(#);
+simp(inject(#,18,factor));
 save "quadratic.html";
