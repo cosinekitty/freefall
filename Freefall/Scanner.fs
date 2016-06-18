@@ -80,8 +80,8 @@ let IsIdentifier (text:string) =
     if System.String.IsNullOrEmpty(text) then
         false
     else
-        let c = System.Char.ToLower(text.[0])
-        ((c >= 'a') && (c <= 'z')) || (c = '_')
+        let c = text.[0]
+        ((c >= 'A') && (c <= 'Z')) || ((c >= 'a') && (c <= 'z')) || (c = '_')
 
 let IsNumericLiteral (text:string) =
     if System.String.IsNullOrEmpty(text) then
