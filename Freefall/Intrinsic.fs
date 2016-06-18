@@ -383,8 +383,8 @@ let FactorDifferenceOfSquares aIndex bIndex context expr =
     let termlist = TermList expr
     if List.length termlist = 2 then
         // a^2 - b^2 ==> (a+b) * (a-b)
-        let aSquared = List.nth termlist aIndex
-        let neg_bSquared = List.nth termlist bIndex
+        let aSquared = termlist.[aIndex]
+        let neg_bSquared = termlist.[bIndex]
         let bSquared = MakeNegative neg_bSquared
         match PerfectSquareRoot context aSquared, PerfectSquareRoot context bSquared with
         | Some(a), Some(b) ->
@@ -397,9 +397,9 @@ let FactorDifferenceOfSquares aIndex bIndex context expr =
 let FactorSquaredBinomial middleIndex leftIndex rightIndex context expr =
     let termlist = TermList expr
     if List.length termlist = 3 then
-        let left   = List.nth termlist leftIndex
-        let right  = List.nth termlist rightIndex
-        let middle = List.nth termlist middleIndex
+        let left   = termlist.[leftIndex]
+        let right  = termlist.[rightIndex]
+        let middle = termlist.[middleIndex]
 
         match PerfectSquareRoot context left, PerfectSquareRoot context right with
         | Some(leftRoot), Some(rightRoot) ->
