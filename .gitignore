@@ -3,3 +3,4 @@ obj
 *.userprefs
 *.suo
 test.html
+*.js
